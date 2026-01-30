@@ -1,0 +1,6 @@
+name: memories.sh
+description: A local-first memory layer for AI agents
+version: 0.1.0
+memory:
+  provider: local
+  store: ~/.config/memories/local.db
