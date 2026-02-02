@@ -8,6 +8,10 @@ const CONFIG_DIR = process.env.MEMORIES_DATA_DIR ?? join(homedir(), ".config", "
 const DB_PATH = join(CONFIG_DIR, "local.db");
 const SYNC_CONFIG_PATH = join(CONFIG_DIR, "sync.json");
 
+export function getConfigDir(): string {
+  return CONFIG_DIR;
+}
+
 export interface SyncConfig {
   syncUrl: string;
   syncToken: string;
@@ -88,6 +92,7 @@ async function runMigrations(db: Client): Promise<void> {
       tags TEXT,
       scope TEXT NOT NULL DEFAULT 'global',
       project_id TEXT,
+      type TEXT NOT NULL DEFAULT 'note',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       deleted_at TEXT
@@ -104,6 +109,14 @@ async function runMigrations(db: Client): Promise<void> {
   // Add project_id column if missing (migration for existing DBs)
   try {
     await db.execute(`ALTER TABLE memories ADD COLUMN project_id TEXT`);
+  } catch {
+    // Column already exists
+  }
+
+  // Add type column if missing (migration for existing DBs)
+  // Types: 'rule' (always active), 'decision' (why we chose something), 'fact' (knowledge), 'note' (general)
+  try {
+    await db.execute(`ALTER TABLE memories ADD COLUMN type TEXT NOT NULL DEFAULT 'note'`);
   } catch {
     // Column already exists
   }
@@ -131,4 +144,48 @@ async function runMigrations(db: Client): Promise<void> {
       remote_url TEXT
     )`
   );
+
+  // FTS5 virtual table for full-text search
+  // We use content_rowid to link to the memories table
+  await db.execute(
+    `CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+      content,
+      tags,
+      content='memories',
+      content_rowid='rowid'
+    )`
+  );
+
+  // Triggers to keep FTS in sync with memories table
+  await db.execute(`
+    CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
+      INSERT INTO memories_fts(rowid, content, tags) VALUES (NEW.rowid, NEW.content, NEW.tags);
+    END
+  `);
+
+  await db.execute(`
+    CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+      INSERT INTO memories_fts(memories_fts, rowid, content, tags) VALUES('delete', OLD.rowid, OLD.content, OLD.tags);
+    END
+  `);
+
+  await db.execute(`
+    CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+      INSERT INTO memories_fts(memories_fts, rowid, content, tags) VALUES('delete', OLD.rowid, OLD.content, OLD.tags);
+      INSERT INTO memories_fts(rowid, content, tags) VALUES (NEW.rowid, NEW.content, NEW.tags);
+    END
+  `);
+
+  // Index for faster type-based queries (rules are queried frequently)
+  try {
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type)`);
+  } catch {
+    // Index might already exist
+  }
+
+  try {
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_memories_scope_project ON memories(scope, project_id)`);
+  } catch {
+    // Index might already exist
+  }
 }

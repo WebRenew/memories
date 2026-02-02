@@ -1,17 +1,52 @@
 import { Command } from "commander";
-import { addMemory } from "../lib/memory.js";
+import chalk from "chalk";
+import { addMemory, type MemoryType } from "../lib/memory.js";
+
+const VALID_TYPES: MemoryType[] = ["rule", "decision", "fact", "note"];
 
 export const addCommand = new Command("add")
   .description("Add a new memory")
   .argument("<content>", "Memory content")
   .option("-t, --tags <tags>", "Comma-separated tags")
   .option("-g, --global", "Store as global memory (default: project-scoped if in git repo)")
-  .action(async (content: string, opts: { tags?: string; global?: boolean }) => {
-    const tags = opts.tags?.split(",").map((t) => t.trim());
-    const memory = await addMemory(content, { tags, global: opts.global });
-    
-    const scopeInfo = memory.scope === "global" 
-      ? "(global)" 
-      : `(project: ${memory.project_id})`;
-    console.log(`Stored memory ${memory.id} ${scopeInfo}`);
+  .option("--type <type>", "Memory type: rule, decision, fact, note (default: note)")
+  .option("-r, --rule", "Shorthand for --type rule")
+  .option("-d, --decision", "Shorthand for --type decision")
+  .option("-f, --fact", "Shorthand for --type fact")
+  .action(async (content: string, opts: { 
+    tags?: string; 
+    global?: boolean;
+    type?: string;
+    rule?: boolean;
+    decision?: boolean;
+    fact?: boolean;
+  }) => {
+    try {
+      const tags = opts.tags?.split(",").map((t) => t.trim());
+      
+      // Determine type from flags
+      let type: MemoryType = "note";
+      if (opts.rule) type = "rule";
+      else if (opts.decision) type = "decision";
+      else if (opts.fact) type = "fact";
+      else if (opts.type) {
+        if (!VALID_TYPES.includes(opts.type as MemoryType)) {
+          console.error(chalk.red("✗") + ` Invalid type "${opts.type}". Valid types: ${VALID_TYPES.join(", ")}`);
+          process.exit(1);
+        }
+        type = opts.type as MemoryType;
+      }
+
+      const memory = await addMemory(content, { tags, global: opts.global, type });
+      
+      const typeIcon = type === "rule" ? "📌" : type === "decision" ? "💡" : type === "fact" ? "📋" : "📝";
+      const scopeInfo = memory.scope === "global" 
+        ? chalk.dim("(global)") 
+        : chalk.dim(`(project)`);
+      
+      console.log(chalk.green("✓") + ` ${typeIcon} Stored ${type} ${chalk.dim(memory.id)} ${scopeInfo}`);
+    } catch (error) {
+      console.error(chalk.red("✗") + " Failed to add memory:", error instanceof Error ? error.message : "Unknown error");
+      process.exit(1);
+    }
   });

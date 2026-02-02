@@ -1,0 +1,63 @@
+"use client";
+
+import Link from "next/link";
+import { ThemeSwitcher } from "./ThemeSwitcher";
+
+export function Footer() {
+  return (
+    <footer className="py-24 px-6  border-t border-border bg-background">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex flex-col md:flex-row items-start justify-between gap-16 mb-24">
+            <div>
+              <div className="flex items-center gap-3 mb-8 group">
+                <img src="/memories.svg" alt="memories.sh logo" className="w-5 h-5 dark:invert group-hover:rotate-12 transition-transform duration-500" />
+                <span className="font-mono text-lg font-bold tracking-tighter uppercase text-foreground">memories.sh</span>
+              </div>
+            <p className="max-w-xs text-[12px] text-muted-foreground/60 leading-relaxed font-light">
+              Engineering the durable context layer for the next generation of autonomous coding agents.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-16 md:gap-24">
+            <div className="flex flex-col gap-6">
+              <h5 className="text-[10px] uppercase tracking-[0.3em] font-bold text-foreground">System</h5>
+              <div className="flex flex-col gap-4 text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.15em]">
+                <Link href="#" className="hover:text-primary transition-colors">Security</Link>
+                <Link href="#" className="hover:text-primary transition-colors">Protocol</Link>
+                <Link href="#" className="hover:text-primary transition-colors">API</Link>
+              </div>
+            </div>
+            <div className="flex flex-col gap-6">
+              <h5 className="text-[10px] uppercase tracking-[0.3em] font-bold text-foreground">Network</h5>
+              <div className="flex flex-col gap-4 text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.15em]">
+                <Link href="#" className="hover:text-primary transition-colors">GitHub</Link>
+                <Link href="#" className="hover:text-primary transition-colors">Discord</Link>
+                <Link href="#" className="hover:text-primary transition-colors">X (Twitter)</Link>
+              </div>
+            </div>
+            <div className="flex flex-col gap-6">
+              <h5 className="text-[10px] uppercase tracking-[0.3em] font-bold text-foreground">Legal</h5>
+              <div className="flex flex-col gap-4 text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.15em]">
+                <Link href="#" className="hover:text-primary transition-colors">Privacy</Link>
+                <Link href="#" className="hover:text-primary transition-colors">Terms</Link>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="pt-12 border-t border-border flex flex-col md:flex-row items-center justify-between gap-8">
+          <p className="text-[9px] text-muted-foreground/40 uppercase tracking-[0.2em] font-bold">
+            © 2026 memories.sh // CORE_PROTOCOL_REv1.0.0
+          </p>
+          <div className="flex items-center gap-8">
+            <ThemeSwitcher />
+            <div className="flex items-center gap-4">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary/20" />
+              <span className="text-[9px] text-primary/40 font-mono tracking-widest uppercase">system_status: stable</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
