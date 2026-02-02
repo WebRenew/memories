@@ -18,6 +18,7 @@ import { doctorCommand } from "./commands/doctor.js";
 import { hookCommand } from "./commands/hook.js";
 import { ingestCommand } from "./commands/ingest.js";
 import { diffCommand } from "./commands/diff.js";
+import { tagCommand } from "./commands/tag.js";
 
 const program = new Command()
   .name("memories")
@@ -48,5 +49,6 @@ program.addCommand(doctorCommand);
 program.addCommand(hookCommand);
 program.addCommand(ingestCommand);
 program.addCommand(diffCommand);
+program.addCommand(tagCommand);
 
 program.parse();
