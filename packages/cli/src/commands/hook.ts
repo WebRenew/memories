@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { readFile, writeFile, chmod } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
@@ -24,10 +24,44 @@ function getGitDir(): string | null {
   }
 }
 
-function getHookPath(hookName: string): string | null {
+interface HookLocation {
+  path: string;
+  type: "husky" | "git";
+}
+
+function getHookLocation(hookName: string): HookLocation | null {
   const gitDir = getGitDir();
   if (!gitDir) return null;
-  return join(gitDir, "hooks", hookName);
+
+  // Check for Husky v9+ (.husky/<hook>) — no _ subdirectory
+  const huskyPath = join(".husky", hookName);
+  if (existsSync(".husky") && !existsSync(join(".husky", "_"))) {
+    return { path: huskyPath, type: "husky" };
+  }
+
+  // Check for Husky v4-8 (.husky/_/<hook>)
+  const huskyLegacyPath = join(".husky", "_", hookName);
+  if (existsSync(join(".husky", "_"))) {
+    return { path: huskyLegacyPath, type: "husky" };
+  }
+
+  // Check for existing Husky hook file (may exist without _ dir in some setups)
+  if (existsSync(huskyPath)) {
+    return { path: huskyPath, type: "husky" };
+  }
+
+  // Default to .git/hooks
+  return { path: join(gitDir, "hooks", hookName), type: "git" };
+}
+
+function detectLintStaged(): boolean {
+  try {
+    if (!existsSync("package.json")) return false;
+    const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
+    return !!(pkg["lint-staged"] || pkg.devDependencies?.["lint-staged"] || pkg.dependencies?.["lint-staged"]);
+  } catch {
+    return false;
+  }
 }
 
 export const hookCommand = new Command("hook")
@@ -39,11 +73,13 @@ hookCommand.addCommand(
     .option("--hook <name>", "Hook name (default: pre-commit)", "pre-commit")
     .action(async (opts: { hook: string }) => {
       try {
-        const hookPath = getHookPath(opts.hook);
-        if (!hookPath) {
+        const location = getHookLocation(opts.hook);
+        if (!location) {
           console.error(chalk.red("✗") + " Not in a git repository");
           process.exit(1);
         }
+
+        const hookPath = location.path;
 
         if (existsSync(hookPath)) {
           const content = await readFile(hookPath, "utf-8");
@@ -59,8 +95,18 @@ hookCommand.addCommand(
         }
 
         await chmod(hookPath, 0o755);
-        console.log(chalk.green("✓") + ` Installed memories hook in ${chalk.dim(opts.hook)}`);
+
+        const locationLabel = location.type === "husky" ? "Husky" : ".git/hooks";
+        console.log(chalk.green("✓") + ` Installed memories hook in ${chalk.dim(opts.hook)} (${locationLabel})`);
         console.log(chalk.dim("  Rule files will auto-generate on each commit."));
+
+        // Lint-staged guidance
+        if (detectLintStaged()) {
+          console.log(
+            chalk.dim("\n  lint-staged detected. You can also add to your lint-staged config:") +
+            chalk.dim('\n  "*.md": "memories generate all --force"'),
+          );
+        }
       } catch (error) {
         console.error(chalk.red("✗") + " Failed to install hook:", error instanceof Error ? error.message : "Unknown error");
         process.exit(1);
@@ -74,11 +120,13 @@ hookCommand.addCommand(
     .option("--hook <name>", "Hook name (default: pre-commit)", "pre-commit")
     .action(async (opts: { hook: string }) => {
       try {
-        const hookPath = getHookPath(opts.hook);
-        if (!hookPath) {
+        const location = getHookLocation(opts.hook);
+        if (!location) {
           console.error(chalk.red("✗") + " Not in a git repository");
           process.exit(1);
         }
+
+        const hookPath = location.path;
 
         if (!existsSync(hookPath)) {
           console.log(chalk.dim("No hook file found."));
@@ -119,7 +167,7 @@ hookCommand.addCommand(
     .option("--hook <name>", "Hook name (default: pre-commit)", "pre-commit")
     .action(async (opts: { hook: string }) => {
       try {
-        const hookPath = getHookPath(opts.hook);
+        const hookPath = getHookLocation(opts.hook)?.path;
         if (!hookPath) {
           console.error(chalk.red("✗") + " Not in a git repository");
           process.exit(1);

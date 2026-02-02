@@ -3,21 +3,36 @@ import chalk from "chalk";
 import { listMemories, type Memory, type MemoryType } from "../lib/memory.js";
 import { getProjectId } from "../lib/git.js";
 
-const TYPE_ICONS: Record<MemoryType, string> = {
-  rule: "📌",
-  decision: "💡",
-  fact: "📋",
-  note: "📝",
+const TYPE_COLORS: Record<MemoryType, (s: string) => string> = {
+  rule: chalk.blue,
+  decision: chalk.yellow,
+  fact: chalk.green,
+  note: chalk.dim,
+};
+
+const TYPE_LABELS: Record<MemoryType, string> = {
+  rule: "rule",
+  decision: "decision",
+  fact: "fact",
+  note: "note",
 };
 
 const VALID_TYPES: MemoryType[] = ["rule", "decision", "fact", "note"];
+const MAX_CONTENT_WIDTH = 80;
+
+function truncate(str: string, max: number): string {
+  if (str.length <= max) return str;
+  return str.slice(0, max - 1) + "…";
+}
 
 function formatMemory(m: Memory): string {
-  const icon = TYPE_ICONS[m.type] || "📝";
-  const scope = m.scope === "global" ? chalk.dim("G") : chalk.dim("P");
+  const typeColor = TYPE_COLORS[m.type] ?? chalk.dim;
+  const typeLabel = typeColor(TYPE_LABELS[m.type].padEnd(9));
+  const scope = m.scope === "global" ? chalk.magenta("G") : chalk.cyan("P");
+  const id = chalk.dim(m.id);
+  const content = truncate(m.content, MAX_CONTENT_WIDTH);
   const tags = m.tags ? chalk.dim(` [${m.tags}]`) : "";
-  const date = chalk.dim(`(${m.created_at.split("T")[0]})`);
-  return `${icon} ${scope} ${chalk.dim(m.id)}  ${m.content}${tags}  ${date}`;
+  return `  ${scope} ${typeLabel} ${id}  ${content}${tags}`;
 }
 
 export const listCommand = new Command("list")
@@ -84,11 +99,17 @@ export const listCommand = new Command("list")
         return;
       }
 
+      // Group header
+      const currentProject = getProjectId();
+      if (currentProject && !opts.global) {
+        console.log(chalk.dim(`  Project: ${currentProject}\n`));
+      }
+
       for (const m of memories) {
         console.log(formatMemory(m));
       }
-      
-      console.log(chalk.dim(`\n${memories.length} memories`));
+
+      console.log(chalk.dim(`\n  ${memories.length} memories`));
     } catch (error) {
       console.error(chalk.red("✗") + " Failed to list memories:", error instanceof Error ? error.message : "Unknown error");
       process.exit(1);

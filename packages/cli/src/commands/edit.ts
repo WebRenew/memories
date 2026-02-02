@@ -5,19 +5,55 @@ import { writeFileSync, readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { nanoid } from "nanoid";
-import { updateMemory, type MemoryType } from "../lib/memory.js";
+import { select } from "@inquirer/prompts";
+import { listMemories, updateMemory, type Memory, type MemoryType } from "../lib/memory.js";
 import { getDb } from "../lib/db.js";
+import { getProjectId } from "../lib/git.js";
 
 const VALID_TYPES: MemoryType[] = ["rule", "decision", "fact", "note"];
 
+function truncate(str: string, max: number): string {
+  if (str.length <= max) return str;
+  return str.slice(0, max - 1) + "…";
+}
+
+async function pickMemory(): Promise<string> {
+  const projectId = getProjectId() ?? undefined;
+  const memories = await listMemories({ limit: 100, projectId });
+
+  if (memories.length === 0) {
+    console.error(chalk.dim("No memories found."));
+    process.exit(0);
+  }
+
+  const id = await select({
+    message: "Select a memory to edit",
+    choices: memories.map((m) => ({
+      name: `${chalk.dim(m.type.padEnd(9))} ${truncate(m.content, 60)} ${chalk.dim(m.id)}`,
+      value: m.id,
+    })),
+  });
+
+  return id;
+}
+
 export const editCommand = new Command("edit")
   .description("Edit an existing memory")
-  .argument("<id>", "Memory ID to edit")
+  .argument("[id]", "Memory ID to edit (interactive picker if omitted)")
   .option("-c, --content <content>", "New content (skips editor)")
   .option("-t, --tags <tags>", "New comma-separated tags")
   .option("--type <type>", "New memory type: rule, decision, fact, note")
-  .action(async (id: string, opts: { content?: string; tags?: string; type?: string }) => {
+  .action(async (id: string | undefined, opts: { content?: string; tags?: string; type?: string }) => {
     try {
+      // Interactive picker if no ID provided
+      if (!id) {
+        if (!process.stdin.isTTY) {
+          console.error(chalk.red("✗") + " Memory ID required in non-interactive mode");
+          process.exit(1);
+        }
+        id = await pickMemory();
+      }
+
       // Fetch existing memory
       const db = await getDb();
       const result = await db.execute({
@@ -85,6 +121,7 @@ export const editCommand = new Command("edit")
 
       console.log(chalk.green("✓") + ` Updated ${chalk.dim(id)} (${changes.join(", ")})`);
     } catch (error) {
+      if ((error as Error).name === "ExitPromptError") return;
       console.error(chalk.red("✗") + " Failed to edit memory:", error instanceof Error ? error.message : "Unknown error");
       process.exit(1);
     }

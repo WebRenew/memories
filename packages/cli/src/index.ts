@@ -16,6 +16,7 @@ import { editCommand } from "./commands/edit.js";
 import { statsCommand } from "./commands/stats.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { hookCommand } from "./commands/hook.js";
+import { ingestCommand } from "./commands/ingest.js";
 
 const program = new Command()
   .name("memories")
@@ -44,5 +45,6 @@ program.addCommand(editCommand);
 program.addCommand(statsCommand);
 program.addCommand(doctorCommand);
 program.addCommand(hookCommand);
+program.addCommand(ingestCommand);
 
 program.parse();
