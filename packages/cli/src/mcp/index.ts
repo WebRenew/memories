@@ -6,6 +6,7 @@ import {
   searchMemories,
   listMemories,
   forgetMemory,
+  updateMemory,
   getContext,
   getRules,
   type Memory,
@@ -351,6 +352,49 @@ By default, memories are project-scoped when in a git repo. Use global: true for
       } catch (error) {
         return {
           content: [{ type: "text", text: `Failed to list memories: ${error instanceof Error ? error.message : "Unknown error"}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool: edit_memory
+  server.tool(
+    "edit_memory",
+    `Update an existing memory's content, type, or tags. Use this to refine or correct memories.
+Find the memory ID first with search_memories or list_memories.`,
+    {
+      id: z.string().describe("The memory ID to edit"),
+      content: z.string().optional().describe("New content for the memory"),
+      type: z.enum(["rule", "decision", "fact", "note"]).optional().describe("New type for the memory"),
+      tags: z.array(z.string()).optional().describe("New tags (replaces existing tags)"),
+    },
+    async ({ id, content, type, tags }) => {
+      try {
+        if (!content && !type && !tags) {
+          return {
+            content: [{ type: "text", text: "Nothing to update. Provide at least one of: content, type, tags." }],
+            isError: true,
+          };
+        }
+        const updated = await updateMemory(id, {
+          content,
+          type: type as MemoryType | undefined,
+          tags,
+        });
+        if (updated) {
+          const typeLabel = TYPE_LABELS[updated.type];
+          return {
+            content: [{ type: "text", text: `Updated ${typeLabel} ${updated.id}: ${updated.content}` }],
+          };
+        }
+        return {
+          content: [{ type: "text", text: `Memory ${id} not found or already deleted.` }],
+          isError: true,
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `Failed to edit memory: ${error instanceof Error ? error.message : "Unknown error"}` }],
           isError: true,
         };
       }
