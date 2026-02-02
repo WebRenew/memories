@@ -42,12 +42,21 @@ export const metadata: Metadata = {
     siteName: "Memories",
     type: "website",
     locale: "en_US",
+    images: [
+      {
+        url: "/opengraph.png",
+        width: 1200,
+        height: 630,
+        alt: "Memories – Persistent Memory for AI Coding Agents",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Memories – Persistent Memory for AI Coding Agents",
     description:
       "Give your AI coding agents persistent memory across sessions. A CLI tool for Claude, Cursor, and other agents.",
+    images: ["/opengraph.png"],
   },
   robots: {
     index: true,
