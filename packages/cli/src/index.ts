@@ -17,6 +17,7 @@ import { statsCommand } from "./commands/stats.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { hookCommand } from "./commands/hook.js";
 import { ingestCommand } from "./commands/ingest.js";
+import { diffCommand } from "./commands/diff.js";
 
 const program = new Command()
   .name("memories")
@@ -46,5 +47,6 @@ program.addCommand(statsCommand);
 program.addCommand(doctorCommand);
 program.addCommand(hookCommand);
 program.addCommand(ingestCommand);
+program.addCommand(diffCommand);
 
 program.parse();
