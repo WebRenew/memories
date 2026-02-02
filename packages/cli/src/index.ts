@@ -12,6 +12,10 @@ import { configCommand } from "./commands/config.js";
 import { serveCommand } from "./commands/serve.js";
 import { syncCommand } from "./commands/sync.js";
 import { generateCommand } from "./commands/generate.js";
+import { editCommand } from "./commands/edit.js";
+import { statsCommand } from "./commands/stats.js";
+import { doctorCommand } from "./commands/doctor.js";
+import { hookCommand } from "./commands/hook.js";
 
 const program = new Command()
   .name("memories")
@@ -36,5 +40,9 @@ program.addCommand(configCommand);
 program.addCommand(serveCommand);
 program.addCommand(syncCommand);
 program.addCommand(generateCommand);
+program.addCommand(editCommand);
+program.addCommand(statsCommand);
+program.addCommand(doctorCommand);
+program.addCommand(hookCommand);
 
 program.parse();

@@ -1,0 +1,91 @@
+import { Command } from "commander";
+import chalk from "chalk";
+import { execFileSync } from "node:child_process";
+import { writeFileSync, readFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { nanoid } from "nanoid";
+import { updateMemory, type MemoryType } from "../lib/memory.js";
+import { getDb } from "../lib/db.js";
+
+const VALID_TYPES: MemoryType[] = ["rule", "decision", "fact", "note"];
+
+export const editCommand = new Command("edit")
+  .description("Edit an existing memory")
+  .argument("<id>", "Memory ID to edit")
+  .option("-c, --content <content>", "New content (skips editor)")
+  .option("-t, --tags <tags>", "New comma-separated tags")
+  .option("--type <type>", "New memory type: rule, decision, fact, note")
+  .action(async (id: string, opts: { content?: string; tags?: string; type?: string }) => {
+    try {
+      // Fetch existing memory
+      const db = await getDb();
+      const result = await db.execute({
+        sql: `SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL`,
+        args: [id],
+      });
+
+      if (result.rows.length === 0) {
+        console.error(chalk.red("✗") + ` Memory ${chalk.dim(id)} not found`);
+        process.exit(1);
+      }
+
+      const memory = result.rows[0] as unknown as {
+        id: string;
+        content: string;
+        tags: string | null;
+        type: MemoryType;
+      };
+
+      // Validate type if provided
+      if (opts.type && !VALID_TYPES.includes(opts.type as MemoryType)) {
+        console.error(chalk.red("✗") + ` Invalid type "${opts.type}". Valid: ${VALID_TYPES.join(", ")}`);
+        process.exit(1);
+      }
+
+      let newContent = opts.content;
+
+      // If no --content flag, open $EDITOR
+      if (newContent === undefined && opts.tags === undefined && opts.type === undefined) {
+        const editor = process.env.EDITOR || process.env.VISUAL || "vi";
+        const tmpFile = join(tmpdir(), `memories-edit-${nanoid(6)}.md`);
+
+        writeFileSync(tmpFile, memory.content, "utf-8");
+
+        try {
+          execFileSync(editor, [tmpFile], { stdio: "inherit" });
+          newContent = readFileSync(tmpFile, "utf-8").trimEnd();
+        } finally {
+          try { unlinkSync(tmpFile); } catch {}
+        }
+
+        if (newContent === memory.content) {
+          console.log(chalk.dim("No changes made."));
+          return;
+        }
+      }
+
+      // Build updates
+      const updates: { content?: string; tags?: string[]; type?: MemoryType } = {};
+      if (newContent !== undefined) updates.content = newContent;
+      if (opts.tags !== undefined) updates.tags = opts.tags.split(",").map((s) => s.trim()).filter(Boolean);
+      if (opts.type !== undefined) updates.type = opts.type as MemoryType;
+
+      const updated = await updateMemory(id, updates);
+
+      if (!updated) {
+        console.error(chalk.red("✗") + ` Failed to update memory ${chalk.dim(id)}`);
+        process.exit(1);
+      }
+
+      const changes: string[] = [];
+      if (updates.content !== undefined) changes.push("content");
+      if (updates.tags !== undefined) changes.push("tags");
+      if (updates.type !== undefined) changes.push(`type→${updates.type}`);
+
+      console.log(chalk.green("✓") + ` Updated ${chalk.dim(id)} (${changes.join(", ")})`);
+    } catch (error) {
+      console.error(chalk.red("✗") + " Failed to edit memory:", error instanceof Error ? error.message : "Unknown error");
+      process.exit(1);
+    }
+  });
