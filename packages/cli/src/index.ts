@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { initCommand } from "./commands/init.js";
 import { addCommand } from "./commands/add.js";
 import { recallCommand } from "./commands/recall.js";
+import { promptCommand } from "./commands/prompt.js";
 import { searchCommand } from "./commands/search.js";
 import { listCommand } from "./commands/list.js";
 import { forgetCommand } from "./commands/forget.js";
@@ -20,6 +21,7 @@ const program = new Command()
 program.addCommand(initCommand);
 program.addCommand(addCommand);
 program.addCommand(recallCommand);
+program.addCommand(promptCommand);
 
 // Query commands
 program.addCommand(searchCommand);
