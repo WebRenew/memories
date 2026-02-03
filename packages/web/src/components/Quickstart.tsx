@@ -2,15 +2,25 @@
 
 import { useState } from "react";
 
+const packageManagers = ["pnpm", "bun", "npm"] as const;
+type PackageManager = typeof packageManagers[number];
+
+const installCommands: Record<PackageManager, string> = {
+  pnpm: "pnpm add -g @memories.sh/cli",
+  bun: "bun add -g @memories.sh/cli",
+  npm: "npm install -g @memories.sh/cli",
+};
+
 export function Quickstart() {
+  const [pm, setPm] = useState<PackageManager>("pnpm");
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+
   const steps = [
-    { label: "Install", cmd: "pnpm add -g @memories.sh/cli" },
+    { label: "Install", cmd: installCommands[pm] },
     { label: "Init", cmd: "memories init" },
     { label: "Add memory", cmd: "memories add --rule 'Use Tailwind for all UI components'" },
     { label: "Recall", cmd: "memories recall 'styling preferences'" }
   ];
-
-  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
   const copyToClipboard = (text: string, idx: number) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -28,13 +38,30 @@ export function Quickstart() {
         </div>
 
         <div className="bg-card/5 border border-border overflow-hidden relative group mb-16">
-          <div className="flex items-center gap-2 px-6 py-4 bg-muted/50 border-b border-border">
-            <div className="flex gap-1.5">
-              <div className="w-1.5 h-1.5 bg-primary/60" />
-              <div className="w-1.5 h-1.5 bg-primary/60" />
-              <div className="w-1.5 h-1.5 bg-primary/60" />
+          <div className="flex items-center justify-between px-6 py-4 bg-muted/50 border-b border-border">
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1.5">
+                <div className="w-1.5 h-1.5 bg-primary/60" />
+                <div className="w-1.5 h-1.5 bg-primary/60" />
+                <div className="w-1.5 h-1.5 bg-primary/60" />
+              </div>
+              <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-[0.2em] ml-4 font-bold">memories-sh // bash</span>
             </div>
-            <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-[0.2em] ml-4 font-bold">memories-sh // bash</span>
+            <div className="flex gap-1">
+              {packageManagers.map((manager) => (
+                <button
+                  key={manager}
+                  onClick={() => setPm(manager)}
+                  className={`px-2 py-1 text-[9px] font-mono uppercase tracking-wider transition-colors ${
+                    pm === manager
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {manager}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="p-6 md:p-10 font-mono text-sm space-y-6 md:space-y-10 relative z-10">
             {steps.map((step, idx) => (
