@@ -30,19 +30,37 @@ function groupByType(memories: Memory[]): { title: string; memories: Memory[] }[
     .map((title) => ({ title, memories: groups[title] }));
 }
 
-function formatMemoriesAsMarkdown(memories: Memory[]): string {
+const AGENT_INSTRUCTIONS = `## Memory Management
+
+When you learn something important about this project, save it using the memories CLI:
+
+- **Architectural decisions**: \`memories add "<decision>" --type decision\`
+- **Coding conventions**: \`memories add "<convention>" --type rule\`  
+- **Project facts**: \`memories add "<fact>" --type fact\`
+
+Save memories when you:
+- Make or discover architectural decisions
+- Learn project-specific patterns or conventions
+- Encounter non-obvious setup or configuration
+- Resolve tricky bugs worth remembering`;
+
+function formatMemoriesAsMarkdown(memories: Memory[], includeAgentInstructions = true): string {
   const sections = groupByType(memories);
-  if (sections.length === 0) return "";
-  return sections
+  const memoriesContent = sections.length === 0 ? "" : sections
     .map(({ title, memories: mems }) => {
       const items = mems.map((m) => `- ${m.content}`).join("\n");
       return `## ${title}\n\n${items}`;
     })
     .join("\n\n");
+  
+  if (includeAgentInstructions) {
+    return memoriesContent ? `${memoriesContent}\n\n${AGENT_INSTRUCTIONS}` : AGENT_INSTRUCTIONS;
+  }
+  return memoriesContent;
 }
 
 function formatCursorMdc(memories: Memory[]): string {
-  const body = formatMemoriesAsMarkdown(memories);
+  const body = formatMemoriesAsMarkdown(memories, true);
   const frontmatter = [
     "---",
     "description: Project memories and rules from memories.sh",
@@ -54,7 +72,7 @@ function formatCursorMdc(memories: Memory[]): string {
 }
 
 function formatWindsurf(memories: Memory[]): string {
-  const full = formatMemoriesAsMarkdown(memories);
+  const full = formatMemoriesAsMarkdown(memories, true);
   const LIMIT = 6000;
   if (full.length <= LIMIT) return full;
   // Truncate on a line boundary
