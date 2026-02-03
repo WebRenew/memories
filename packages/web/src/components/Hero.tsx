@@ -171,16 +171,16 @@ export function Hero() {
                   {marqueeTools.map((tool, index) => (
                     <div
                       key={`${tool.name}-${index}`}
-                      className="flex shrink-0 items-center gap-3 px-8 opacity-60 hover:opacity-100 transition-opacity duration-300"
+                      className="flex shrink-0 items-center gap-4 px-10 opacity-60 hover:opacity-100 transition-opacity duration-300"
                     >
                       <Image
                         src={tool.logo}
                         alt={tool.name}
-                        width={28}
-                        height={28}
-                        className="w-7 h-7"
+                        width={40}
+                        height={40}
+                        className="w-10 h-10"
                       />
-                      <span className="font-mono text-sm md:text-base uppercase tracking-wide text-muted-foreground">
+                      <span className="font-mono text-lg md:text-xl uppercase tracking-wide text-muted-foreground">
                         {tool.name}
                       </span>
                     </div>
