@@ -7,23 +7,23 @@ export function FAQ() {
   const faqs = [
     {
       q: "What's the difference between global and project memory?",
-      a: "Global memory stores your personal preferences, common patterns, and cross-project knowledge. Project memory is repository-specific, containing codebase rules, architectural decisions, and local context."
+      a: "Global memory stores your personal preferences, common patterns, and cross-project knowledge. Project memory is repository-specific — automatically scoped using your git remote URL — containing codebase rules, architectural decisions, and local context."
     },
     {
       q: "Does this lock me into one tool?",
-      a: "No. memories.sh is built on open standards. Our adapters work across multiple IDEs and CLIs, and you can export your data at any time."
+      a: "No. memories.sh generates native rule files for 8+ tools including Cursor, Claude Code, GitHub Copilot, Windsurf, Cline, Roo, and Gemini. You can also export all data to JSON or YAML at any time."
     },
     {
       q: "How do you store and retrieve memory?",
-      a: "We use a hybrid vector database approach. Memories are indexed semantically, allowing agents to retrieve relevant context using natural language queries with sub-100ms latency."
+      a: "Memories are stored in a local SQLite database on your machine using FTS5 full-text search with BM25 ranking. Queries use prefix matching and intelligent ranking for fast, relevant retrieval."
     },
     {
       q: "Can I export my data?",
-      a: "Yes. You own your data. We provide a simple CLI command to export your entire memory layer to standard JSON or YAML formats."
+      a: "Yes. You own your data — it lives on your machine. Run 'memories export' to export everything to JSON or YAML, or 'memories import' to bring data in from those formats."
     },
     {
-      q: "How do you handle sensitive info?",
-      a: "Security is built-in. We provide automatic PII masking and local-only storage options for sensitive projects. Your data is encrypted at rest and in transit."
+      q: "Where is my data stored?",
+      a: "All data is stored locally at ~/.config/memories/local.db on your machine. Optional cloud sync via Turso is available for accessing memories across devices, but is not required."
     }
   ];
 

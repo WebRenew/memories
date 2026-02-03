@@ -34,29 +34,29 @@ const FeatureIcon = ({ index }: { index: number }) => {
 export function FeaturesGrid() {
   const features = [
     {
-      title: "Tool-agnostic configs",
-      detail: "Define once, use across OpenCode, Claude Code, and Codex.",
-      metric: "YAML v2.1"
+      title: "8+ IDE targets",
+      detail: "Generate native rule files for Cursor, Claude, Copilot, Windsurf, Cline, Roo, Gemini, and AGENTS.md.",
+      metric: "One command"
     },
     {
-      title: "Universal context",
-      detail: "Hybrid vector stores optimized for high-speed retrieval.",
-      metric: "Sub-100ms"
+      title: "Full-text search",
+      detail: "FTS5-powered search with BM25 ranking and prefix matching for fast recall.",
+      metric: "SQLite FTS5"
     },
     {
-      title: "Scoped permissions",
-      detail: "Isolate project memory from global preferences.",
-      metric: "RBAC ready"
+      title: "Global & project scopes",
+      detail: "Isolate project memory from global preferences using automatic git remote detection.",
+      metric: "Auto-scoped"
     },
     {
-      title: "Fast recall search",
-      detail: "Intelligent ranking based on active tool context.",
-      metric: "99.9% Acc"
+      title: "Memory types",
+      detail: "Classify memories as rules, decisions, facts, or notes for structured retrieval.",
+      metric: "4 types"
     },
     {
-      title: "Zero lock-in export",
-      detail: "Export your entire context to standard JSON/YAML.",
-      metric: "Open Std"
+      title: "JSON/YAML export",
+      detail: "Export and import your entire memory store in standard open formats.",
+      metric: "Open format"
     }
   ];
 
@@ -64,8 +64,8 @@ export function FeaturesGrid() {
       <section id="features" className="py-32 px-6 ">
         <div className="max-w-6xl mx-auto">
           <div className="mb-24 flex flex-col items-center text-center">
-            <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-primary mb-4">Core Infrastructure</div>
-            <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Engineered for momentum</h2>
+            <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-primary mb-4">Core Features</div>
+            <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Built for your workflow</h2>
           </div>
   
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-1">
@@ -104,14 +104,14 @@ export function FeaturesGrid() {
                 <div className="w-6 h-6 border border-primary/40 rounded-full flex items-center justify-center mb-10">
                   <div className="w-1 h-1 bg-primary animate-pulse" />
                 </div>
-                <h4 className="text-lg font-bold tracking-tight text-foreground mb-2">Custom Adapters</h4>
+                <h4 className="text-lg font-bold tracking-tight text-foreground mb-2">MCP Server</h4>
                 <p className="text-[13px] text-muted-foreground leading-relaxed font-light">
-                  Need a specific integration? We're building the future of agent memory together.
+                  Built-in Model Context Protocol server with 7 tools for direct agent integration.
                 </p>
               </div>
-              <button className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary group-hover:translate-x-1 transition-transform inline-flex items-center gap-2 mt-10">
-                Apply for Beta <span className="text-lg">→</span>
-              </button>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary inline-flex items-center gap-2 mt-10">
+                memories serve
+              </span>
             </div>
           </div>
         </div>

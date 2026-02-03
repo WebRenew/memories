@@ -117,7 +117,7 @@ export function Hero() {
             </motion.h1>
             
             <motion.p variants={itemVariants} className="text-xl md:text-2xl text-muted-foreground mb-16 max-w-2xl leading-relaxed font-light tracking-tight">
-              A high-performance context layer engineered for durable agent configurations and optimized project recall across any coding environment.
+              A local-first context layer that stores rules, decisions, and knowledge so your AI coding agents stay consistent across sessions and tools.
             </motion.p>
             
             <motion.div variants={itemVariants} className="flex flex-wrap items-center justify-center gap-8">
@@ -141,9 +141,9 @@ export function Hero() {
             className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-1 border-t border-border"
           >
             {[
-              { label: "Latency", value: "0.14ms", detail: "Sub-millisecond retrieval" },
-              { label: "Sync", value: "Durable", detail: "Multi-node consensus" },
-              { label: "Storage", value: "Encrypted", detail: "At-rest & In-transit" },
+              { label: "Storage", value: "Local", detail: "SQLite-based, your machine" },
+              { label: "Search", value: "FTS5", detail: "Full-text with BM25 ranking" },
+              { label: "Targets", value: "8+", detail: "IDE rule file generators" },
             ].map((stat, i) => (
               <div key={i} className="py-8 md:px-8 first:pl-0 border-b md:border-b-0 md:border-r border-border last:border-0">
                 <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-2">{stat.label}</div>

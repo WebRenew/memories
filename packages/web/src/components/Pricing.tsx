@@ -9,13 +9,13 @@ const tiers = [
   {
     name: "Free",
     price: "$0",
-    description: "Perfect for individual developers and small side projects.",
+    description: "Everything you need for local memory management.",
     features: [
-      "Up to 3 active agent profiles",
-      "5GB universal memory storage",
-      "Standard retrieval latency",
-      "Community support",
-      "Basic API access",
+      "Unlimited local memories",
+      "Full-text search with BM25 ranking",
+      "8+ IDE rule file generators",
+      "MCP server with 7 tools",
+      "JSON/YAML export & import",
     ],
     cta: "Start Building",
     highlighted: false,
@@ -23,14 +23,14 @@ const tiers = [
   {
     name: "Professional",
     price: "$15",
-    description: "Advanced capabilities for power users and growing teams.",
+    description: "Cloud sync and dashboard for teams and power users.",
     features: [
-      "Unlimited agent profiles",
-      "100GB universal memory storage",
-      "Sub-millisecond retrieval",
+      "Everything in Free",
+      "Cloud sync via Turso",
+      "Web dashboard for browsing memories",
+      "Cross-device access",
       "Priority email support",
-      "Advanced API with webhooks",
-      "Custom context filters",
+      "Usage stats and analytics",
     ],
     cta: "Go Pro",
     highlighted: true,
@@ -38,14 +38,14 @@ const tiers = [
   {
     name: "Enterprise",
     price: "Custom",
-    description: "Military-grade infrastructure for large-scale agent deployments.",
+    description: "For organizations with advanced requirements.",
     features: [
-      "Unlimited everything",
-      "Dedicated infrastructure",
+      "Everything in Professional",
+      "Dedicated support",
       "SLA guarantees",
-      "24/7 dedicated support",
-      "On-premise deployment options",
-      "Advanced security & compliance",
+      "Team management",
+      "Custom integrations",
+      "Volume licensing",
     ],
     cta: "Contact Us",
     highlighted: false,
@@ -64,14 +64,14 @@ export function Pricing({ user }: { user?: User | null }) {
             className="inline-flex items-center gap-2 px-3 py-1 bg-primary/5 border border-primary/20 text-[10px] uppercase tracking-[0.2em] font-bold mb-6 text-primary"
           >
             <span className="w-1.5 h-1.5 bg-primary animate-pulse" />
-            Pricing Protocols
+            Pricing
           </motion.div>
           <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
             Simple, Transparent <br />
             <span className="text-muted-foreground italic font-light">Memory Management</span>
           </h2>
           <p className="text-muted-foreground max-w-2xl mx-auto text-lg font-light leading-relaxed">
-            Choose the tier that fits your agent's cognitive load. All plans include our core universal memory technology.
+            The CLI is free and open source. Pro adds cloud sync and a web dashboard.
           </p>
         </div>
 

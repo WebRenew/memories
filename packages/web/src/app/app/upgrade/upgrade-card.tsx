@@ -5,12 +5,12 @@ import { Check } from "lucide-react"
 import { toast } from "sonner"
 
 const features = [
-  "Unlimited agent profiles",
-  "100GB universal memory storage",
-  "Sub-millisecond retrieval",
+  "Everything in Free",
+  "Cloud sync via Turso",
+  "Web dashboard for browsing memories",
+  "Cross-device access",
   "Priority email support",
-  "Advanced API with webhooks",
-  "Custom context filters",
+  "Usage stats and analytics",
 ]
 
 export function UpgradeCard() {

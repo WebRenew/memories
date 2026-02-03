@@ -14,7 +14,7 @@ export function Footer() {
                 <span className="font-mono text-lg font-bold tracking-tighter uppercase text-foreground">memories.sh</span>
               </div>
             <p className="max-w-xs text-[12px] text-muted-foreground/60 leading-relaxed font-light">
-              Engineering the durable context layer for the next generation of autonomous coding agents.
+              Persistent memory for AI coding agents. Local-first, open format, works with any tool.
             </p>
           </div>
           
@@ -47,7 +47,7 @@ export function Footer() {
         
         <div className="pt-12 border-t border-border flex flex-col md:flex-row items-center justify-between gap-8">
           <p className="text-[9px] text-muted-foreground/40 uppercase tracking-[0.2em] font-bold">
-            © 2026 memories.sh // CORE_PROTOCOL_REv1.0.0
+            © 2026 memories.sh
           </p>
           <div className="flex items-center gap-8">
             <ThemeSwitcher />

@@ -6,18 +6,18 @@ export function WhyItMatters() {
   const cases = [
     {
       title: "Contextual Continuity",
-      desc: "Switch between Claude Code, OpenCode, and local scripts without re-explaining project state.",
-      example: "memories sync"
+      desc: "Switch between Claude Code, Cursor, and Copilot without re-explaining project state.",
+      example: "memories generate all"
     },
     {
       title: "Architectural Integrity",
-      desc: "Ensure agents respect repository-specific rules, patterns, and design systems automatically.",
-      example: "memories enforce"
+      desc: "Store coding rules and decisions that every agent respects, across every session.",
+      example: "memories add --rule 'Always use server components'"
     },
     {
       title: "Instant Resumption",
       desc: "Return to a codebase after months and have your agent immediately recall previous decisions.",
-      example: "memories resume"
+      example: "memories recall 'architecture decisions'"
     }
   ];
 

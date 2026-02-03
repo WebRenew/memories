@@ -4,10 +4,10 @@ import { motion } from "framer-motion";
 
 export function Quickstart() {
   const steps = [
-    { label: "Install", cmd: "curl -sS https://memories.sh/install | sh" },
+    { label: "Install", cmd: "npm install -g @memories.sh/cli" },
     { label: "Init", cmd: "memories init" },
-    { label: "Add memory", cmd: "memories add 'Use Tailwind for all UI components'" },
-    { label: "Query", cmd: "memories query 'styling preferences'" }
+    { label: "Add memory", cmd: "memories add --rule 'Use Tailwind for all UI components'" },
+    { label: "Recall", cmd: "memories recall 'styling preferences'" }
   ];
 
   const copyToClipboard = (text: string) => {
@@ -19,7 +19,7 @@ export function Quickstart() {
       <div className="max-w-4xl mx-auto">
         <div className="mb-24 flex flex-col items-center text-center">
           <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-primary mb-4">Implementation</div>
-          <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-white">Initialize Protocol</h2>
+          <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-white">Get Started</h2>
         </div>
 
         <div className="bg-white/[0.02] border border-white/5 overflow-hidden relative group mb-16">
@@ -60,7 +60,7 @@ export function Quickstart() {
           <div className="flex items-start gap-6">
             <div className="mt-1 w-1.5 h-1.5 rounded-full bg-primary" />
             <div>
-              <h4 className="text-sm font-bold mb-4 tracking-[0.1em] text-white uppercase">Context Propagation</h4>
+              <h4 className="text-sm font-bold mb-4 tracking-[0.1em] text-white uppercase">Two Memory Layers</h4>
               <p className="text-[13px] text-muted-foreground leading-relaxed font-light">
                 Memories are stored in two distinct layers. <span className="text-primary/90">Global Scope</span> persists your personal preferences and cross-project knowledge across all tools. <span className="text-primary/90">Project Scope</span> is bound to your current repository, ensuring that agent context remains relevant to the specific codebase and team rules.
               </p>

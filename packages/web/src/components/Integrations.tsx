@@ -4,23 +4,23 @@ import { motion } from "framer-motion";
 
 const AdapterIcon = ({ name }: { name: string }) => {
   const icons: Record<string, JSX.Element> = {
-    "OpenCode": (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M16 18l6-6-6-6M8 6l-6 6 6 6" />
-      </svg>
-    ),
     "Claude Code": (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
       </svg>
     ),
-    "Codex": (
+    "Cursor": (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 18l6-6-6-6M8 6l-6 6 6 6" />
+      </svg>
+    ),
+    "GitHub Copilot": (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10" />
         <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10zM2 12h20" />
       </svg>
     ),
-    "Any CLI": (
+    "Any MCP Client": (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
         <path d="M4 17l6-6-6-6M12 19h8" />
       </svg>
@@ -32,24 +32,24 @@ const AdapterIcon = ({ name }: { name: string }) => {
 export function Integrations() {
   const adapters = [
     {
-      name: "OpenCode",
-      status: "Available",
-      desc: "Native integration for multi-model coding environments.",
-    },
-    {
       name: "Claude Code",
       status: "Available",
-      desc: "Deep integration with Anthropic's agentic CLI.",
+      desc: "Generates CLAUDE.md with your rules and context for Anthropic's CLI.",
     },
     {
-      name: "Codex",
-      status: "Beta",
-      desc: "Optimized context retrieval for legacy codebases.",
-    },
-    {
-      name: "Any CLI",
+      name: "Cursor",
       status: "Available",
-      desc: "Universal shell adapter for custom agentic scripts.",
+      desc: "Generates .cursor/rules/memories.mdc with YAML frontmatter for Cursor IDE.",
+    },
+    {
+      name: "GitHub Copilot",
+      status: "Available",
+      desc: "Generates .github/copilot-instructions.md for Copilot context.",
+    },
+    {
+      name: "Any MCP Client",
+      status: "Available",
+      desc: "Built-in MCP server works with any client that supports the Model Context Protocol.",
     }
   ];
 
@@ -57,8 +57,8 @@ export function Integrations() {
       <section id="integrations" className="py-32 px-6 bg-card/5">
         <div className="max-w-6xl mx-auto">
           <div className="mb-24 flex flex-col items-center text-center">
-            <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-primary mb-4">Connectivity</div>
-            <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Ecosystem Adapters</h2>
+            <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-primary mb-4">Integrations</div>
+            <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Works With Your Tools</h2>
           </div>
   
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-1">
@@ -84,7 +84,7 @@ export function Integrations() {
                 <p className="text-[13px] text-muted-foreground leading-relaxed mb-10 font-light">{a.desc}</p>
                 
                 <button className="mt-auto text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground group-hover:text-primary transition-colors flex items-center gap-2">
-                  Protocol Docs <span className="text-lg opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">→</span>
+                  View Docs <span className="text-lg opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">→</span>
                 </button>
               </motion.div>
             ))}

@@ -29,7 +29,7 @@ export default async function UpgradePage() {
           Upgrade to Pro
         </h1>
         <p className="text-muted-foreground max-w-md leading-relaxed">
-          Unlock unlimited agent profiles, 100GB storage, and sub-millisecond retrieval.
+          Add cloud sync, a web dashboard, and cross-device access to your memory workflow.
         </p>
       </div>
 

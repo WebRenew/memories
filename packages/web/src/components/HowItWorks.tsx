@@ -102,19 +102,19 @@ function StepCard({ step, idx }: { step: any; idx: number }) {
 export function HowItWorks() {
   const steps = [
     {
-      title: "Define an agent",
-      desc: "Describe identity and capabilities in a portable format.",
-      cmd: "memories init --name 'architect'"
+      title: "Store a memory",
+      desc: "Save rules, decisions, and facts with automatic type detection and scoping.",
+      cmd: "memories add --rule 'Use Tailwind for all styling'"
     },
     {
-      title: "Choose scope",
-      desc: "Assign memory to global or project-specific stores.",
-      cmd: "memories scope set project"
+      title: "Generate rule files",
+      desc: "Output memories as native IDE rule files for Cursor, Claude, Copilot, and more.",
+      cmd: "memories generate all"
     },
     {
       title: "Recall anywhere",
-      desc: "Access context via adapters in any tool or framework.",
-      cmd: "memories recall 'last auth fix'"
+      desc: "Retrieve relevant context via CLI or the built-in MCP server.",
+      cmd: "memories recall 'auth patterns'"
     }
   ];
 
