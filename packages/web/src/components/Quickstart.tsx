@@ -4,7 +4,7 @@ import { useState } from "react";
 
 export function Quickstart() {
   const steps = [
-    { label: "Install", cmd: "npm install -g @memories.sh/cli" },
+    { label: "Install", cmd: "pnpm add -g @memories.sh/cli" },
     { label: "Init", cmd: "memories init" },
     { label: "Add memory", cmd: "memories add --rule 'Use Tailwind for all UI components'" },
     { label: "Recall", cmd: "memories recall 'styling preferences'" }
