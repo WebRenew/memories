@@ -28,7 +28,7 @@ const MemoryStream = () => {
   }, []);
 
   return (
-    <div className="flex flex-col gap-4 font-mono text-[9px] leading-none h-full">
+    <div className="flex flex-col gap-3 font-mono text-[9px] leading-normal h-full">
       <AnimatePresence mode="popLayout" initial={false}>
         {memories.map((m) => (
           <motion.div
@@ -148,7 +148,7 @@ export function Hero() {
               <div key={i} className="py-8 md:px-8 first:pl-0 border-b md:border-b-0 md:border-r border-border last:border-0">
                 <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-2">{stat.label}</div>
                 <div className="text-3xl font-mono mb-1 text-foreground">{stat.value}</div>
-                <div className="text-[11px] text-muted-foreground/40 italic">{stat.detail}</div>
+                <div className="text-[11px] text-muted-foreground/70 italic">{stat.detail}</div>
               </div>
             ))}
           </motion.div>
