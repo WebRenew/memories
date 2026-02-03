@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createTurso } from "@libsql/client"
-import Link from "next/link"
-import { Database, Settings } from "@/components/icons/app"
+import { ProvisioningScreen } from "@/components/dashboard/ProvisioningScreen"
 
 export default async function MemoriesPage() {
   const supabase = await createClient()
@@ -18,29 +17,7 @@ export default async function MemoriesPage() {
   const hasTurso = profile?.turso_db_url && profile?.turso_db_token
 
   if (!hasTurso) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <div className="w-16 h-16 rounded-full bg-muted/50 border border-border flex items-center justify-center mb-6">
-          <Database className="w-8 h-8 text-muted-foreground" />
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight mb-3">
-          Connect Your Memory Database
-        </h1>
-        <p className="text-muted-foreground max-w-md mb-8 leading-relaxed">
-          Link your Turso database from the CLI to view and manage your memories here.
-          Run <code className="px-2 py-0.5 bg-muted border border-border font-mono text-xs">memories sync</code> to get started.
-        </p>
-        <Link
-          href="/app/settings"
-          className="inline-flex items-center gap-3 px-6 py-3 bg-primary text-primary-foreground hover:opacity-90 transition-all duration-300"
-        >
-          <Settings className="w-4 h-4" />
-          <span className="text-xs font-bold uppercase tracking-[0.15em]">
-            Go to Settings
-          </span>
-        </Link>
-      </div>
-    )
+    return <ProvisioningScreen />
   }
 
   // Fetch memories directly via Turso (server-only, no credential leaking)
@@ -71,7 +48,7 @@ export default async function MemoriesPage() {
       {connectError ? (
         <div className="border border-border bg-card/20 p-8 text-center">
           <p className="text-muted-foreground text-sm">
-            Could not connect to your memory database. Check your Turso credentials in Settings.
+            Could not connect to your memory database. Please try again later.
           </p>
         </div>
       ) : memories.length === 0 ? (

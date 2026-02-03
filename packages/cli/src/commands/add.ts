@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { addMemory, type MemoryType } from "../lib/memory.js";
+import { readAuth, getApiClient } from "../lib/auth.js";
 
 const VALID_TYPES: MemoryType[] = ["rule", "decision", "fact", "note"];
 
@@ -22,6 +23,34 @@ export const addCommand = new Command("add")
     fact?: boolean;
   }) => {
     try {
+      // Check rate limits if logged in
+      const auth = await readAuth();
+      if (auth) {
+        try {
+          const apiFetch = getApiClient(auth);
+          const res = await apiFetch("/api/db/limits");
+          if (res.ok) {
+            const limits = (await res.json()) as {
+              plan: string;
+              memoryLimit: number | null;
+              memoryCount: number;
+            };
+            if (limits.memoryLimit !== null && limits.memoryCount >= limits.memoryLimit) {
+              console.error(
+                chalk.yellow("!") +
+                  ` You've reached the free plan limit of ${limits.memoryLimit.toLocaleString()} memories.`
+              );
+              console.error(
+                `  Upgrade at ${chalk.cyan("https://memories.sh/app/upgrade")}`
+              );
+              process.exit(1);
+            }
+          }
+        } catch {
+          // If limit check fails, allow the add to proceed
+        }
+      }
+
       const tags = opts.tags?.split(",").map((t) => t.trim());
       
       // Determine type from flags

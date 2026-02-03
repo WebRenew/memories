@@ -26,7 +26,7 @@ const tiers = [
     description: "Cloud sync and dashboard for teams and power users.",
     features: [
       "Everything in Free",
-      "Cloud sync via Turso",
+      "Cloud sync & backup",
       "Web dashboard for browsing memories",
       "Cross-device access",
       "Priority email support",
@@ -76,7 +76,7 @@ export function Pricing({ user }: { user?: User | null }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {tiers.map((tier, index) => (
+          {tiers.map((tier) => (
               <motion.div
                 key={tier.name}
                 initial={{ opacity: 0 }}

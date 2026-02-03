@@ -6,7 +6,7 @@ import { toast } from "sonner"
 
 const features = [
   "Everything in Free",
-  "Cloud sync via Turso",
+  "Cloud sync & backup",
   "Web dashboard for browsing memories",
   "Cross-device access",
   "Priority email support",

@@ -1,0 +1,163 @@
+import { nanoid } from "nanoid"
+import { createClient } from "@libsql/client"
+
+const API_BASE = "https://api.turso.tech/v1"
+
+interface CreateDbResponse {
+  database: {
+    Name: string
+    DbId: string
+    Hostname: string
+  }
+}
+
+interface CreateTokenResponse {
+  jwt: string
+}
+
+function getApiToken(): string {
+  const token = process.env.TURSO_PLATFORM_API_TOKEN
+  if (!token) {
+    throw new Error("TURSO_PLATFORM_API_TOKEN not set")
+  }
+  return token
+}
+
+async function api<T>(
+  path: string,
+  opts?: { method?: string; body?: unknown }
+): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: opts?.method ?? "GET",
+    headers: {
+      Authorization: `Bearer ${getApiToken()}`,
+      "Content-Type": "application/json",
+    },
+    body: opts?.body ? JSON.stringify(opts.body) : undefined,
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Turso API error (${res.status}): ${text}`)
+  }
+
+  return res.json() as Promise<T>
+}
+
+export async function createDatabase(org: string): Promise<{
+  name: string
+  hostname: string
+  dbId: string
+}> {
+  const name = `memories-${nanoid(8).toLowerCase()}`
+
+  const { database } = await api<CreateDbResponse>(
+    `/organizations/${org}/databases`,
+    {
+      method: "POST",
+      body: { name, group: "default" },
+    }
+  )
+
+  return {
+    name: database.Name,
+    hostname: database.Hostname,
+    dbId: database.DbId,
+  }
+}
+
+export async function createDatabaseToken(
+  org: string,
+  dbName: string
+): Promise<string> {
+  const { jwt } = await api<CreateTokenResponse>(
+    `/organizations/${org}/databases/${dbName}/auth/tokens`,
+    { method: "POST" }
+  )
+  return jwt
+}
+
+/**
+ * Initialize the schema on a freshly provisioned Turso database.
+ * Runs the same DDL the CLI uses so the web dashboard can query it.
+ */
+export async function initSchema(url: string, token: string): Promise<void> {
+  const db = createClient({ url, authToken: token })
+
+  await db.execute(
+    `CREATE TABLE IF NOT EXISTS memories (
+      id TEXT PRIMARY KEY,
+      content TEXT NOT NULL,
+      tags TEXT,
+      scope TEXT NOT NULL DEFAULT 'global',
+      project_id TEXT,
+      type TEXT NOT NULL DEFAULT 'note',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      deleted_at TEXT
+    )`
+  )
+
+  await db.execute(
+    `CREATE TABLE IF NOT EXISTS configs (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )`
+  )
+
+  await db.execute(
+    `CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      path TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`
+  )
+
+  await db.execute(
+    `CREATE TABLE IF NOT EXISTS sync_state (
+      id TEXT PRIMARY KEY,
+      last_synced_at TEXT,
+      remote_url TEXT
+    )`
+  )
+
+  await db.execute(
+    `CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+      content,
+      tags,
+      content='memories',
+      content_rowid='rowid'
+    )`
+  )
+
+  // FTS triggers
+  await db.execute(`DROP TRIGGER IF EXISTS memories_ai`)
+  await db.execute(`DROP TRIGGER IF EXISTS memories_ad`)
+  await db.execute(`DROP TRIGGER IF EXISTS memories_au`)
+
+  await db.execute(`
+    CREATE TRIGGER memories_ai AFTER INSERT ON memories
+    WHEN NEW.deleted_at IS NULL
+    BEGIN
+      INSERT INTO memories_fts(rowid, content, tags) VALUES (NEW.rowid, NEW.content, NEW.tags);
+    END
+  `)
+
+  await db.execute(`
+    CREATE TRIGGER memories_ad AFTER DELETE ON memories BEGIN
+      INSERT INTO memories_fts(memories_fts, rowid, content, tags) VALUES('delete', OLD.rowid, OLD.content, OLD.tags);
+    END
+  `)
+
+  await db.execute(`
+    CREATE TRIGGER memories_au AFTER UPDATE ON memories BEGIN
+      INSERT INTO memories_fts(memories_fts, rowid, content, tags) VALUES('delete', OLD.rowid, OLD.content, OLD.tags);
+      INSERT INTO memories_fts(rowid, content, tags)
+        SELECT NEW.rowid, NEW.content, NEW.tags WHERE NEW.deleted_at IS NULL;
+    END
+  `)
+
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type)`)
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_memories_scope_project ON memories(scope, project_id)`)
+}

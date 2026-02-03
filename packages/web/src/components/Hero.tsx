@@ -143,7 +143,7 @@ export function Hero() {
             {[
               { label: "Tools", value: "8+", detail: "Supported IDE targets" },
               { label: "Commands", value: "20", detail: "Full CLI toolkit" },
-              { label: "Format", value: "Open", detail: "JSON, YAML, SQLite" },
+              { label: "Format", value: "Open", detail: "JSON, YAML, Export" },
             ].map((stat, i) => (
               <div key={i} className="py-8 md:px-8 first:pl-0 border-b md:border-b-0 md:border-r border-border last:border-0">
                 <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-2">{stat.label}</div>

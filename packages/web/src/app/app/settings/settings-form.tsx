@@ -8,16 +8,12 @@ interface SettingsFormProps {
     name: string
     email: string
     avatar_url: string
-    turso_db_url: string
-    turso_db_token: string
     plan: string
   }
 }
 
 export function SettingsForm({ profile }: SettingsFormProps) {
   const [name, setName] = useState(profile.name)
-  const [tursoUrl, setTursoUrl] = useState(profile.turso_db_url)
-  const [tursoToken, setTursoToken] = useState(profile.turso_db_token)
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -26,11 +22,7 @@ export function SettingsForm({ profile }: SettingsFormProps) {
       const res = await fetch("/api/user", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          turso_db_url: tursoUrl,
-          turso_db_token: tursoToken,
-        }),
+        body: JSON.stringify({ name }),
       })
 
       if (!res.ok) {
@@ -85,45 +77,6 @@ export function SettingsForm({ profile }: SettingsFormProps) {
             <div className="px-4 py-3 bg-muted/30 border border-border text-sm">
               <span className="uppercase tracking-wider font-bold">{profile.plan}</span>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Turso connection */}
-      <div className="border border-border bg-card/20 p-6 space-y-6">
-        <h2 className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground/60">
-          Database Connection
-        </h2>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Connect your Turso database to browse memories in the dashboard.
-          Find these values in your CLI config or Turso dashboard.
-        </p>
-
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider block mb-2">
-              Turso Database URL
-            </label>
-            <input
-              type="text"
-              value={tursoUrl}
-              onChange={(e) => setTursoUrl(e.target.value)}
-              placeholder="libsql://your-db.turso.io"
-              className="w-full px-4 py-3 bg-background border border-border text-sm font-mono focus:border-primary/50 focus:outline-none transition-colors placeholder:text-muted-foreground/40"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider block mb-2">
-              Turso Auth Token
-            </label>
-            <input
-              type="password"
-              value={tursoToken}
-              onChange={(e) => setTursoToken(e.target.value)}
-              placeholder="eyJhb..."
-              className="w-full px-4 py-3 bg-background border border-border text-sm font-mono focus:border-primary/50 focus:outline-none transition-colors placeholder:text-muted-foreground/40"
-            />
           </div>
         </div>
       </div>

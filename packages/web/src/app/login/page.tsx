@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 import { OAuthButtons } from "./oauth-buttons"
 
 export const metadata = {
@@ -13,9 +14,11 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 justify-center mb-12 group">
-          <img
+          <Image
             src="/memories.svg"
             alt="memories.sh logo"
+            width={32}
+            height={32}
             className="w-8 h-8 dark:invert group-hover:scale-110 transition-transform duration-500"
           />
           <span className="font-mono text-sm font-bold tracking-tighter uppercase text-foreground">

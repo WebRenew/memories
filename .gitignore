@@ -6,3 +6,4 @@ dist/
 *.local.db
 *.local.db-*
 sync.json
+supabase/.temp/

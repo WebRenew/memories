@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import type { User } from "@supabase/supabase-js";
 
@@ -30,7 +31,7 @@ export function TopNav({ user }: { user?: User | null }) {
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           {/* Logo */}
             <Link href="/" className="flex items-center gap-3 group">
-              <img src="/memories.svg" alt="memories.sh logo" className="w-8 h-8 dark:invert group-hover:scale-110 transition-transform duration-500" />
+              <Image src="/memories.svg" alt="memories.sh logo" width={32} height={32} className="w-8 h-8 dark:invert group-hover:scale-110 transition-transform duration-500" />
               <span className="font-mono text-sm font-bold tracking-tighter uppercase hidden sm:block text-foreground">
                 memories.sh
               </span>

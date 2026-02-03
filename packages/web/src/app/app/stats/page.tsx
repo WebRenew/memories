@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { StatsCharts } from "./stats-charts"
+import { ProvisioningScreen } from "@/components/dashboard/ProvisioningScreen"
 
 export const metadata = {
   title: "Stats",
@@ -20,14 +21,7 @@ export default async function StatsPage() {
   const hasTurso = profile?.turso_db_url && profile?.turso_db_token
 
   if (!hasTurso) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <h1 className="text-2xl font-bold tracking-tight mb-3">No Data Yet</h1>
-        <p className="text-muted-foreground max-w-md">
-          Connect your Turso database in Settings to see memory statistics.
-        </p>
-      </div>
-    )
+    return <ProvisioningScreen />
   }
 
   // Fetch stats from Turso
@@ -62,7 +56,7 @@ export default async function StatsPage() {
     return (
       <div className="border border-border bg-card/20 p-8 text-center">
         <p className="text-muted-foreground text-sm">
-          Could not connect to your memory database. Check your Turso credentials in Settings.
+          Could not connect to your memory database. Please try again later.
         </p>
       </div>
     )

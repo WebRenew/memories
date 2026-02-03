@@ -17,16 +17,6 @@ export async function PATCH(request: Request) {
     updates.name = body.name
   }
 
-  if (typeof body.turso_db_url === "string" && body.turso_db_url.length <= 500) {
-    if (body.turso_db_url === "" || body.turso_db_url.startsWith("libsql://") || body.turso_db_url.startsWith("https://")) {
-      updates.turso_db_url = body.turso_db_url
-    }
-  }
-
-  if (typeof body.turso_db_token === "string" && body.turso_db_token.length <= 2000) {
-    updates.turso_db_token = body.turso_db_token
-  }
-
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 })
   }

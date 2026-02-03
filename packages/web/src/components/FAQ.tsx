@@ -19,7 +19,7 @@ export function FAQ() {
     },
     {
       q: "How do you store and retrieve memory?",
-      a: "Memories are stored in a local SQLite database on your machine using FTS5 full-text search with BM25 ranking. Queries use prefix matching and intelligent ranking for fast, relevant retrieval."
+      a: "Memories are stored locally on your machine with full-text search and BM25 ranking. Queries use prefix matching and intelligent ranking for fast, relevant retrieval."
     },
     {
       q: "Can I export my data?",
@@ -27,7 +27,7 @@ export function FAQ() {
     },
     {
       q: "Where is my data stored?",
-      a: "All data is stored locally at ~/.config/memories/local.db on your machine. Optional cloud sync via Turso is available for accessing memories across devices, but is not required."
+      a: "All data is stored locally at ~/.config/memories/ on your machine. Optional cloud sync is available with Pro for accessing memories across devices, but is not required."
     }
   ];
 

@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import type { User } from "@supabase/supabase-js"
 import { Database, BarChart3, Settings, Sparkles, LogOut, AlertTriangle } from "@/components/icons/app"
@@ -66,9 +67,11 @@ export function DashboardShell({
       <header className={`fixed left-0 w-full z-50 border-b border-border bg-background/80 backdrop-blur-2xl ${plan === "past_due" ? "top-9" : "top-0"}`}>
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 group">
-            <img
+            <Image
               src="/memories.svg"
               alt="memories.sh"
+              width={24}
+              height={24}
               className="w-6 h-6 dark:invert group-hover:scale-110 transition-transform duration-500"
             />
             <span className="font-mono text-xs font-bold tracking-tighter uppercase hidden sm:block text-foreground">
@@ -97,9 +100,11 @@ export function DashboardShell({
                 </p>
               </div>
               {profile?.avatar_url ? (
-                <img
+                <Image
                   src={profile.avatar_url}
                   alt=""
+                  width={32}
+                  height={32}
                   className="w-8 h-8 rounded-full border border-border"
                 />
               ) : (

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 
 export function Footer() {
@@ -10,7 +11,7 @@ export function Footer() {
         <div className="flex flex-col md:flex-row items-start justify-between gap-16 mb-24">
             <div>
               <div className="flex items-center gap-3 mb-8 group">
-                <img src="/memories.svg" alt="memories.sh logo" className="w-5 h-5 dark:invert group-hover:rotate-12 transition-transform duration-500" />
+                <Image src="/memories.svg" alt="memories.sh logo" width={20} height={20} className="w-5 h-5 dark:invert group-hover:rotate-12 transition-transform duration-500" />
                 <span className="font-mono text-lg font-bold tracking-tighter uppercase text-foreground">memories.sh</span>
               </div>
             <p className="max-w-xs text-[12px] text-muted-foreground/60 leading-relaxed font-light">

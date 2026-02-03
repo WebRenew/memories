@@ -6,24 +6,24 @@ import React from "react";
 const StepIcon = ({ index }: { index: number }) => {
   const icons = [
     // Define
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+    <svg key="define" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3v18M3 12h18" />
       <circle cx="12" cy="12" r="9" strokeDasharray="4 4" />
     </svg>,
     // Scope
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+    <svg key="scope" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" />
       <path d="M10 7V13M7 10H13" />
     </svg>,
     // Recall
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+    <svg key="recall" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 12h20M12 2L2 12l10 10M22 12l-10-10" />
     </svg>
   ];
   return icons[index % icons.length];
 };
 
-function StepCard({ step, idx }: { step: any; idx: number }) {
+function StepCard({ step, idx }: { step: { title: string; desc: string; cmd: string }; idx: number }) {
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
 
