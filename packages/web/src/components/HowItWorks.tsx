@@ -39,16 +39,12 @@ function StepCard({ step, idx }: { step: any; idx: number }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
       viewport={{ once: true }}
-      transition={{ 
-        duration: 0.8, 
-        delay: idx * 0.1,
-        ease: [0.16, 1, 0.3, 1]
-      }}
+      transition={{ duration: 0.4 }}
       onMouseMove={handleMouseMove}
-      className="p-10 bg-card/10 border border-border group relative overflow-hidden cursor-none"
+      className="p-10 bg-card/10 border border-border group relative overflow-hidden md:cursor-none"
     >
       {/* Accent Circle (The "Mouse") */}
       <motion.div
@@ -119,7 +115,7 @@ export function HowItWorks() {
   ];
 
   return (
-    <section id="how-it-works" className="py-32 px-6 border-y border-border">
+    <section id="how-it-works" className="py-32 px-6 border-y border-border bg-muted/20">
       <div className="max-w-6xl mx-auto">
         {/* Social Proof / Momentum Bar */}
         <div className="mb-40 grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -146,7 +142,7 @@ export function HowItWorks() {
           <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Three commands to get started</h2>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-1">
+        <div className="grid md:grid-cols-3 gap-3 md:gap-1">
           {steps.map((step, idx) => (
             <StepCard key={idx} step={step} idx={idx} />
           ))}

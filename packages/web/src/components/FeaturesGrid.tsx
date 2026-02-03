@@ -68,14 +68,14 @@ export function FeaturesGrid() {
             <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Built for your workflow</h2>
           </div>
   
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-1">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-1">
             {features.map((f, idx) => (
               <motion.div 
                 key={idx}
                 initial={{ opacity: 0 }}
                 whileInView={{ opacity: 1 }}
                 viewport={{ once: true }}
-                transition={{ delay: idx * 0.05 }}
+                transition={{ duration: 0.4 }}
                 className="group p-10 bg-card/10 border border-border hover:bg-card/20 transition-all duration-500 relative overflow-hidden"
               >
                 <div className="text-primary/40 group-hover:text-primary transition-colors duration-500 mb-10">

@@ -81,14 +81,14 @@ export function Integrations() {
             <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Works With Your Tools</h2>
           </div>
   
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-1">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-1">
             {adapters.map((a, idx) => (
               <motion.div 
                 key={idx}
                 initial={{ opacity: 0 }}
                 whileInView={{ opacity: 1 }}
                 viewport={{ once: true }}
-                transition={{ delay: idx * 0.05 }}
+                transition={{ duration: 0.4 }}
                 className="p-10 border border-border bg-card/10 flex flex-col items-start group hover:bg-card/20 transition-all"
               >
                 <div className="flex items-center justify-between w-full mb-12">

@@ -111,7 +111,7 @@ export function Hero() {
               Open Source CLI
             </motion.div>
             
-            <motion.h1 variants={itemVariants} className="text-7xl md:text-[120px] font-bold tracking-[-0.04em] mb-10 leading-[0.85] text-foreground">
+            <motion.h1 variants={itemVariants} className="text-5xl sm:text-7xl md:text-[120px] font-bold tracking-[-0.04em] mb-10 leading-[0.85] text-foreground">
               One Memory <br />
               <span className="text-primary/80 italic font-light">Every AI Tool</span>
             </motion.h1>
@@ -121,15 +121,15 @@ export function Hero() {
             </motion.p>
             
             <motion.div variants={itemVariants} className="flex flex-wrap items-center justify-center gap-8">
-              <button className="group relative px-10 py-5 bg-foreground text-background font-bold uppercase tracking-[0.1em] text-xs overflow-hidden transition-all hover:scale-[1.02]">
+              <a href="#quickstart" className="group relative px-10 py-5 bg-foreground text-background font-bold uppercase tracking-[0.1em] text-xs overflow-hidden transition-all hover:scale-[1.02]">
                 <span className="relative z-10">Get Started</span>
                 <div className="absolute inset-0 bg-primary translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-              </button>
+              </a>
               
-              <button className="group flex items-center gap-4 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors">
+              <a href="#pricing" className="group flex items-center gap-4 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors">
                 <span className="w-12 h-px bg-border group-hover:w-16 group-hover:bg-primary transition-all duration-500" />
-                View on GitHub
-              </button>
+                View Pricing
+              </a>
             </motion.div>
           </motion.div>
   
@@ -138,7 +138,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 40, filter: "blur(10px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             transition={{ duration: 1.2, delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-1 border-t border-border"
+            className="mt-24 grid grid-cols-1 sm:grid-cols-3 gap-1 border-t border-border"
           >
             {[
               { label: "Tools", value: "8+", detail: "Supported IDE targets" },

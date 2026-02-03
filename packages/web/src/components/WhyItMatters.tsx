@@ -22,20 +22,20 @@ export function WhyItMatters() {
   ];
 
   return (
-    <section className="py-32 px-6 ">
+    <section className="py-20 px-6 ">
       <div className="max-w-6xl mx-auto">
-        <div className="grid md:grid-cols-3 gap-24">
+        <div className="grid md:grid-cols-3 gap-12 md:gap-24">
           {cases.map((c, idx) => (
             <motion.div 
               key={idx}
-              initial={{ y: 20, opacity: 0 }}
-              whileInView={{ y: 0, opacity: 1 }}
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
-              transition={{ delay: idx * 0.1, duration: 0.6 }}
+              transition={{ duration: 0.4 }}
               className="flex flex-col group"
             >
               <div className="h-px w-12 bg-primary/30 mb-10 group-hover:w-full transition-all duration-700" />
-              <h4 className="text-xl font-bold mb-6 tracking-tight text-white uppercase tracking-wider">{c.title}</h4>
+              <h4 className="text-xl font-bold mb-6 tracking-tight text-foreground uppercase tracking-wider">{c.title}</h4>
               <p className="text-[14px] text-muted-foreground leading-relaxed mb-10 font-light">
                 {c.desc}
               </p>

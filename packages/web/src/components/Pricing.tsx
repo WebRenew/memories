@@ -58,8 +58,8 @@ export function Pricing({ user }: { user?: User | null }) {
       <div className="max-w-7xl mx-auto relative z-10">
         <div className="text-center mb-20">
           <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
             className="inline-flex items-center gap-2 px-3 py-1 bg-primary/5 border border-primary/20 text-[10px] uppercase tracking-[0.2em] font-bold mb-6 text-primary"
           >
@@ -79,10 +79,10 @@ export function Pricing({ user }: { user?: User | null }) {
           {tiers.map((tier, index) => (
               <motion.div
                 key={tier.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
                 viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
+                transition={{ duration: 0.4 }}
                 className={`relative flex flex-col p-8 border ${
                   tier.highlighted 
                     ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20" 
