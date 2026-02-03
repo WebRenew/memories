@@ -2,6 +2,17 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
+import Image from "next/image";
+
+const tools = [
+  { name: "Cursor", logo: "/logos/cursor.svg" },
+  { name: "Claude Code", logo: "/logos/claude-code.svg" },
+  { name: "Copilot", logo: "/logos/copilot.svg" },
+  { name: "Windsurf", logo: "/logos/windsurf.svg" },
+  { name: "Cline", logo: "/logos/cline.svg" },
+  { name: "Codex", logo: "/logos/codex.svg" },
+  { name: "Gemini", logo: "/logos/gemini.svg" },
+];
 
 const MemoryStream = () => {
   const [memories, setMemories] = useState<Array<{ id: number; hash: string; addr: string; status: string }>>([]);
@@ -133,24 +144,38 @@ export function Hero() {
             </motion.div>
           </motion.div>
   
-          {/* Technical Visualization Layer */}
+          {/* Works With Section */}
           <motion.div 
             initial={{ opacity: 0, y: 40, filter: "blur(10px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             transition={{ duration: 1.2, delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-24 grid grid-cols-1 sm:grid-cols-3 gap-1 border-t border-border"
+            className="mt-24 pt-12 border-t border-border"
           >
-            {[
-              { label: "Tools", value: "13+", detail: "Coding agents supported" },
-              { label: "Switch", value: "Instant", detail: "One command to migrate" },
-              { label: "Data", value: "Yours", detail: "Export anytime, any format" },
-            ].map((stat, i) => (
-              <div key={i} className="py-8 md:px-8 first:pl-0 border-b md:border-b-0 md:border-r border-border last:border-0">
-                <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-2">{stat.label}</div>
-                <div className="text-3xl font-mono mb-1 text-foreground">{stat.value}</div>
-                <div className="text-[11px] text-muted-foreground/70 italic">{stat.detail}</div>
-              </div>
-            ))}
+            <p className="text-xs uppercase tracking-[0.3em] font-bold text-muted-foreground/50 mb-8">
+              Works with
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
+              {tools.map((tool) => (
+                <div
+                  key={tool.name}
+                  className="flex items-center gap-3 opacity-70 hover:opacity-100 transition-opacity duration-300"
+                >
+                  <Image
+                    src={tool.logo}
+                    alt={tool.name}
+                    width={32}
+                    height={32}
+                    className="w-8 h-8"
+                  />
+                  <span className="font-mono text-base md:text-lg uppercase tracking-wide text-muted-foreground">
+                    {tool.name}
+                  </span>
+                </div>
+              ))}
+              <span className="font-mono text-base md:text-lg text-muted-foreground/50">
+                +6 more
+              </span>
+            </div>
           </motion.div>
 
       </div>
