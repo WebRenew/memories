@@ -12,7 +12,15 @@ const tools = [
   { name: "Cline", logo: "/logos/cline.svg" },
   { name: "Codex", logo: "/logos/codex.svg" },
   { name: "Gemini", logo: "/logos/gemini.svg" },
+  { name: "Roo", logo: "/logos/roo.svg" },
+  { name: "OpenCode", logo: "/logos/opencode.svg" },
+  { name: "Kilo", logo: "/logos/kilo.svg" },
+  { name: "Amp", logo: "/logos/amp.svg" },
+  { name: "Trae", logo: "/logos/trae.svg" },
+  { name: "Goose", logo: "/logos/goose.svg" },
 ];
+
+const marqueeTools = [...tools, ...tools, ...tools];
 
 const MemoryStream = () => {
   const [memories, setMemories] = useState<Array<{ id: number; hash: string; addr: string; status: string }>>([]);
@@ -144,37 +152,43 @@ export function Hero() {
             </motion.div>
           </motion.div>
   
-          {/* Works With Section */}
+          {/* Works With Section - Marquee */}
           <motion.div 
             initial={{ opacity: 0, y: 40, filter: "blur(10px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             transition={{ duration: 1.2, delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-24 pt-12 border-t border-border"
+            className="mt-24 pt-12 border-t border-border w-full"
           >
             <p className="text-xs uppercase tracking-[0.3em] font-bold text-muted-foreground/50 mb-8">
               Works with
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
-              {tools.map((tool) => (
+            <div className="relative w-full overflow-hidden">
+              <div className="flex overflow-hidden">
                 <div
-                  key={tool.name}
-                  className="flex items-center gap-3 opacity-70 hover:opacity-100 transition-opacity duration-300"
+                  className="flex w-fit items-center whitespace-nowrap"
+                  style={{ animation: "marquee 40s linear infinite" }}
                 >
-                  <Image
-                    src={tool.logo}
-                    alt={tool.name}
-                    width={32}
-                    height={32}
-                    className="w-8 h-8"
-                  />
-                  <span className="font-mono text-base md:text-lg uppercase tracking-wide text-muted-foreground">
-                    {tool.name}
-                  </span>
+                  {marqueeTools.map((tool, index) => (
+                    <div
+                      key={`${tool.name}-${index}`}
+                      className="flex shrink-0 items-center gap-3 px-8 opacity-60 hover:opacity-100 transition-opacity duration-300"
+                    >
+                      <Image
+                        src={tool.logo}
+                        alt={tool.name}
+                        width={28}
+                        height={28}
+                        className="w-7 h-7"
+                      />
+                      <span className="font-mono text-sm md:text-base uppercase tracking-wide text-muted-foreground">
+                        {tool.name}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              <span className="font-mono text-base md:text-lg text-muted-foreground/50">
-                +6 more
-              </span>
+              </div>
+              <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-background to-transparent z-10" />
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-background to-transparent z-10" />
             </div>
           </motion.div>
 
