@@ -2,6 +2,8 @@
 
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
+import Link from "next/link";
+import type { User } from "@supabase/supabase-js";
 
 const tiers = [
   {
@@ -50,7 +52,7 @@ const tiers = [
   },
 ];
 
-export function Pricing() {
+export function Pricing({ user }: { user?: User | null }) {
   return (
     <section id="pricing" className="py-24 px-6 relative overflow-hidden">
       <div className="max-w-7xl mx-auto relative z-10">
@@ -120,15 +122,16 @@ export function Pricing() {
                 </ul>
               </div>
 
-                <button 
-                  className={`w-full py-4 text-xs font-bold uppercase tracking-[0.2em] transition-all duration-300 ${
+                <Link 
+                  href={tier.name === "Enterprise" ? "mailto:hello@memories.sh" : user ? "/app/upgrade" : "/login"}
+                  className={`block w-full py-4 text-xs font-bold uppercase tracking-[0.2em] transition-all duration-300 text-center ${
                     tier.highlighted
                       ? "bg-primary text-primary-foreground hover:opacity-90 shadow-[0_0_20px_rgba(var(--primary),0.3)]"
                       : "bg-muted/50 text-foreground border border-border hover:bg-muted"
                   }`}
                 >
                   {tier.cta}
-                </button>
+                </Link>
               </motion.div>
             ))}
           </div>

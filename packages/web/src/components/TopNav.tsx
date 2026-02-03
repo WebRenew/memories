@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import type { User } from "@supabase/supabase-js";
 
 const navItems = [
   { href: "#how-it-works", label: "How" },
@@ -12,7 +13,7 @@ const navItems = [
   { href: "#faq", label: "FAQ" },
 ];
 
-export function TopNav() {
+export function TopNav({ user }: { user?: User | null }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLinkClick = () => {
@@ -55,17 +56,31 @@ export function TopNav() {
             </div>
 
             <div className="flex items-center gap-6">
-              <Link 
-                href="#get-started" 
-                className="group hidden sm:flex items-center gap-3 px-6 py-2 border border-border bg-muted/50 hover:border-primary/50 transition-all duration-300"
-              >
-                <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground group-hover:text-foreground">Initialize</span>
-                <div className="w-6 h-6 rounded-sm bg-foreground text-background flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M5 12h14m-7-7 7 7-7 7" />
-                  </svg>
-                </div>
-              </Link>
+              {user ? (
+                <Link 
+                  href="/app" 
+                  className="group hidden sm:flex items-center gap-3 px-6 py-2 bg-primary text-primary-foreground hover:opacity-90 transition-all duration-300"
+                >
+                  <span className="text-[10px] uppercase tracking-[0.2em] font-bold">Dashboard</span>
+                  <div className="w-6 h-6 rounded-sm bg-primary-foreground/20 flex items-center justify-center">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 12h14m-7-7 7 7-7 7" />
+                    </svg>
+                  </div>
+                </Link>
+              ) : (
+                <Link 
+                  href="/login" 
+                  className="group hidden sm:flex items-center gap-3 px-6 py-2 border border-border bg-muted/50 hover:border-primary/50 transition-all duration-300"
+                >
+                  <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground group-hover:text-foreground">Sign In</span>
+                  <div className="w-6 h-6 rounded-sm bg-foreground text-background flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 12h14m-7-7 7 7-7 7" />
+                    </svg>
+                  </div>
+                </Link>
+              )}
 
               {/* Mobile Menu Toggle */}
               <button 
@@ -150,11 +165,13 @@ export function TopNav() {
                   className="mt-6 pt-6 border-t border-border"
                 >
                   <Link 
-                    href="#get-started"
+                    href={user ? "/app" : "/login"}
                     onClick={handleLinkClick}
                     className="group flex items-center justify-center gap-3 w-full px-6 py-4 bg-foreground text-background hover:bg-primary hover:text-primary-foreground transition-all duration-300"
                   >
-                    <span className="text-sm uppercase tracking-[0.15em] font-bold">Get Started</span>
+                    <span className="text-sm uppercase tracking-[0.15em] font-bold">
+                      {user ? "Dashboard" : "Sign In"}
+                    </span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M5 12h14m-7-7 7 7-7 7" />
                     </svg>
