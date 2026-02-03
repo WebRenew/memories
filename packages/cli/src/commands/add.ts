@@ -2,6 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { addMemory, type MemoryType } from "../lib/memory.js";
 import { readAuth, getApiClient } from "../lib/auth.js";
+import * as ui from "../lib/ui.js";
 
 const VALID_TYPES: MemoryType[] = ["rule", "decision", "fact", "note"];
 
@@ -36,13 +37,8 @@ export const addCommand = new Command("add")
               memoryCount: number;
             };
             if (limits.memoryLimit !== null && limits.memoryCount >= limits.memoryLimit) {
-              console.error(
-                chalk.yellow("!") +
-                  ` You've reached the free plan limit of ${limits.memoryLimit.toLocaleString()} memories.`
-              );
-              console.error(
-                `  Upgrade at ${chalk.cyan("https://memories.sh/app/upgrade")}`
-              );
+              ui.warn(`You've reached the free plan limit of ${limits.memoryLimit.toLocaleString()} memories.`);
+              ui.proFeature("Unlimited memories");
               process.exit(1);
             }
           }
@@ -68,14 +64,19 @@ export const addCommand = new Command("add")
 
       const memory = await addMemory(content, { tags, global: opts.global, type });
       
-      const typeIcon = type === "rule" ? "📌" : type === "decision" ? "💡" : type === "fact" ? "📋" : "📝";
-      const scopeInfo = memory.scope === "global" 
-        ? chalk.dim("(global)") 
-        : chalk.dim(`(project)`);
+      const typeLabel = type === "rule" ? "Rule" : type === "decision" ? "Decision" : type === "fact" ? "Fact" : "Note";
+      const scopeInfo = memory.scope === "global" ? "global" : "project";
       
-      console.log(chalk.green("✓") + ` ${typeIcon} Stored ${type} ${chalk.dim(memory.id)} ${scopeInfo}`);
+      ui.success(`Stored ${chalk.bold(typeLabel.toLowerCase())} ${chalk.dim(memory.id)}`);
+      ui.dim(`Scope: ${scopeInfo}${tags?.length ? ` • Tags: ${tags.join(", ")}` : ""}`);
+      
+      // Hint about generating rule files
+      if (type === "rule") {
+        console.log("");
+        ui.dim(`Run ${chalk.cyan("memories generate")} to update your IDE rule files`);
+      }
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed to add memory:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed to add memory: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });
