@@ -18,7 +18,7 @@ export function Quickstart() {
     <section id="quickstart" className="py-32 px-6 ">
       <div className="max-w-4xl mx-auto">
         <div className="mb-24 flex flex-col items-center text-center">
-          <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-primary mb-4">Implementation</div>
+          <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-primary mb-4">Quick Start</div>
           <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-white">Get Started</h2>
         </div>
 

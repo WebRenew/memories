@@ -68,7 +68,7 @@ export function Pricing({ user }: { user?: User | null }) {
           </motion.div>
           <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
             Simple, Transparent <br />
-            <span className="text-muted-foreground italic font-light">Memory Management</span>
+            <span className="text-muted-foreground italic font-light">Pricing</span>
           </h2>
           <p className="text-muted-foreground max-w-2xl mx-auto text-lg font-light leading-relaxed">
             The CLI is free and open source. Pro adds cloud sync and a web dashboard.

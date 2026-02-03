@@ -5,18 +5,18 @@ import { motion } from "framer-motion";
 export function WhyItMatters() {
   const cases = [
     {
-      title: "Contextual Continuity",
-      desc: "Switch between Claude Code, Cursor, and Copilot without re-explaining project state.",
+      title: "Use Any Tool",
+      desc: "Your rules follow you across Claude Code, Cursor, Copilot, Windsurf, and more. No copy-pasting between config files.",
       example: "memories generate all"
     },
     {
-      title: "Architectural Integrity",
-      desc: "Store coding rules and decisions that every agent respects, across every session.",
+      title: "Stay Consistent",
+      desc: "Define coding standards once and every AI agent follows them — whether it's a new session or a new teammate.",
       example: "memories add --rule 'Always use server components'"
     },
     {
-      title: "Instant Resumption",
-      desc: "Return to a codebase after months and have your agent immediately recall previous decisions.",
+      title: "Never Re-Explain",
+      desc: "Come back to a project after months. Your agent already knows the architecture, the decisions, and the why.",
       example: "memories recall 'architecture decisions'"
     }
   ];

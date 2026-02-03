@@ -14,17 +14,17 @@ export function Footer() {
                 <span className="font-mono text-lg font-bold tracking-tighter uppercase text-foreground">memories.sh</span>
               </div>
             <p className="max-w-xs text-[12px] text-muted-foreground/60 leading-relaxed font-light">
-              Persistent memory for AI coding agents. Local-first, open format, works with any tool.
+              One memory store for all your AI coding tools.
             </p>
           </div>
           
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-16 md:gap-24">
             <div className="flex flex-col gap-6">
-              <h5 className="text-[10px] uppercase tracking-[0.3em] font-bold text-foreground">System</h5>
+              <h5 className="text-[10px] uppercase tracking-[0.3em] font-bold text-foreground">Product</h5>
               <div className="flex flex-col gap-4 text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.15em]">
-                <Link href="#" className="hover:text-primary transition-colors">Security</Link>
-                <Link href="#" className="hover:text-primary transition-colors">Protocol</Link>
-                <Link href="#" className="hover:text-primary transition-colors">API</Link>
+                <Link href="#" className="hover:text-primary transition-colors">Documentation</Link>
+                <Link href="#" className="hover:text-primary transition-colors">CLI Reference</Link>
+                <Link href="#" className="hover:text-primary transition-colors">MCP Server</Link>
               </div>
             </div>
             <div className="flex flex-col gap-6">

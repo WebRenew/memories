@@ -108,27 +108,27 @@ export function Hero() {
         >
             <motion.div variants={itemVariants} className="inline-flex items-center gap-3 px-3 py-1 bg-muted/50 border border-border text-[10px] uppercase tracking-[0.2em] font-bold mb-10 text-foreground">
               <span className="w-1.5 h-1.5 bg-primary animate-pulse" />
-              System Protocol v1.0.0 Active
+              Open Source CLI
             </motion.div>
             
             <motion.h1 variants={itemVariants} className="text-7xl md:text-[120px] font-bold tracking-[-0.04em] mb-10 leading-[0.85] text-foreground">
-              Universal Memory <br />
-              <span className="text-primary/80 italic font-light">for AI Agents</span>
+              One Memory <br />
+              <span className="text-primary/80 italic font-light">Every AI Tool</span>
             </motion.h1>
             
             <motion.p variants={itemVariants} className="text-xl md:text-2xl text-muted-foreground mb-16 max-w-2xl leading-relaxed font-light tracking-tight">
-              A local-first context layer that stores rules, decisions, and knowledge so your AI coding agents stay consistent across sessions and tools.
+              Store your coding rules and context once. Generate native rule files for Cursor, Claude Code, Copilot, and 5+ more — all from the terminal.
             </motion.p>
             
             <motion.div variants={itemVariants} className="flex flex-wrap items-center justify-center gap-8">
               <button className="group relative px-10 py-5 bg-foreground text-background font-bold uppercase tracking-[0.1em] text-xs overflow-hidden transition-all hover:scale-[1.02]">
-                <span className="relative z-10">Initialize Shell</span>
+                <span className="relative z-10">Get Started</span>
                 <div className="absolute inset-0 bg-primary translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
               </button>
               
               <button className="group flex items-center gap-4 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors">
                 <span className="w-12 h-px bg-border group-hover:w-16 group-hover:bg-primary transition-all duration-500" />
-                View Architecture
+                View on GitHub
               </button>
             </motion.div>
           </motion.div>
@@ -141,9 +141,9 @@ export function Hero() {
             className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-1 border-t border-border"
           >
             {[
-              { label: "Storage", value: "Local", detail: "SQLite-based, your machine" },
-              { label: "Search", value: "FTS5", detail: "Full-text with BM25 ranking" },
-              { label: "Targets", value: "8+", detail: "IDE rule file generators" },
+              { label: "Tools", value: "8+", detail: "Supported IDE targets" },
+              { label: "Commands", value: "20", detail: "Full CLI toolkit" },
+              { label: "Format", value: "Open", detail: "JSON, YAML, SQLite" },
             ].map((stat, i) => (
               <div key={i} className="py-8 md:px-8 first:pl-0 border-b md:border-b-0 md:border-r border-border last:border-0">
                 <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-2">{stat.label}</div>

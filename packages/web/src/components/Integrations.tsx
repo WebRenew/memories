@@ -20,6 +20,16 @@ const AdapterIcon = ({ name }: { name: string }) => {
         <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10zM2 12h20" />
       </svg>
     ),
+    "Windsurf": (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 20L9 4M9 4L15 20M15 20L21 4" />
+      </svg>
+    ),
+    "Gemini": (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2C12 2 14.5 9.5 22 12C14.5 14.5 12 22 12 22C12 22 9.5 14.5 2 12C9.5 9.5 12 2 12 2Z" />
+      </svg>
+    ),
     "Any MCP Client": (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
         <path d="M4 17l6-6-6-6M12 19h8" />
@@ -34,22 +44,32 @@ export function Integrations() {
     {
       name: "Claude Code",
       status: "Available",
-      desc: "Generates CLAUDE.md with your rules and context for Anthropic's CLI.",
+      desc: "Generates CLAUDE.md for Anthropic's coding CLI.",
     },
     {
       name: "Cursor",
       status: "Available",
-      desc: "Generates .cursor/rules/memories.mdc with YAML frontmatter for Cursor IDE.",
+      desc: "Generates .cursor/rules/memories.mdc with frontmatter.",
     },
     {
       name: "GitHub Copilot",
       status: "Available",
-      desc: "Generates .github/copilot-instructions.md for Copilot context.",
+      desc: "Generates .github/copilot-instructions.md.",
+    },
+    {
+      name: "Windsurf",
+      status: "Available",
+      desc: "Generates .windsurf/rules/memories.md.",
+    },
+    {
+      name: "Gemini",
+      status: "Available",
+      desc: "Generates GEMINI.md for Google's coding agent.",
     },
     {
       name: "Any MCP Client",
       status: "Available",
-      desc: "Built-in MCP server works with any client that supports the Model Context Protocol.",
+      desc: "Built-in MCP server for direct agent access.",
     }
   ];
 
@@ -61,7 +81,7 @@ export function Integrations() {
             <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Works With Your Tools</h2>
           </div>
   
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-1">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-1">
             {adapters.map((a, idx) => (
               <motion.div 
                 key={idx}

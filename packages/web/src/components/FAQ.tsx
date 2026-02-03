@@ -6,6 +6,10 @@ import { motion, AnimatePresence } from "framer-motion";
 export function FAQ() {
   const faqs = [
     {
+      q: "What does memories.sh actually do?",
+      a: "It's a CLI that stores your coding rules, decisions, and project knowledge in a local database. Run 'memories generate all' and it outputs native rule files for Cursor, Claude Code, Copilot, Windsurf, Cline, Roo, and Gemini — so every AI tool you use gets the same context."
+    },
+    {
       q: "What's the difference between global and project memory?",
       a: "Global memory stores your personal preferences, common patterns, and cross-project knowledge. Project memory is repository-specific — automatically scoped using your git remote URL — containing codebase rules, architectural decisions, and local context."
     },

@@ -124,14 +124,14 @@ export function HowItWorks() {
         {/* Social Proof / Momentum Bar */}
         <div className="mb-40 grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-1">
-            <h3 className="text-xl font-bold tracking-tight text-foreground mb-2 leading-tight">Built for teams that ship.</h3>
+            <h3 className="text-xl font-bold tracking-tight text-foreground mb-2 leading-tight">Why developers use Memories</h3>
             <div className="w-12 h-1 bg-primary/20" />
           </div>
           <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-12">
             {[
-              { label: "Velocity", detail: "Zero re-explaining context" },
-              { label: "Continuity", detail: "Persistent project logic" },
-              { label: "Onboarding", detail: "Instant agent hydration" },
+              { label: "Consistency", detail: "Same rules in every tool" },
+              { label: "Portability", detail: "Switch tools without losing context" },
+              { label: "Speed", detail: "One command updates all rule files" },
             ].map((item, i) => (
               <div key={i}>
                 <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-primary mb-2">{item.label}</div>
@@ -142,8 +142,8 @@ export function HowItWorks() {
         </div>
 
         <div className="mb-24 flex flex-col items-center text-center">
-          <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-primary mb-4">The Protocol</div>
-          <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Three steps to recall</h2>
+          <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-primary mb-4">How It Works</div>
+          <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Three commands to get started</h2>
         </div>
 
         <div className="grid md:grid-cols-3 gap-1">

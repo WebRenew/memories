@@ -20,11 +20,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://memories.sh"),
   title: {
-    default: "Memories – Persistent Memory for AI Coding Agents",
+    default: "Memories – One Memory, Every AI Coding Tool",
     template: "%s | Memories",
   },
   description:
-    "Give your AI coding agents persistent memory across sessions. Memories is a CLI tool that stores, retrieves, and manages context so Claude, Cursor, and other agents remember what matters.",
+    "Store your coding rules once, generate native rule files for Cursor, Claude Code, Copilot, and more. An open source CLI for developers who use multiple AI tools.",
   keywords: [
     "AI memory",
     "coding agents",
@@ -36,9 +36,9 @@ export const metadata: Metadata = {
     "AI developer experience",
   ],
   openGraph: {
-    title: "Memories – Persistent Memory for AI Coding Agents",
+    title: "Memories – One Memory, Every AI Coding Tool",
     description:
-      "Give your AI coding agents persistent memory across sessions. A CLI tool that stores, retrieves, and manages context for Claude, Cursor, and other agents.",
+      "Store your coding rules once, generate native rule files for Cursor, Claude Code, Copilot, and more. A CLI for developers who use multiple AI tools.",
     url: "https://memories.sh",
     siteName: "Memories",
     type: "website",
@@ -48,15 +48,15 @@ export const metadata: Metadata = {
         url: "/opengraph.png",
         width: 1200,
         height: 630,
-        alt: "Memories – Persistent Memory for AI Coding Agents",
+        alt: "Memories – One Memory, Every AI Coding Tool",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Memories – Persistent Memory for AI Coding Agents",
+    title: "Memories – One Memory, Every AI Coding Tool",
     description:
-      "Give your AI coding agents persistent memory across sessions. A CLI tool for Claude, Cursor, and other agents.",
+      "Store your coding rules once, generate native rule files for Cursor, Claude Code, Copilot, and more.",
     images: ["/opengraph.png"],
   },
   robots: {
