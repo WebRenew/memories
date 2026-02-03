@@ -6,28 +6,28 @@ import { motion, AnimatePresence } from "framer-motion";
 export function FAQ() {
   const faqs = [
     {
-      q: "What does memories.sh actually do?",
-      a: "It's a CLI that stores your coding rules, decisions, and project knowledge in a local database. Run 'memories generate all' and it outputs native rule files for Cursor, Claude Code, Copilot, Windsurf, Cline, Roo, and Gemini — so every AI tool you use gets the same context."
+      q: "What problem does memories.sh solve?",
+      a: "Every AI coding tool has its own config format — CLAUDE.md, .cursor/rules/, copilot-instructions.md, etc. When you switch tools or use multiple, you're maintaining the same rules in different places. memories.sh stores your context once and generates native configs for 13+ tools instantly."
+    },
+    {
+      q: "Can I switch between coding agents easily?",
+      a: "Yes — that's the point. Run 'memories generate cursor' today, 'memories generate claude' tomorrow. Your rules, decisions, and project context travel with you. No copy-pasting, no re-teaching."
     },
     {
       q: "What's the difference between global and project memory?",
-      a: "Global memory stores your personal preferences, common patterns, and cross-project knowledge. Project memory is repository-specific — automatically scoped using your git remote URL — containing codebase rules, architectural decisions, and local context."
+      a: "Global memory stores your personal coding preferences that apply everywhere. Project memory is repository-specific — automatically scoped via git remote — containing your codebase rules and architectural decisions."
     },
     {
-      q: "Does this lock me into one tool?",
-      a: "No. memories.sh generates native rule files for 8+ tools including Cursor, Claude Code, GitHub Copilot, Windsurf, Cline, Roo, and Gemini. You can also export all data to JSON or YAML at any time."
-    },
-    {
-      q: "How do you store and retrieve memory?",
-      a: "Memories are stored locally on your machine with full-text search and BM25 ranking. Queries use prefix matching and intelligent ranking for fast, relevant retrieval."
-    },
-    {
-      q: "Can I export my data?",
-      a: "Yes. You own your data — it lives on your machine. Run 'memories export' to export everything to JSON or YAML, or 'memories import' to bring data in from those formats."
+      q: "Am I locked into memories.sh?",
+      a: "No. Export everything to JSON or YAML anytime with 'memories export'. Generate native config files for any supported tool. Your data is always portable."
     },
     {
       q: "Where is my data stored?",
-      a: "All data is stored locally at ~/.config/memories/ on your machine. Optional cloud sync is available with Pro for accessing memories across devices, but is not required."
+      a: "All data is stored locally at ~/.config/memories/ on your machine. Cloud sync (Pro) is optional — you keep full control of your data regardless of plan."
+    },
+    {
+      q: "Which coding agents are supported?",
+      a: "Cursor, Claude Code, GitHub Copilot, Windsurf, Cline, Roo, Gemini, Amp, Codex, OpenCode, Kilo, Trae, Goose — and any MCP-compatible client via the built-in server."
     }
   ];
 

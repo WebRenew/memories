@@ -9,28 +9,28 @@ const tiers = [
   {
     name: "Free",
     price: "$0",
-    description: "Everything you need for local memory management.",
+    description: "Full power locally. Switch tools without limits.",
     features: [
-      "Unlimited local memories",
-      "Full-text search with BM25 ranking",
-      "8+ IDE rule file generators",
-      "MCP server with 7 tools",
+      "Unlimited memories",
+      "13+ coding agent targets",
+      "Full-text search",
+      "MCP server for direct agent access",
       "JSON/YAML export & import",
     ],
-    cta: "Start Building",
+    cta: "Get Started",
     highlighted: false,
   },
   {
     name: "Professional",
     price: "$15",
-    description: "Cloud sync and dashboard for teams and power users.",
+    description: "Sync across machines. Access memories anywhere.",
     features: [
       "Everything in Free",
       "Cloud sync & backup",
-      "Web dashboard for browsing memories",
+      "Web dashboard",
       "Cross-device access",
-      "Priority email support",
-      "Usage stats and analytics",
+      "Priority support",
+      "Usage analytics",
     ],
     cta: "Go Pro",
     highlighted: true,
@@ -38,7 +38,7 @@ const tiers = [
   {
     name: "Enterprise",
     price: "Custom",
-    description: "For organizations with advanced requirements.",
+    description: "For teams with compliance and support needs.",
     features: [
       "Everything in Professional",
       "Dedicated support",
@@ -71,7 +71,7 @@ export function Pricing({ user }: { user?: User | null }) {
             <span className="text-muted-foreground italic font-light">Pricing</span>
           </h2>
           <p className="text-muted-foreground max-w-2xl mx-auto text-lg font-light leading-relaxed">
-            The CLI is free and open source. Pro adds cloud sync and a web dashboard.
+            Free tier includes everything you need locally. Pro adds cloud sync and cross-device access.
           </p>
         </div>
 

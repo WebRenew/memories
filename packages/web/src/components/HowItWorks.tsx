@@ -98,19 +98,19 @@ function StepCard({ step, idx }: { step: { title: string; desc: string; cmd: str
 export function HowItWorks() {
   const steps = [
     {
-      title: "Store a memory",
-      desc: "Save rules, decisions, and facts with automatic type detection and scoping.",
+      title: "Capture your rules",
+      desc: "Store coding standards, decisions, and project context in one place.",
       cmd: "memories add --rule 'Use Tailwind for all styling'"
     },
     {
-      title: "Generate rule files",
-      desc: "Output memories as native IDE rule files for Cursor, Claude, Copilot, and more.",
+      title: "Generate for any tool",
+      desc: "One command outputs native configs for Cursor, Claude Code, Copilot, and 10+ more.",
       cmd: "memories generate all"
     },
     {
-      title: "Recall anywhere",
-      desc: "Retrieve relevant context via CLI or the built-in MCP server.",
-      cmd: "memories recall 'auth patterns'"
+      title: "Switch agents freely",
+      desc: "Try a new tool tomorrow. Your context travels with you — no re-teaching required.",
+      cmd: "memories generate cursor"
     }
   ];
 
@@ -120,14 +120,14 @@ export function HowItWorks() {
         {/* Social Proof / Momentum Bar */}
         <div className="mb-40 grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-1">
-            <h3 className="text-xl font-bold tracking-tight text-foreground mb-2 leading-tight">Why developers use Memories</h3>
+            <h3 className="text-xl font-bold tracking-tight text-foreground mb-2 leading-tight">Why developers switch to Memories</h3>
             <div className="w-12 h-1 bg-primary/20" />
           </div>
           <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-12">
             {[
-              { label: "Consistency", detail: "Same rules in every tool" },
-              { label: "Portability", detail: "Switch tools without losing context" },
-              { label: "Speed", detail: "One command updates all rule files" },
+              { label: "Freedom", detail: "Try any agent, keep your context" },
+              { label: "No Lock-in", detail: "Export to JSON, YAML, or native files" },
+              { label: "Zero Rework", detail: "Switch tools in one command" },
             ].map((item, i) => (
               <div key={i}>
                 <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-primary mb-2">{item.label}</div>
@@ -139,7 +139,7 @@ export function HowItWorks() {
 
         <div className="mb-24 flex flex-col items-center text-center">
           <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-primary mb-4">How It Works</div>
-          <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Three commands to get started</h2>
+          <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Start in under a minute</h2>
         </div>
 
         <div className="grid md:grid-cols-3 gap-3 md:gap-1">

@@ -1,21 +1,22 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 const tools = [
-  { name: "Claude Code", icon: "⬡" },
-  { name: "Cursor", icon: "⌘" },
-  { name: "GitHub Copilot", icon: "◉" },
-  { name: "Windsurf", icon: "≋" },
-  { name: "Gemini", icon: "✦" },
-  { name: "Codex", icon: "▣" },
-  { name: "Roo", icon: "◈" },
-  { name: "Cline", icon: "⟐" },
-  { name: "OpenCode", icon: "⬢" },
-  { name: "Kilo", icon: "◇" },
-  { name: "AMP", icon: "⚡" },
-  { name: "Trae", icon: "△" },
-  { name: "Goose", icon: "◎" },
+  { name: "Claude Code", logo: "/logos/claude-code.svg" },
+  { name: "Cursor", logo: "/logos/cursor.svg" },
+  { name: "GitHub Copilot", logo: "/logos/copilot.svg" },
+  { name: "Windsurf", logo: "/logos/windsurf.svg" },
+  { name: "Gemini", logo: "/logos/gemini.svg" },
+  { name: "Codex", logo: "/logos/codex.svg" },
+  { name: "Roo", logo: "/logos/roo.svg" },
+  { name: "Cline", logo: "/logos/cline.svg" },
+  { name: "OpenCode", logo: "/logos/opencode.svg" },
+  { name: "Kilo", logo: "/logos/kilo.svg" },
+  { name: "Amp", logo: "/logos/amp.svg" },
+  { name: "Trae", logo: "/logos/trae.svg" },
+  { name: "Goose", logo: "/logos/goose.svg" },
 ];
 
 const marqueeItems = [...tools, ...tools, ...tools];
@@ -48,7 +49,13 @@ export function TrustedBy() {
                     key={`${tool.name}-${index}`}
                     className="flex shrink-0 items-center gap-2 px-5 lg:px-7 opacity-60 hover:opacity-100 transition-opacity duration-300"
                   >
-                    <span className="text-sm text-primary/60">{tool.icon}</span>
+                    <Image
+                      src={tool.logo}
+                      alt={tool.name}
+                      width={16}
+                      height={16}
+                      className="opacity-70"
+                    />
                     <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-muted-foreground">
                       {tool.name}
                     </span>

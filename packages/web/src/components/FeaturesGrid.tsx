@@ -34,29 +34,29 @@ const FeatureIcon = ({ index }: { index: number }) => {
 export function FeaturesGrid() {
   const features = [
     {
-      title: "8+ IDE targets",
-      detail: "Generate native rule files for Cursor, Claude, Copilot, Windsurf, Cline, Roo, Gemini, and AGENTS.md.",
+      title: "13+ coding agents",
+      detail: "Generate native configs for Cursor, Claude Code, Copilot, Windsurf, Cline, Roo, Gemini, Amp, Codex, and more.",
       metric: "One command"
     },
     {
-      title: "Full-text search",
-      detail: "FTS5-powered search with BM25 ranking and prefix matching for fast recall.",
-      metric: "Instant recall"
+      title: "Instant search",
+      detail: "Full-text search with BM25 ranking finds the right context in milliseconds.",
+      metric: "Fast recall"
     },
     {
-      title: "Global & project scopes",
-      detail: "Isolate project memory from global preferences using automatic git remote detection.",
+      title: "Project isolation",
+      detail: "Keep project-specific rules separate from your global preferences. Auto-detected via git remote.",
       metric: "Auto-scoped"
     },
     {
-      title: "Memory types",
-      detail: "Classify memories as rules, decisions, facts, or notes for structured retrieval.",
+      title: "Structured context",
+      detail: "Organize as rules, decisions, facts, or notes — agents retrieve exactly what they need.",
       metric: "4 types"
     },
     {
-      title: "JSON/YAML export",
-      detail: "Export and import your entire memory store in standard open formats.",
-      metric: "Open format"
+      title: "No lock-in",
+      detail: "Export everything to JSON or YAML anytime. Your data, your choice.",
+      metric: "Portable"
     }
   ];
 
@@ -65,7 +65,7 @@ export function FeaturesGrid() {
         <div className="max-w-6xl mx-auto">
           <div className="mb-24 flex flex-col items-center text-center">
             <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-primary mb-4">Core Features</div>
-            <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Built for your workflow</h2>
+            <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-foreground">Built for tool freedom</h2>
           </div>
   
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-1">

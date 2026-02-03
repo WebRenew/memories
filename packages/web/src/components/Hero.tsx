@@ -108,7 +108,7 @@ export function Hero() {
         >
             <motion.div variants={itemVariants} className="inline-flex items-center gap-3 px-3 py-1 bg-muted/50 border border-border text-[10px] uppercase tracking-[0.2em] font-bold mb-10 text-foreground">
               <span className="w-1.5 h-1.5 bg-primary animate-pulse" />
-              Open Source CLI
+              Switch Tools Freely
             </motion.div>
             
             <motion.h1 variants={itemVariants} className="text-5xl sm:text-7xl md:text-[120px] font-bold tracking-[-0.04em] mb-10 leading-[0.85] text-foreground">
@@ -117,7 +117,7 @@ export function Hero() {
             </motion.h1>
             
             <motion.p variants={itemVariants} className="text-xl md:text-2xl text-muted-foreground mb-16 max-w-2xl leading-relaxed font-light tracking-tight">
-              Store your coding rules and context once. Generate native rule files for Cursor, Claude Code, Copilot, and 5+ more — all from the terminal.
+              Stop re-teaching every coding agent. Store your rules once, generate native configs for Cursor, Claude Code, Copilot, and 10+ more.
             </motion.p>
             
             <motion.div variants={itemVariants} className="flex flex-wrap items-center justify-center gap-8">
@@ -141,9 +141,9 @@ export function Hero() {
             className="mt-24 grid grid-cols-1 sm:grid-cols-3 gap-1 border-t border-border"
           >
             {[
-              { label: "Tools", value: "8+", detail: "Supported IDE targets" },
-              { label: "Commands", value: "20", detail: "Full CLI toolkit" },
-              { label: "Format", value: "Open", detail: "JSON, YAML, Export" },
+              { label: "Tools", value: "13+", detail: "Coding agents supported" },
+              { label: "Switch", value: "Instant", detail: "One command to migrate" },
+              { label: "Data", value: "Yours", detail: "Export anytime, any format" },
             ].map((stat, i) => (
               <div key={i} className="py-8 md:px-8 first:pl-0 border-b md:border-b-0 md:border-r border-border last:border-0">
                 <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-2">{stat.label}</div>

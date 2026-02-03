@@ -5,19 +5,19 @@ import { motion } from "framer-motion";
 export function WhyItMatters() {
   const cases = [
     {
-      title: "Use Any Tool",
-      desc: "Your rules follow you across Claude Code, Cursor, Copilot, Windsurf, and more. No copy-pasting between config files.",
+      title: "No Vendor Lock-in",
+      desc: "Switch between Claude Code, Cursor, Copilot, and Windsurf whenever you want. Your rules and context come with you.",
+      example: "memories generate windsurf"
+    },
+    {
+      title: "Same Rules, Every Agent",
+      desc: "Define your coding standards once. Every tool — new or old — gets the same context automatically.",
       example: "memories generate all"
     },
     {
-      title: "Stay Consistent",
-      desc: "Define coding standards once and every AI agent follows them — whether it's a new session or a new teammate.",
-      example: "memories add --rule 'Always use server components'"
-    },
-    {
-      title: "Never Re-Explain",
-      desc: "Come back to a project after months. Your agent already knows the architecture, the decisions, and the why.",
-      example: "memories recall 'architecture decisions'"
+      title: "Pick Up Where You Left Off",
+      desc: "Return to a project after months. Your agent already knows the stack, the decisions, and the why.",
+      example: "memories recall 'architecture'"
     }
   ];
 
