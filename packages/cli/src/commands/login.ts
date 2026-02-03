@@ -1,8 +1,10 @@
 import { Command } from "commander";
 import chalk from "chalk";
+import ora from "ora";
 import { readAuth, saveAuth, clearAuth } from "../lib/auth.js";
 import { randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
+import * as ui from "../lib/ui.js";
 
 const DEFAULT_API_URL = "https://memories.sh";
 
@@ -23,37 +25,48 @@ export const loginCommand = new Command("login")
   .description("Log in to memories.sh to enable cloud sync")
   .option("--api-url <url>", "API base URL", DEFAULT_API_URL)
   .action(async (opts: { apiUrl: string }) => {
+    ui.banner();
+
     const existing = await readAuth();
     if (existing) {
-      console.log(
-        chalk.yellow("!") +
-          ` Already logged in as ${chalk.bold(existing.email)}`
-      );
-      console.log(`  Run ${chalk.dim("memories logout")} to sign out first.`);
+      ui.warn(`Already logged in as ${chalk.bold(existing.email)}`);
+      ui.dim(`Run ${chalk.cyan("memories logout")} to sign out first.`);
       return;
     }
+
+    ui.box(
+      chalk.bold("Pro features include:\n\n") +
+        chalk.dim("→ ") + "Cloud sync & backup\n" +
+        chalk.dim("→ ") + "Cross-device access\n" +
+        chalk.dim("→ ") + "Web dashboard\n" +
+        chalk.dim("→ ") + "Priority support",
+      "Upgrade to Pro"
+    );
 
     const code = randomBytes(16).toString("hex");
     const authUrl = `${opts.apiUrl}/app/auth/cli?code=${code}`;
 
-    console.log(
-      chalk.bold("\nOpen this URL in your browser to log in:\n")
-    );
+    console.log(chalk.bold("Open this URL in your browser:\n"));
     console.log(`  ${chalk.cyan(authUrl)}\n`);
 
     // Try to open browser automatically
     try {
       openBrowser(authUrl);
+      ui.dim("Browser opened automatically");
     } catch {
       // Browser open is best-effort
     }
 
-    console.log(chalk.dim("Waiting for authorization..."));
+    const spinner = ora({
+      text: "Waiting for authorization...",
+      color: "magenta",
+    }).start();
 
     // Poll for the token
     const maxAttempts = 60; // 5 minutes at 5s intervals
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise((r) => setTimeout(r, 5000));
+      spinner.text = `Waiting for authorization... (${Math.floor((maxAttempts - i) * 5 / 60)}m remaining)`;
 
       try {
         const res = await fetch(`${opts.apiUrl}/api/auth/cli`, {
@@ -72,22 +85,23 @@ export const loginCommand = new Command("login")
             email: data.email,
             apiUrl: opts.apiUrl,
           });
-          console.log(
-            chalk.green("\n✓") +
-              ` Logged in as ${chalk.bold(data.email)}`
-          );
-          console.log(
-            chalk.dim(
-              "  Your cloud database has been provisioned automatically."
-            )
-          );
+          spinner.stop();
+          console.log("");
+          ui.success(`Logged in as ${chalk.bold(data.email)}`);
+          ui.dim("Your cloud database has been provisioned automatically.");
+          
+          ui.nextSteps([
+            `${chalk.cyan("memories sync")} ${chalk.dim("to sync your memories")}`,
+            `${chalk.cyan("memories.sh/app")} ${chalk.dim("to view your dashboard")}`,
+          ]);
           return;
         }
 
         if (res.status !== 202) {
           // 202 = still waiting, anything else is an error
           const text = await res.text();
-          console.error(chalk.red("✗") + ` Authorization failed: ${text}`);
+          spinner.stop();
+          ui.error(`Authorization failed: ${text}`);
           return;
         }
       } catch {
@@ -95,9 +109,8 @@ export const loginCommand = new Command("login")
       }
     }
 
-    console.error(
-      chalk.red("✗") + " Authorization timed out. Please try again."
-    );
+    spinner.stop();
+    ui.error("Authorization timed out. Please try again.");
   });
 
 export const logoutCommand = new Command("logout")
@@ -105,10 +118,10 @@ export const logoutCommand = new Command("logout")
   .action(async () => {
     const existing = await readAuth();
     if (!existing) {
-      console.log("Not logged in.");
+      ui.info("Not logged in.");
       return;
     }
 
     await clearAuth();
-    console.log(chalk.green("✓") + " Logged out successfully.");
+    ui.success("Logged out successfully.");
   });
