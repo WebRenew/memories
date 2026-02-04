@@ -74,7 +74,19 @@ export function MemoryCard({
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="flex items-center gap-2">
           {memory.type ? (
-            <span className="px-2 py-0.5 bg-primary/10 border border-primary/20 text-[10px] uppercase tracking-wider font-bold text-primary">
+            <span className={`px-2 py-0.5 border text-[10px] uppercase tracking-wider font-bold ${
+              memory.type === "rule" 
+                ? "bg-primary/10 border-primary/20 text-primary"
+                : memory.type === "command"
+                ? "bg-green-500/10 border-green-500/20 text-green-400"
+                : memory.type === "skill"
+                ? "bg-purple-500/10 border-purple-500/20 text-purple-400"
+                : memory.type === "decision"
+                ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                : memory.type === "fact"
+                ? "bg-pink-500/10 border-pink-500/20 text-pink-400"
+                : "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"
+            }`}>
               {memory.type}
             </span>
           ) : null}
