@@ -15,11 +15,13 @@ interface Memory {
 export function MemoryCard({ 
   memory, 
   onDelete,
-  onUpdate 
+  onUpdate,
+  onFilterByProject
 }: { 
   memory: Memory
   onDelete: (id: string) => void
   onUpdate: (id: string, content: string) => void
+  onFilterByProject?: (scope: string) => void
 }) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -81,12 +83,13 @@ export function MemoryCard({
               Global
             </span>
           ) : memory.scope ? (
-            <span 
-              className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 text-[10px] tracking-wider font-bold text-amber-400 cursor-help" 
-              title={memory.scope}
+            <button
+              onClick={() => onFilterByProject?.(memory.scope!)}
+              className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 text-[10px] tracking-wider font-bold text-amber-400 hover:bg-amber-500/20 transition-colors" 
+              title={`Filter by ${memory.scope}`}
             >
               {memory.scope.replace(/^github\.com\//, "")}
-            </span>
+            </button>
           ) : null}
           {memory.tags
             ? memory.tags.split(",").map((tag: string) => (

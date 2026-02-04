@@ -191,7 +191,11 @@ export function RulesSection({ initialRules }: { initialRules: Memory[] }) {
             </p>
           </div>
         ) : (
-          <MemoriesList initialMemories={filteredRules} onMemoriesChange={handleChange} />
+          <MemoriesList 
+            initialMemories={filteredRules} 
+            onMemoriesChange={handleChange}
+            onFilterByProject={(scope) => setScopeFilter(scope)}
+          />
         )}
       </div>
     </div>

@@ -14,10 +14,12 @@ interface Memory {
 
 export function MemoriesList({ 
   initialMemories,
-  onMemoriesChange
+  onMemoriesChange,
+  onFilterByProject
 }: { 
   initialMemories: Memory[]
   onMemoriesChange?: (memories: Memory[]) => void
+  onFilterByProject?: (scope: string) => void
 }) {
   const [memories, setMemories] = useState(initialMemories)
 
@@ -47,6 +49,7 @@ export function MemoriesList({
           memory={memory} 
           onDelete={handleDelete}
           onUpdate={handleUpdate}
+          onFilterByProject={onFilterByProject}
         />
       ))}
     </div>
