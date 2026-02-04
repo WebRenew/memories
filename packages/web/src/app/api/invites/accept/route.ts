@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { addTeamSeat } from "@/lib/stripe/teams"
 import { NextResponse } from "next/server"
 
 // POST /api/invites/accept - Accept an invite
@@ -11,16 +12,16 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { token } = body
+  const { token, billing = "monthly" } = body
 
   if (!token) {
     return NextResponse.json({ error: "Token is required" }, { status: 400 })
   }
 
-  // Find invite
+  // Find invite with org details
   const { data: invite, error: inviteError } = await supabase
     .from("org_invites")
-    .select("*, organization:organizations(id, name, slug)")
+    .select("*, organization:organizations(id, name, slug, owner_id, stripe_subscription_id)")
     .eq("token", token)
     .is("accepted_at", null)
     .gt("expires_at", new Date().toISOString())
@@ -56,6 +57,44 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "You are already a member of this organization" }, { status: 400 })
   }
 
+  const org = invite.organization as {
+    id: string
+    name: string
+    slug: string
+    owner_id: string
+    stripe_subscription_id: string | null
+  }
+
+  // Get org owner's Stripe customer ID
+  const { data: owner } = await supabase
+    .from("users")
+    .select("stripe_customer_id")
+    .eq("id", org.owner_id)
+    .single()
+
+  // Add seat to org's subscription (or create one)
+  let subscriptionId = org.stripe_subscription_id
+  try {
+    const result = await addTeamSeat({
+      orgId: org.id,
+      stripeCustomerId: owner?.stripe_customer_id || null,
+      stripeSubscriptionId: subscriptionId,
+      billing: billing as "monthly" | "annual",
+    })
+
+    // If new subscription created, save it to org
+    if (result.action === "created") {
+      await supabase
+        .from("organizations")
+        .update({ stripe_subscription_id: result.subscriptionId })
+        .eq("id", org.id)
+    }
+  } catch (e) {
+    console.error("Failed to add team seat:", e)
+    // Don't block invite acceptance if billing fails - can reconcile later
+    // In production you might want to handle this differently
+  }
+
   // Add as member
   const { error: memberError } = await supabase
     .from("org_members")
@@ -85,6 +124,6 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ 
     success: true,
-    organization: invite.organization 
+    organization: { id: org.id, name: org.name, slug: org.slug }
   })
 }

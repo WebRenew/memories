@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { removeTeamSeat } from "@/lib/stripe/teams"
 import { NextResponse } from "next/server"
 
 // GET /api/orgs/[orgId]/members - List organization members
@@ -102,6 +103,14 @@ export async function DELETE(
     return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
   }
 
+  // Get org's subscription to decrement seat
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("stripe_subscription_id")
+    .eq("id", orgId)
+    .single()
+
+  // Remove the member
   const { error } = await supabase
     .from("org_members")
     .delete()
@@ -110,6 +119,26 @@ export async function DELETE(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // Decrement seat in Stripe
+  if (org?.stripe_subscription_id) {
+    try {
+      const result = await removeTeamSeat({
+        stripeSubscriptionId: org.stripe_subscription_id,
+      })
+
+      // If subscription was cancelled (last seat), clear it from org
+      if (result.action === "cancelled") {
+        await supabase
+          .from("organizations")
+          .update({ stripe_subscription_id: null })
+          .eq("id", orgId)
+      }
+    } catch (e) {
+      console.error("Failed to remove team seat from Stripe:", e)
+      // Don't fail the request - member was removed, billing can be reconciled
+    }
   }
 
   return NextResponse.json({ success: true })
