@@ -28,16 +28,18 @@ function hashContent(content: string): string {
 // Specific file paths and patterns to sync from each tool directory
 // Only sync: instruction files, commands, skills, rules, and essential configs
 const SYNC_TARGETS = [
-  // .agents - Agent instruction files, commands, and skills
+  // .agents - Agent instruction files, commands, tasks, and skills
   { dir: ".agents", files: ["AGENTS.md"] },
   { dir: ".agents/commands", pattern: /\.md$/ },
+  { dir: ".agents/tasks", pattern: /\.(md|txt)$/ },
   { dir: ".agents/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
   
-  // .claude - Claude Code instructions, commands, rules, and hooks
+  // .claude - Claude Code instructions, commands, rules, hooks, and tasks
   { dir: ".claude", files: ["CLAUDE.md", "settings.json", "settings.local.json"] },
   { dir: ".claude/commands", pattern: /\.md$/ },
   { dir: ".claude/rules", pattern: /\.(md|rules)$/ },
   { dir: ".claude/hooks", pattern: /\.(json|sh)$/ },
+  { dir: ".claude/tasks", pattern: /\.(md|txt)$/ },
   { dir: ".claude/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
   
   // .cursor - Cursor rules and MCP config
@@ -45,9 +47,10 @@ const SYNC_TARGETS = [
   { dir: ".cursor/rules", pattern: /\.(md|mdc|txt)$/ },
   { dir: ".cursor/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
   
-  // .codex - Codex config and rules
+  // .codex - Codex config, rules, and tasks
   { dir: ".codex", files: ["config.toml", "AGENTS.md", "instructions.md"] },
   { dir: ".codex/rules", pattern: /\.(md|rules)$/ },
+  { dir: ".codex/tasks", pattern: /\.(md|txt)$/ },
   { dir: ".codex/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
   
   // .windsurf - Windsurf rules
@@ -84,6 +87,7 @@ const SYNC_TARGETS = [
   // .factory - Factory/Droid config
   { dir: ".factory", files: ["config.json", "instructions.md"] },
   { dir: ".factory/droids", pattern: /\.(md|yaml|yml)$/ },
+  { dir: ".factory/tasks", pattern: /\.(md|txt)$/ },
   { dir: ".factory/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
 ];
 
