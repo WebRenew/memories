@@ -256,7 +256,7 @@ export function TeamContent({
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="h-3 w-3 text-green-400" />
-                  <span>Each additional member — <span className="text-foreground">$8/month</span></span>
+                  <span>Each additional member — <span className="text-foreground">$15/mo</span> or <span className="text-foreground">$150/year</span></span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="h-3 w-3 text-green-400" />
@@ -296,7 +296,7 @@ export function TeamContent({
             Create an organization to collaborate with your team and share rules.
           </p>
           <p className="text-xs text-muted-foreground mb-6">
-            Free to create • <span className="text-foreground">$8/month per additional member</span>
+            Free to create • <span className="text-foreground">$15/mo or $150/year per member</span>
           </p>
           <button
             onClick={() => setShowCreateOrg(true)}
@@ -350,7 +350,7 @@ export function TeamContent({
                     </div>
                     {isOwner && members.length > 1 && (
                       <div className="text-xs text-muted-foreground">
-                        Est. billing: <span className="text-foreground font-medium">${(members.length - 1) * 8}/mo</span>
+                        Est. billing: <span className="text-foreground font-medium">${(members.length - 1) * 15}/mo</span>
                       </div>
                     )}
                   </div>
@@ -444,10 +444,10 @@ export function TeamContent({
 
                         <div className="bg-amber-500/10 border border-amber-500/20 p-3 mb-4">
                           <p className="text-sm text-amber-400">
-                            <strong>$8/month</strong> will be added to your bill for this member.
+                            <strong>$15/month</strong> or <strong>$150/year</strong> per member
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            Billed monthly. You can remove members anytime.
+                            Billed to you when they accept. You can remove members anytime.
                           </p>
                         </div>
 
@@ -463,7 +463,7 @@ export function TeamContent({
                             disabled={!inviteEmail.trim() || loading}
                             className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
                           >
-                            {loading ? "Sending..." : "Send Invite — $8/mo"}
+                            {loading ? "Sending..." : "Send Invite"}
                           </button>
                         </div>
                       </>
