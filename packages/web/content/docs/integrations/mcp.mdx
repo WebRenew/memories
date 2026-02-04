@@ -1,0 +1,68 @@
+---
+title: MCP Server
+description: Use memories.sh with any MCP-compatible client.
+---
+
+memories.sh includes a built-in MCP (Model Context Protocol) server that exposes your memories directly to any compatible AI agent or client.
+
+## Starting the Server
+
+```bash
+memories serve
+```
+
+This starts an MCP server that provides tools for reading, writing, and searching memories.
+
+## Available Tools
+
+The MCP server exposes these tools to connected clients:
+
+- **memories_add** - Add a new memory with optional tags and type
+- **memories_list** - List all memories, optionally filtered by tags or type
+- **memories_search** - Full-text search across memory content
+- **memories_recall** - Get contextually relevant memories for a given prompt
+- **memories_delete** - Remove a memory by ID
+
+## Client Configuration
+
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "memories": {
+      "command": "memories",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+### Cursor
+
+In Cursor Settings → MCP, add:
+
+```json
+{
+  "mcpServers": {
+    "memories": {
+      "command": "memories",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+### Other Clients
+
+Any MCP-compatible client can connect by running `memories serve` as a subprocess. The server communicates over stdio using the MCP protocol.
+
+## Pro Features
+
+With a Pro subscription, the MCP server gains access to:
+
+- **Cloud sync** - Memories sync across all your machines
+- **Unlimited memories** - No storage limits
+- **Priority support** - Get help when you need it
