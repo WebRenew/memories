@@ -1,60 +1,104 @@
 "use client";
 
-import { motion, useMotionValue, useMotionTemplate } from "framer-motion";
+import { motion } from "framer-motion";
 import { useRef } from "react";
 import { NoiseTexture } from "./NoiseTexture";
 
-interface ProblemItem {
-  pain: string;
-  resolution: string;
-  detail: string;
+interface StepItem {
+  number: string;
+  title: string;
+  command: string;
+  args: string;
+  description: string;
 }
 
-function ProblemCard({ item, idx }: { item: ProblemItem; idx: number }) {
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
+function FlowArrow() {
+  return (
+    <div className="hidden lg:flex items-center justify-center">
+      <svg width="60" height="24" viewBox="0 0 60 24" fill="none" className="text-primary/30">
+        <path 
+          d="M0 12H52M52 12L44 4M52 12L44 20" 
+          stroke="currentColor" 
+          strokeWidth="2" 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
 
-  function handleMouseMove({ currentTarget, clientX, clientY }: React.MouseEvent) {
-    const { left, top } = currentTarget.getBoundingClientRect();
-    mouseX.set(clientX - left);
-    mouseY.set(clientY - top);
-  }
+function TerminalBlock({ command, args, isActive }: { command: string; args: string; isActive?: boolean }) {
+  return (
+    <div className="relative group">
+      {/* Glow effect */}
+      <div className={`absolute -inset-1 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent rounded-lg blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500 ${isActive ? 'opacity-60' : ''}`} />
+      
+      <div className="relative bg-[#0d0d12] border border-white/10 rounded-lg overflow-hidden">
+        {/* Terminal header */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 bg-white/[0.02]">
+          <div className="w-2.5 h-2.5 rounded-full bg-white/10" />
+          <div className="w-2.5 h-2.5 rounded-full bg-white/10" />
+          <div className="w-2.5 h-2.5 rounded-full bg-white/10" />
+          <span className="ml-2 text-[10px] text-white/30 font-mono">terminal</span>
+        </div>
+        
+        {/* Command line */}
+        <div className="px-5 py-4 font-mono">
+          <div className="flex items-start gap-2">
+            <span className="text-primary/70 select-none text-sm">$</span>
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <span className="text-white font-medium text-sm">{command}</span>
+              <span className="text-primary text-sm">{args}</span>
+              <span className="inline-block w-2 h-4 bg-primary/80 animate-pulse ml-1" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
+function StepCard({ item, idx }: { item: StepItem; idx: number }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 40 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.5, delay: idx * 0.1 }}
-      onMouseMove={handleMouseMove}
-      className="p-8 lg:p-10 border border-white/10 bg-white/[0.02] group relative overflow-hidden rounded-lg flex flex-col hover:border-white/20 transition-colors duration-300"
+      viewport={{ once: true, margin: "-50px" }}
+      transition={{ 
+        duration: 0.8, 
+        delay: idx * 0.15,
+        ease: [0.16, 1, 0.3, 1]
+      }}
+      className="relative flex flex-col"
     >
-      {/* Background Spotlight Glow */}
-      <motion.div
-        className="pointer-events-none absolute -inset-px opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-0"
-        style={{
-          background: useMotionTemplate`
-            radial-gradient(
-              300px circle at ${mouseX}px ${mouseY}px,
-              var(--primary) 0.06,
-              transparent 70%
-            )
-          `,
-        }}
-      />
-
-      <div className="relative z-20 flex flex-col h-full">
-        {/* Pain as italic quote */}
-        <p className="text-muted-foreground/70 text-sm italic mb-8 leading-relaxed">
-          &ldquo;{item.pain}&rdquo;
-        </p>
-
-        {/* Resolution headline */}
-        <h4 className="text-2xl font-bold tracking-tight text-foreground mb-4 mt-auto">{item.resolution}</h4>
+      {/* Large backdrop number */}
+      <div className="absolute -top-8 -left-2 text-[140px] font-bold leading-none text-white/[0.03] select-none pointer-events-none tracking-tighter">
+        {item.number}
+      </div>
+      
+      <div className="relative z-10">
+        {/* Step indicator */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full border border-primary/30 bg-primary/5">
+            <span className="text-sm font-bold text-primary">{item.number}</span>
+          </div>
+          <div className="h-px flex-1 bg-gradient-to-r from-primary/20 to-transparent" />
+        </div>
         
-        {/* Detail */}
-        <p className="text-sm text-muted-foreground font-light leading-relaxed">
-          {item.detail}
+        {/* Title */}
+        <h3 className="text-2xl md:text-3xl font-bold text-white mb-4 tracking-tight">
+          {item.title}
+        </h3>
+        
+        {/* Terminal */}
+        <div className="mb-5">
+          <TerminalBlock command={item.command} args={item.args} isActive={idx === 0} />
+        </div>
+        
+        {/* Description */}
+        <p className="text-[15px] text-white/50 leading-relaxed max-w-sm">
+          {item.description}
         </p>
       </div>
     </motion.div>
@@ -64,21 +108,27 @@ function ProblemCard({ item, idx }: { item: ProblemItem; idx: number }) {
 export function HowItWorks() {
   const sectionRef = useRef<HTMLElement>(null);
   
-  const problems: ProblemItem[] = [
+  const steps: StepItem[] = [
     {
-      pain: "You explain the same rules every session",
-      resolution: "Store once, recall forever",
-      detail: "Your preferences persist across every conversation. No more repeating yourself.",
+      number: "1",
+      title: "Store",
+      command: "memories add",
+      args: "\"Use Tailwind for styling\"",
+      description: "Save rules, preferences, and context to a local SQLite database. Works offline, always.",
     },
     {
-      pain: "Agents lose track mid-project",
-      resolution: "Context that never dies",
-      detail: "Durable state survives restarts, updates, and even tool switches.",
+      number: "2",
+      title: "Recall",
+      command: "memories recall",
+      args: "\"auth\"",
+      description: "Query by keyword or semantic search. Get relevant context for your current task.",
     },
     {
-      pain: "Switching tools means starting over",
-      resolution: "Your rules travel with you",
-      detail: "Generate native configs for Cursor, Claude Code, Copilot, and more. Zero lock-in.",
+      number: "3",
+      title: "Generate",
+      command: "memories generate",
+      args: "cursor",
+      description: "Output native config files for any supported tool. One memory store, any agent.",
     },
   ];
 
@@ -86,58 +136,44 @@ export function HowItWorks() {
     <section 
       ref={sectionRef}
       id="how-it-works" 
-      className="relative py-28 border-y border-white/10 flex flex-col overflow-hidden"
+      className="relative py-32 lg:py-40 border-y border-white/10 overflow-hidden"
     >
-      {/* 2D Noise Background - muted */}
-      <div className="absolute inset-0 opacity-25">
+      {/* Ambient background */}
+      <div className="absolute inset-0 opacity-20">
         <NoiseTexture parentRef={sectionRef} />
       </div>
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/[0.02] to-transparent" />
       
-      {/* Gradient overlay: bg top-right, transparent bottom-left */}
-      <div className="absolute inset-0 pointer-events-none z-[1] bg-gradient-to-bl from-background from-50% to-transparent" />
-
-      <div className="relative z-10 w-full px-6 lg:px-16 xl:px-24 flex-1 flex flex-col">
-        {/* Section Header */}
-        <div className="mb-16 max-w-3xl">
-          <div className="text-[11px] uppercase tracking-[0.35em] font-bold text-primary mb-6">The Problem</div>
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
-            Agents forget.<br />
-            <span className="text-primary">Memories remembers.</span>
-          </h2>
-          <p className="mt-6 text-lg text-muted-foreground font-light max-w-xl leading-relaxed">
-            Every coding agent starts fresh. Your rules, preferences, and project context—gone. 
-            Until now.
-          </p>
-        </div>
-
-        {/* Problem → Solution Cards */}
-        <div className="grid md:grid-cols-3 gap-4">
-          {problems.map((item, idx) => (
-            <ProblemCard key={idx} item={item} idx={idx} />
-          ))}
-        </div>
-
-        {/* CTA */}
+      <div className="relative z-10 w-full px-6 lg:px-16 xl:px-24">
+        {/* Section header - centered */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="pt-16 flex flex-col items-center text-center"
+          transition={{ duration: 0.8 }}
+          className="text-center mb-20 lg:mb-28"
         >
-          <p className="text-muted-foreground mb-6 text-lg font-light">
-            Ready to stop repeating yourself?
-          </p>
-          <a 
-            href="#quickstart" 
-            className="inline-flex items-center gap-3 px-8 py-4 bg-primary text-primary-foreground font-bold uppercase tracking-[0.2em] text-[11px] rounded-md hover:translate-y-[-1px] transition-transform"
-          >
-            Get Started
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
-          </a>
+          <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full border border-primary/20 bg-primary/5 mb-8">
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            <span className="text-[11px] uppercase tracking-[0.3em] font-bold text-primary">
+              How It Works
+            </span>
+          </div>
+          
+          <h2 className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight text-white leading-[1.05]">
+            Three commands.<br />
+            <span className="text-white/40">That&apos;s it.</span>
+          </h2>
         </motion.div>
+
+        {/* Steps with flow arrows */}
+        <div className="grid lg:grid-cols-[1fr_auto_1fr_auto_1fr] gap-8 lg:gap-6 items-start max-w-6xl mx-auto">
+          <StepCard item={steps[0]} idx={0} />
+          <FlowArrow />
+          <StepCard item={steps[1]} idx={1} />
+          <FlowArrow />
+          <StepCard item={steps[2]} idx={2} />
+        </div>
       </div>
     </section>
   );

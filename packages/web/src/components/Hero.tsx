@@ -200,7 +200,7 @@ export function Hero() {
               variants={itemVariants} 
               className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-[-0.03em] mb-6 leading-[1.05] text-foreground"
             >
-              The <span className="text-accent-secondary">agnostic</span> memory layer for any agent.
+              The unified agent memory layer.
             </motion.h1>
 
             <motion.p variants={itemVariants} className="text-lg md:text-xl text-muted-foreground mb-8 max-w-xl leading-relaxed font-light">

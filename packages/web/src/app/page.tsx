@@ -4,7 +4,6 @@ import { Hero } from "@/components/Hero";
 import { HowItWorks } from "@/components/HowItWorks";
 import { FeaturesGrid } from "@/components/FeaturesGrid";
 import { Integrations } from "@/components/Integrations";
-import { WhyItMatters } from "@/components/WhyItMatters";
 import { Quickstart } from "@/components/Quickstart";
 import { Pricing } from "@/components/Pricing";
 import { FAQ } from "@/components/FAQ";
@@ -22,7 +21,6 @@ export default async function Home() {
       <main className="relative">
         <Hero />
         <HowItWorks />
-        <WhyItMatters />
         <FeaturesGrid />
         <Integrations />
         <Quickstart />
