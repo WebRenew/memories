@@ -72,6 +72,7 @@ export function TeamContent({
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member")
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
+  const [emailSent, setEmailSent] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const selectedOrg = organizations.find(o => o.id === selectedOrgId)
@@ -142,6 +143,7 @@ export function TeamContent({
       
       if (res.ok) {
         setInviteUrl(data.inviteUrl)
+        setEmailSent(data.emailSent || false)
         setInviteEmail("")
         fetchOrgData()
       } else {
@@ -380,9 +382,13 @@ export function TeamContent({
                     {inviteUrl ? (
                       <div className="space-y-4">
                         <div className="bg-green-500/10 border border-green-500/20 p-3 text-sm">
-                          <p className="text-green-400 font-medium mb-2">Invite Created!</p>
+                          <p className="text-green-400 font-medium mb-2">
+                            {emailSent ? "Invite Sent!" : "Invite Created!"}
+                          </p>
                           <p className="text-muted-foreground text-xs">
-                            Share this link with the person you want to invite:
+                            {emailSent 
+                              ? "We've sent an email with the invite link. You can also share this link directly:"
+                              : "Share this link with the person you want to invite:"}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -400,7 +406,7 @@ export function TeamContent({
                           </button>
                         </div>
                         <button
-                          onClick={() => { setShowInvite(false); setInviteUrl(null) }}
+                          onClick={() => { setShowInvite(false); setInviteUrl(null); setEmailSent(false) }}
                           className="w-full px-4 py-2 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
                         >
                           Done

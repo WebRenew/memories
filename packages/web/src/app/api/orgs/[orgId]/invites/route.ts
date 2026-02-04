@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { sendTeamInviteEmail } from "@/lib/resend"
 import { NextResponse } from "next/server"
 
 // GET /api/orgs/[orgId]/invites - List pending invites
@@ -139,21 +140,44 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Get org name for email
+  // Get org name and inviter name for email
   const { data: org } = await supabase
     .from("organizations")
     .select("name")
     .eq("id", orgId)
     .single()
 
-  // TODO: Send invite email with link like /invite/accept?token=xxx
-  // For now, return the token (in production, send via email)
+  const { data: inviter } = await supabase
+    .from("users")
+    .select("name, email")
+    .eq("id", user.id)
+    .single()
+
   const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://memories.sh"}/invite/accept?token=${invite.token}`
+
+  // Send invite email
+  if (process.env.RESEND_API_KEY) {
+    try {
+      await sendTeamInviteEmail({
+        to: email.toLowerCase(),
+        inviterName: inviter?.name || inviter?.email?.split("@")[0] || "Someone",
+        orgName: org?.name || "an organization",
+        inviteUrl,
+        role,
+      })
+    } catch (e) {
+      console.error("Failed to send invite email:", e)
+      // Don't fail the request - invite was created, email just didn't send
+    }
+  }
 
   return NextResponse.json({ 
     invite,
-    inviteUrl, // Remove in production - send via email instead
-    message: `Invite created. Share this link: ${inviteUrl}` 
+    inviteUrl,
+    emailSent: !!process.env.RESEND_API_KEY,
+    message: process.env.RESEND_API_KEY 
+      ? `Invite sent to ${email}` 
+      : `Invite created. Share this link: ${inviteUrl}` 
   }, { status: 201 })
 }
 
