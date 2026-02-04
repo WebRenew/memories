@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
+import { ChevronDown } from "lucide-react"
 import { MemoriesList } from "./MemoriesList"
 import { AddRuleForm } from "./AddRuleForm"
 
@@ -13,11 +14,22 @@ interface Memory {
   created_at: string
 }
 
-type ScopeFilter = "all" | "global" | "project"
+type ScopeFilter = "all" | "global" | string // "all", "global", or a specific project scope
+
+function formatProjectName(scope: string): string {
+  // github.com/org/repo -> org/repo
+  return scope.replace(/^github\.com\//, "")
+}
+
+function getShortProjectName(scope: string): string {
+  // github.com/org/repo -> repo
+  return scope.replace(/^github\.com\//, "").split("/").pop() || scope
+}
 
 export function RulesSection({ initialRules }: { initialRules: Memory[] }) {
   const [rules, setRules] = useState(initialRules)
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all")
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false)
 
   const handleAdd = (memory: Memory) => {
     setRules((prev) => [memory, ...prev])
@@ -27,24 +39,30 @@ export function RulesSection({ initialRules }: { initialRules: Memory[] }) {
     setRules(updated)
   }
 
+  // Get unique project scopes with counts
+  const projectScopes = useMemo(() => {
+    const scopeCounts = new Map<string, number>()
+    rules.forEach((r) => {
+      if (r.scope && r.scope !== "global") {
+        scopeCounts.set(r.scope, (scopeCounts.get(r.scope) || 0) + 1)
+      }
+    })
+    return Array.from(scopeCounts.entries())
+      .map(([scope, count]) => ({ scope, count }))
+      .sort((a, b) => b.count - a.count)
+  }, [rules])
+
   const filteredRules = useMemo(() => {
     if (scopeFilter === "all") return rules
+    if (scopeFilter === "global") return rules.filter((r) => r.scope === "global")
     return rules.filter((r) => r.scope === scopeFilter)
   }, [rules, scopeFilter])
 
   const globalCount = rules.filter((r) => r.scope === "global").length
-  const projectCount = rules.filter((r) => r.scope === "project").length
+  const allProjectCount = rules.filter((r) => r.scope && r.scope !== "global").length
 
-  // Get unique project scopes for display
-  const projectScopes = useMemo(() => {
-    const scopes = new Set<string>()
-    rules.forEach((r) => {
-      if (r.scope && r.scope !== "global") {
-        scopes.add(r.scope)
-      }
-    })
-    return Array.from(scopes)
-  }, [rules])
+  // Check if current filter is a specific project
+  const isProjectFilter = scopeFilter !== "all" && scopeFilter !== "global"
 
   return (
     <div>
@@ -84,22 +102,80 @@ export function RulesSection({ initialRules }: { initialRules: Memory[] }) {
         >
           Global ({globalCount})
         </button>
-        <button
-          onClick={() => setScopeFilter("project")}
-          className={`px-3 py-1.5 text-[10px] uppercase tracking-wider font-bold transition-colors ${
-            scopeFilter === "project"
-              ? "bg-background text-foreground border border-border"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Project ({projectCount})
-        </button>
+        
+        {/* Project dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setShowProjectDropdown(!showProjectDropdown)}
+            className={`px-3 py-1.5 text-[10px] uppercase tracking-wider font-bold transition-colors flex items-center gap-1 ${
+              isProjectFilter
+                ? "bg-background text-foreground border border-border"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {isProjectFilter ? getShortProjectName(scopeFilter) : `Projects (${allProjectCount})`}
+            <ChevronDown className="w-3 h-3" />
+          </button>
+          
+          {showProjectDropdown && (
+            <>
+              <div 
+                className="fixed inset-0 z-10" 
+                onClick={() => setShowProjectDropdown(false)} 
+              />
+              <div className="absolute top-full left-0 mt-1 bg-background border border-border shadow-lg z-20 min-w-[200px] max-h-[300px] overflow-y-auto">
+                <button
+                  onClick={() => {
+                    setScopeFilter("all")
+                    setShowProjectDropdown(false)
+                  }}
+                  className="w-full px-3 py-2 text-left text-xs hover:bg-muted/50 transition-colors flex items-center justify-between"
+                >
+                  <span>All Projects</span>
+                  <span className="text-muted-foreground">{allProjectCount}</span>
+                </button>
+                <div className="border-t border-border" />
+                {projectScopes.map(({ scope, count }) => (
+                  <button
+                    key={scope}
+                    onClick={() => {
+                      setScopeFilter(scope)
+                      setShowProjectDropdown(false)
+                    }}
+                    className={`w-full px-3 py-2 text-left text-xs hover:bg-muted/50 transition-colors flex items-center justify-between ${
+                      scopeFilter === scope ? "bg-muted/30" : ""
+                    }`}
+                  >
+                    <span className="truncate" title={scope}>
+                      {formatProjectName(scope)}
+                    </span>
+                    <span className="text-muted-foreground ml-2 shrink-0">{count}</span>
+                  </button>
+                ))}
+                {projectScopes.length === 0 && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    No project-scoped rules
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Project scopes hint */}
-      {scopeFilter === "project" && projectScopes.length > 0 && (
-        <div className="mb-4 text-[10px] text-muted-foreground">
-          Projects: {projectScopes.map((s) => s.replace("github.com/", "")).join(", ")}
+      {/* Current filter indicator for specific project */}
+      {isProjectFilter && (
+        <div className="mb-4 flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground">Filtering:</span>
+          <span className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 text-[10px] tracking-wider font-bold text-amber-400">
+            {formatProjectName(scopeFilter)}
+          </span>
+          <button
+            onClick={() => setScopeFilter("all")}
+            className="text-[10px] text-muted-foreground hover:text-foreground underline"
+          >
+            Clear
+          </button>
         </div>
       )}
 
