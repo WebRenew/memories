@@ -1,124 +1,117 @@
 ---
 title: v0 by Vercel
-description: Integrate memories.sh with v0's AI coding assistant.
+description: Use memories.sh context with v0's AI coding assistant.
 ---
 
-[v0](https://v0.dev/) is Vercel's AI-powered coding assistant for building React components. Since v0 runs in a web browser, it can't use the standard stdio MCP transport. Instead, you can use the HTTP/SSE transport or export your memories as context.
+[v0](https://v0.dev/) is Vercel's AI-powered tool for generating React components and UI. Since v0 is a web app focused on UI generation (not a full coding agent), it doesn't have MCP client support. However, you can still use your memories.sh context with v0.
 
-## Current Options
+## Using Memories with v0
 
-### Option 1: Export Context (Available Now)
+### Export Context and Paste
 
-The simplest approach is to export your memories and paste them into v0:
+The recommended approach is to export your relevant memories and include them in your v0 prompt:
 
 ```bash
-# Generate a context prompt
+# Generate a context prompt with your rules
 memories prompt > context.md
 
-# Or export as structured data
-memories export --format yaml > memories.yaml
+# Or search for specific relevant memories
+memories search "react components" 
+memories search "tailwind" --type rule
 ```
 
-Then paste the contents into v0's chat as context:
+Then include the context in your v0 prompt:
 
 ```
-Here are my coding rules and project context:
+My coding standards:
+- Use TypeScript strict mode
+- Use Tailwind CSS with cn() helper for conditional classes  
+- Prefer shadcn/ui components
+- Use React Server Components by default
 
-[paste contents of context.md]
-
-Now, please build a...
+Build me a dashboard card component that shows user stats...
 ```
 
-### Option 2: Use with v0's CLI
+### Generate a Context File
 
-If you're using v0's CLI locally, you can generate a context file that v0 reads:
+Create a dedicated context file you can reference:
 
 ```bash
-# Generate context for v0
-memories generate agents -o v0-context.md
+memories prompt --types rule,decision > v0-context.md
 ```
 
-Then reference this file when working with v0.
+Keep this file open alongside v0 and copy relevant sections as needed.
 
-## SSE Transport (Coming Soon)
-
-<Callout type="info">
-**Coming in a future release**: Native SSE transport for web-based MCP clients.
-</Callout>
-
-We're working on adding SSE (Server-Sent Events) transport to the memories MCP server. This will allow web-based tools like v0 to connect directly:
-
-```bash
-# Future command
-memories serve --sse --port 3030
-```
-
-Once available, you'll be able to configure v0's MCP settings to connect to your local server, enabling live access to search and add memories.
-
-### Why SSE?
-
-Web-based AI tools can't spawn local processes, so the standard stdio MCP transport doesn't work. SSE provides an HTTP-based transport that works from anywhere:
-
-- **stdio** — Standard for desktop apps (Cursor, Claude Code, etc.)
-- **SSE** — Required for web apps (v0, web-based IDEs)
-
-## Workaround: mcp-proxy
-
-Until native SSE support is added, you can use [mcp-proxy](https://github.com/anthropics/mcp-proxy) to bridge stdio to SSE:
-
-```bash
-# Install mcp-proxy
-npm install -g @anthropic/mcp-proxy
-
-# Run memories via the proxy
-mcp-proxy --port 3030 -- memories serve
-```
-
-Then configure v0 to connect to `http://localhost:3030`.
-
-<Callout type="warn">
-**Security Note**: Exposing MCP over HTTP makes your memories accessible to anything that can reach that port. Only run on trusted networks.
-</Callout>
-
-## Best Practices for v0
+## Best Practices
 
 ### 1. Keep context focused
 
-v0 works best with focused context. Instead of dumping all memories:
+v0 works best with concise, focused context. Don't dump all your memories — pick the relevant ones:
 
 ```bash
-# Search for relevant memories
-memories search "react component" --json | head -10
+# Search for UI-related rules
+memories search "component" --type rule
+memories search "styling" --type rule
+memories search "tailwind"
 ```
 
-### 2. Use the prompt command
+### 2. Include your design system rules
 
-The `prompt` command formats memories specifically for AI consumption:
+If you have rules about your design system, include them:
 
 ```bash
-memories prompt --types rule,decision
+memories search "design" --type rule
+memories search "shadcn" 
 ```
 
-This outputs a clean, structured prompt ready to paste.
+### 3. Save v0's patterns back to memories
 
-### 3. Save v0's learnings
-
-After v0 helps you build something, save any conventions it established:
+After v0 generates something you like, save the patterns:
 
 ```bash
 memories add --rule "Use Tailwind's cn() helper for conditional classes"
-memories add --decision "Chose shadcn/ui Button component for all buttons"
+memories add --rule "Card components use rounded-lg shadow-sm border"
+memories add --decision "Chose shadcn/ui Card for all card-style containers"
 ```
 
-These will be available for future v0 sessions.
+These will be available for your next v0 session and all your other AI tools.
 
-## Integration Roadmap
+## Why No Direct MCP?
 
-| Feature | Status |
-|---------|--------|
-| Export context (`memories prompt`) | ✅ Available |
-| Generate files (`memories generate`) | ✅ Available |
-| SSE transport | 🚧 Planned |
-| v0-specific MCP config | 🚧 Planned |
+v0 is different from coding agents like Cursor or Claude Code:
 
-Follow the [memories.sh changelog](https://memories.sh/changelog) for updates.
+| Tool | Type | MCP Support |
+|------|------|-------------|
+| Cursor, Claude Code | Full coding agents | Yes (stdio) |
+| v0 | UI generation tool | No |
+
+v0 runs entirely in your browser and is optimized for quick UI generation, not long-running agent sessions with tool access.
+
+## Future: Web-Based MCP
+
+For web-based AI tools that *do* support MCP (like future coding agents), memories.sh will support SSE (Server-Sent Events) transport:
+
+```bash
+# Planned feature
+memories serve --sse --port 3030
+```
+
+This would require:
+1. **Exposing the server** via tunnel (ngrok, Cloudflare Tunnel)
+2. **Authentication** to protect your memories (API key or token)
+
+For now, the copy-paste workflow is the most practical approach for v0.
+
+## Quick Reference
+
+```bash
+# Export all rules for v0
+memories prompt --types rule > v0-rules.md
+
+# Search for specific context
+memories search "react" --type rule
+memories search "component patterns" --semantic
+
+# Save patterns from v0
+memories add --rule "Your new rule from v0"
+```
