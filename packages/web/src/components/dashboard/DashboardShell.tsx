@@ -65,7 +65,7 @@ export function DashboardShell({
 
       {/* Top bar */}
       <header className={`fixed left-0 w-full z-50 border-b border-border bg-background/80 backdrop-blur-2xl ${plan === "past_due" ? "top-9" : "top-0"}`}>
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 group">
             <Image
               src="/memories.svg"
@@ -118,7 +118,7 @@ export function DashboardShell({
       </header>
 
       {/* Content area with sidebar */}
-      <div className={`max-w-7xl mx-auto flex ${plan === "past_due" ? "pt-[6.25rem]" : "pt-16"}`}>
+      <div className={`flex ${plan === "past_due" ? "pt-[6.25rem]" : "pt-16"}`}>
         {/* Sidebar */}
         <aside className="hidden md:flex flex-col w-56 shrink-0 border-r border-border h-[calc(100vh-4rem)] sticky top-16 p-4 gap-1 overflow-hidden">
           {navItems.map((item) => {
