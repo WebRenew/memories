@@ -5,5 +5,8 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "sharp", "protobufjs", "unrs-resolver"]
   }
 }

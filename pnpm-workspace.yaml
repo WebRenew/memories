@@ -1,4 +1,10 @@
 packages:
   - packages/*
 
+ignoredBuiltDependencies:
+  - esbuild
+  - protobufjs
+  - sharp
+  - unrs-resolver
+
 onlyBuiltDependencies: esbuild

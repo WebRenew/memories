@@ -9,3 +9,16 @@ sync.json
 supabase/.temp/
 .vercel
 .env*.local
+
+# Local agent config directories (each tool's project-specific config)
+.agents/
+.claude/
+.codex/
+.cursor/
+.factory/
+.gemini/
+.opencode/
+.windsurf/
+.cline/
+.roo/
+.amp/

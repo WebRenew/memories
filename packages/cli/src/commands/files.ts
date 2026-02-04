@@ -25,83 +25,133 @@ function hashContent(content: string): string {
   return createHash("sha256").update(content).digest("hex").slice(0, 16);
 }
 
-// Known config directories to scan
-const CONFIG_DIRS = [
-  { dir: ".agents", name: "Agents" },
-  { dir: ".claude", name: "Claude" },
-  { dir: ".cursor", name: "Cursor" },
-  { dir: ".github/copilot", name: "Copilot" },
-  { dir: ".windsurf", name: "Windsurf" },
-  { dir: ".cline", name: "Cline" },
-  { dir: ".codex", name: "Codex" },
-  { dir: ".gemini", name: "Gemini" },
-  { dir: ".roo", name: "Roo" },
-  { dir: ".amp", name: "Amp" },
-];
-
-// File patterns to include
-const INCLUDE_PATTERNS = [
-  /\.md$/,
-  /\.txt$/,
-  /\.json$/,
-  /\.yaml$/,
-  /\.yml$/,
-  /\.toml$/,
-  /rules$/,
-  /config$/,
-];
-
-// Patterns to exclude
-const EXCLUDE_PATTERNS = [
-  /node_modules/,
-  /\.git\//,
-  /\.DS_Store/,
-  /\.log$/,
-  /cache/i,
-  /history/i,
-  /session/i,
-  /debug/i,
-  /\.lock$/,
-  /stats-cache/,
-  /telemetry/,
-  /todos/,
-];
-
-function shouldIncludeFile(filePath: string): boolean {
-  // Check excludes first
-  for (const pattern of EXCLUDE_PATTERNS) {
-    if (pattern.test(filePath)) return false;
-  }
+// Specific file paths and patterns to sync from each tool directory
+// Only sync: instruction files, commands, skills, rules, and essential configs
+const SYNC_TARGETS = [
+  // .agents - Agent instruction files, commands, and skills
+  { dir: ".agents", files: ["AGENTS.md"] },
+  { dir: ".agents/commands", pattern: /\.md$/ },
+  { dir: ".agents/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
   
-  // Check includes
-  for (const pattern of INCLUDE_PATTERNS) {
-    if (pattern.test(filePath)) return true;
-  }
+  // .claude - Claude Code instructions, commands, rules, and hooks
+  { dir: ".claude", files: ["CLAUDE.md", "settings.json", "settings.local.json"] },
+  { dir: ".claude/commands", pattern: /\.md$/ },
+  { dir: ".claude/rules", pattern: /\.(md|rules)$/ },
+  { dir: ".claude/hooks", pattern: /\.(json|sh)$/ },
+  { dir: ".claude/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
   
-  return false;
+  // .cursor - Cursor rules and MCP config
+  { dir: ".cursor", files: ["mcp.json", "rules.md"] },
+  { dir: ".cursor/rules", pattern: /\.(md|mdc|txt)$/ },
+  { dir: ".cursor/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
+  
+  // .codex - Codex config and rules
+  { dir: ".codex", files: ["config.toml", "AGENTS.md", "instructions.md"] },
+  { dir: ".codex/rules", pattern: /\.(md|rules)$/ },
+  { dir: ".codex/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
+  
+  // .windsurf - Windsurf rules
+  { dir: ".windsurf", files: ["rules.md", "cascade.json"] },
+  { dir: ".windsurf/rules", pattern: /\.(md|txt)$/ },
+  { dir: ".windsurf/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
+  
+  // .cline - Cline rules
+  { dir: ".cline", files: ["rules.md", "CLINE.md", "cline_rules.md"] },
+  { dir: ".cline/rules", pattern: /\.(md|txt)$/ },
+  { dir: ".cline/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
+  
+  // .github/copilot - Copilot instructions
+  { dir: ".github/copilot", files: ["instructions.md"] },
+  
+  // .gemini - Gemini instructions
+  { dir: ".gemini", files: ["GEMINI.md", "settings.json"] },
+  { dir: ".gemini/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
+  
+  // .roo - Roo config and rules
+  { dir: ".roo", files: ["config.json", "rules.md"] },
+  { dir: ".roo/rules", pattern: /\.(md|txt)$/ },
+  { dir: ".roo/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
+  
+  // .amp - Amp rules
+  { dir: ".amp", files: ["AGENTS.md", "rules.md"] },
+  { dir: ".amp/rules", pattern: /\.(md|txt)$/ },
+  { dir: ".amp/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
+  
+  // .opencode - OpenCode instructions
+  { dir: ".opencode", files: ["instructions.md"] },
+  { dir: ".opencode/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
+  
+  // .factory - Factory/Droid config
+  { dir: ".factory", files: ["config.json", "instructions.md"] },
+  { dir: ".factory/droids", pattern: /\.(md|yaml|yml)$/ },
+  { dir: ".factory/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
+];
+
+interface SyncTarget {
+  dir: string;
+  files?: string[];
+  pattern?: RegExp;
+  recurse?: boolean;
 }
 
-async function scanDirectory(dir: string, basePath: string = ""): Promise<{ path: string; fullPath: string }[]> {
-  const files: { path: string; fullPath: string }[] = [];
+async function scanTarget(baseDir: string, target: SyncTarget, relativeTo: string = ""): Promise<{ path: string; fullPath: string; source: string }[]> {
+  const results: { path: string; fullPath: string; source: string }[] = [];
+  const targetDir = join(baseDir, target.dir);
   
-  if (!existsSync(dir)) return files;
+  if (!existsSync(targetDir)) return results;
   
-  const entries = await readdir(dir, { withFileTypes: true });
+  // Get tool name from first part of dir (e.g., ".agents" -> "Agents")
+  const source = target.dir.split("/")[0].replace(/^\./, "").replace(/^(.)/, (_, c) => c.toUpperCase());
+  
+  // If specific files are listed, just check for those
+  if (target.files) {
+    for (const file of target.files) {
+      const fullPath = join(targetDir, file);
+      if (existsSync(fullPath)) {
+        const stats = await stat(fullPath);
+        if (stats.isFile()) {
+          results.push({
+            path: join(target.dir, file),
+            fullPath,
+            source,
+          });
+        }
+      }
+    }
+    return results;
+  }
+  
+  // Otherwise scan with pattern
+  if (!target.pattern) return results;
+  
+  const entries = await readdir(targetDir, { withFileTypes: true });
   
   for (const entry of entries) {
-    const fullPath = join(dir, entry.name);
-    const relativePath = basePath ? join(basePath, entry.name) : entry.name;
+    const fullPath = join(targetDir, entry.name);
+    const relativePath = join(target.dir, entry.name);
     
-    if (entry.isDirectory()) {
+    if (entry.isDirectory() && target.recurse) {
       // Recurse into subdirectories
-      const subFiles = await scanDirectory(fullPath, relativePath);
-      files.push(...subFiles);
-    } else if (entry.isFile() && shouldIncludeFile(relativePath)) {
-      files.push({ path: relativePath, fullPath });
+      const subTarget: SyncTarget = { dir: relativePath, pattern: target.pattern, recurse: true };
+      const subResults = await scanTarget(baseDir, subTarget, relativeTo);
+      results.push(...subResults);
+    } else if (entry.isFile() && target.pattern.test(entry.name)) {
+      results.push({ path: relativePath, fullPath, source });
     }
   }
   
-  return files;
+  return results;
+}
+
+async function scanAllTargets(baseDir: string): Promise<{ path: string; fullPath: string; source: string }[]> {
+  const results: { path: string; fullPath: string; source: string }[] = [];
+  
+  for (const target of SYNC_TARGETS) {
+    const targetResults = await scanTarget(baseDir, target);
+    results.push(...targetResults);
+  }
+  
+  return results;
 }
 
 export const filesCommand = new Command("files")
@@ -176,33 +226,23 @@ filesCommand
     
     // Scan global configs
     if (opts.global !== false) {
-      for (const { dir, name } of CONFIG_DIRS) {
-        const globalDir = join(home, dir);
-        const files = await scanDirectory(globalDir);
-        for (const file of files) {
-          filesToIngest.push({
-            path: join(dir, file.path),
-            fullPath: file.fullPath,
-            scope: "global",
-            source: name,
-          });
-        }
+      const files = await scanAllTargets(home);
+      for (const file of files) {
+        filesToIngest.push({
+          ...file,
+          scope: "global",
+        });
       }
     }
     
     // Scan project configs
     if (opts.project) {
-      for (const { dir, name } of CONFIG_DIRS) {
-        const projectDir = join(cwd, dir);
-        const files = await scanDirectory(projectDir);
-        for (const file of files) {
-          filesToIngest.push({
-            path: join(dir, file.path),
-            fullPath: file.fullPath,
-            scope: "project", // Will be resolved to git remote
-            source: name,
-          });
-        }
+      const files = await scanAllTargets(cwd);
+      for (const file of files) {
+        filesToIngest.push({
+          ...file,
+          scope: "project", // Will be resolved to git remote
+        });
       }
     }
     
