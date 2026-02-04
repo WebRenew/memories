@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { 
   CreditCard, 
   Zap, 
@@ -10,7 +11,9 @@ import {
   FolderOpen,
   Clock,
   ExternalLink,
-  Check
+  Check,
+  AlertTriangle,
+  Trash2
 } from "lucide-react"
 
 interface UsageStats {
@@ -45,7 +48,11 @@ const PRO_FEATURES = [
 ]
 
 export function BillingContent({ plan, hasStripeCustomer, usage, memberSince }: BillingContentProps) {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [deleting, setDeleting] = useState(false)
   const isPro = plan === "pro"
 
   async function handleManageBilling() {
@@ -75,6 +82,23 @@ export function BillingContent({ plan, hasStripeCustomer, usage, memberSince }: 
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (deleteConfirmText !== "DELETE") return
+    
+    setDeleting(true)
+    try {
+      const res = await fetch("/api/account", { method: "DELETE" })
+      if (res.ok) {
+        router.push("/")
+      } else {
+        const data = await res.json()
+        alert(data.error || "Failed to delete account")
+      }
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -281,6 +305,84 @@ export function BillingContent({ plan, hasStripeCustomer, usage, memberSince }: 
           </div>
         </div>
       )}
+
+      {/* Danger Zone */}
+      <div className="border border-red-500/30 bg-red-500/5">
+        <div className="p-4 border-b border-red-500/30 flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-red-400" />
+          <h2 className="font-semibold text-red-400">Danger Zone</h2>
+        </div>
+
+        <div className="p-4 space-y-6">
+          {/* Cancel Subscription (Pro only) */}
+          {isPro && hasStripeCustomer && (
+            <div className="flex items-start justify-between gap-4 pb-6 border-b border-red-500/20">
+              <div>
+                <h3 className="font-medium text-sm">Cancel Subscription</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Downgrade to the Free plan. You&apos;ll lose cloud sync and web dashboard access at the end of your billing period.
+                </p>
+              </div>
+              <button
+                onClick={handleManageBilling}
+                disabled={loading}
+                className="shrink-0 px-4 py-2 text-xs font-medium border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+              >
+                {loading ? "Loading..." : "Cancel Plan"}
+              </button>
+            </div>
+          )}
+
+          {/* Delete Account */}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="font-medium text-sm">Delete Account</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Permanently delete your account and all data. This action cannot be undone.
+                {isPro && " Your subscription will be cancelled immediately."}
+              </p>
+            </div>
+            {!showDeleteConfirm ? (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="shrink-0 px-4 py-2 text-xs font-medium border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                Delete Account
+              </button>
+            ) : (
+              <div className="shrink-0 flex flex-col gap-2">
+                <p className="text-xs text-red-400">Type DELETE to confirm:</p>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  className="px-3 py-1.5 text-sm bg-background border border-red-500/30 focus:outline-none focus:border-red-500"
+                  placeholder="DELETE"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={deleteConfirmText !== "DELETE" || deleting}
+                    className="flex-1 px-3 py-1.5 text-xs font-medium bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    {deleting ? "Deleting..." : "Confirm Delete"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDeleteConfirm(false)
+                      setDeleteConfirmText("")
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium border border-border hover:bg-muted/50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
