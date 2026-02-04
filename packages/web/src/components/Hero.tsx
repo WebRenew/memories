@@ -1,7 +1,8 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import type { RefObject } from "react";
 import Image from "next/image";
 
 const tools = [
@@ -83,7 +84,91 @@ const GeometricPattern = () => (
   </svg>
 );
 
+function NoiseTexture({ parentRef }: { parentRef: RefObject<HTMLElement> }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [opacity, setOpacity] = useState(0);
+
+  useEffect(() => {
+    const draw = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+
+      const grid = 12;
+      for (let y = 0; y <= height; y += grid) {
+        for (let x = 0; x <= width; x += grid) {
+          const i = x / grid;
+          const j = y / grid;
+          const noise =
+            Math.sin(i * 0.2) * Math.cos(j * 0.2) +
+            Math.sin((i + j) * 0.1);
+
+          if (noise <= -0.3) continue;
+
+          const alpha = Math.max(0, Math.min(0.25, (noise + 1.5) * 0.1));
+          const size = 2 + noise * 1.5;
+          ctx.fillStyle = `rgba(99, 102, 241, ${alpha})`;
+          ctx.fillRect(x - size / 2, y - size / 2, size, size);
+        }
+      }
+    };
+
+    const updateOpacity = () => {
+      const parent = parentRef.current;
+      if (!parent) return;
+      const rect = parent.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || 1;
+      const progress = Math.max(0, Math.min(1, 1 - rect.top / viewportHeight));
+      setOpacity(progress);
+    };
+
+    const timeout = window.setTimeout(() => {
+      draw();
+      updateOpacity();
+    }, 100);
+
+    const handleResize = () => {
+      draw();
+      updateOpacity();
+    };
+
+    const handleScroll = () => {
+      updateOpacity();
+    };
+
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [parentRef]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 transition-opacity duration-500 z-0"
+      style={{ opacity }}
+    />
+  );
+}
+
 export function Hero() {
+  const sectionRef = useRef<HTMLElement | null>(null);
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -109,7 +194,8 @@ export function Hero() {
   };
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center pt-32 pb-24 px-6 overflow-hidden">
+    <section ref={sectionRef} className="relative min-h-screen flex items-center justify-center pt-32 pb-24 px-6 overflow-hidden">
+      <NoiseTexture parentRef={sectionRef} />
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -194,7 +280,7 @@ export function Hero() {
       </div>
 
       {/* Side Ambient Data Stream */}
-      <div className="hidden lg:block absolute right-10 top-1/2 -translate-y-1/2 w-64 h-96 pointer-events-none">
+      <div className="hidden absolute right-10 top-1/2 -translate-y-1/2 w-64 h-96 pointer-events-none">
         <MemoryStream />
       </div>
     </section>
