@@ -40,8 +40,8 @@ export function ToolsPanel({ ruleCount }: { ruleCount: number }) {
             <Image
               src={tool.logo}
               alt={tool.name}
-              width={32}
-              height={32}
+              width={48}
+              height={48}
               className="opacity-60 group-hover:opacity-100 transition-opacity"
             />
             <div className="text-center">
