@@ -9,7 +9,8 @@ export function ApiKeySection() {
   const [newKey, setNewKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [showKey, setShowKey] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copiedKey, setCopiedKey] = useState(false)
+  const [copiedConfig, setCopiedConfig] = useState(false)
 
   useEffect(() => {
     fetchKeyStatus()
@@ -62,24 +63,35 @@ export function ApiKeySection() {
     }
   }
 
-  async function copyToClipboard(text: string) {
-    await navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  function copyConfig() {
-    const config = `{
-  "mcpServers": {
-    "memories": {
-      "url": "https://memories.sh/api/mcp",
-      "headers": {
-        "Authorization": "Bearer ${newKey || "YOUR_API_KEY"}"
-      }
+  async function copyKey() {
+    if (!newKey) return
+    try {
+      await navigator.clipboard.writeText(newKey)
+      setCopiedKey(true)
+      setTimeout(() => setCopiedKey(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy:", err)
     }
   }
-}`
-    copyToClipboard(config)
+
+  async function copyConfig() {
+    const config = JSON.stringify({
+      mcpServers: {
+        memories: {
+          url: "https://memories.sh/api/mcp",
+          headers: {
+            Authorization: `Bearer ${newKey || "YOUR_API_KEY"}`
+          }
+        }
+      }
+    }, null, 2)
+    try {
+      await navigator.clipboard.writeText(config)
+      setCopiedConfig(true)
+      setTimeout(() => setCopiedConfig(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy:", err)
+    }
   }
 
   if (loading && !hasKey && !newKey) {
@@ -125,11 +137,11 @@ export function ApiKeySection() {
                 {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
               <button
-                onClick={() => copyToClipboard(newKey)}
+                onClick={copyKey}
                 className="p-2 hover:bg-muted/30 rounded transition-colors"
-                title="Copy"
+                title={copiedKey ? "Copied!" : "Copy"}
               >
-                <Copy className="h-4 w-4" />
+                <Copy className={`h-4 w-4 ${copiedKey ? "text-green-400" : ""}`} />
               </button>
             </div>
 
@@ -137,9 +149,13 @@ export function ApiKeySection() {
               <p className="text-xs text-muted-foreground mb-2">v0 / MCP Config:</p>
               <button
                 onClick={copyConfig}
-                className="w-full text-left bg-muted/20 hover:bg-muted/30 px-3 py-2 rounded text-xs font-mono transition-colors"
+                className={`w-full text-left px-3 py-2 rounded text-xs font-mono transition-colors ${
+                  copiedConfig 
+                    ? "bg-green-500/10 text-green-400 border border-green-500/20" 
+                    : "bg-muted/20 hover:bg-muted/30"
+                }`}
               >
-                {copied ? "Copied!" : "Click to copy MCP config"}
+                {copiedConfig ? "Copied to clipboard!" : "Click to copy MCP config"}
               </button>
             </div>
 
