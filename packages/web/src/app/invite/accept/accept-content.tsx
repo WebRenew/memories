@@ -12,7 +12,7 @@ interface AcceptInviteContentProps {
   role: string
   email: string
   isLoggedIn: boolean
-  userEmail?: string
+  userEmails: string[]
 }
 
 export function AcceptInviteContent({ 
@@ -21,13 +21,15 @@ export function AcceptInviteContent({
   role, 
   email,
   isLoggedIn,
-  userEmail 
+  userEmails 
 }: AcceptInviteContentProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const emailMismatch = isLoggedIn && userEmail?.toLowerCase() !== email.toLowerCase()
+  const inviteEmailLower = email.toLowerCase()
+  const hasMatchingEmail = userEmails.some(e => e.toLowerCase() === inviteEmailLower)
+  const emailMismatch = isLoggedIn && !hasMatchingEmail
 
   async function acceptInvite() {
     setLoading(true)
@@ -111,25 +113,39 @@ export function AcceptInviteContent({
               <div className="bg-amber-500/10 border border-amber-500/20 p-3">
                 <p className="text-sm text-amber-400">
                   This invite was sent to <span className="font-medium">{email}</span>, 
-                  but you&apos;re signed in as <span className="font-medium">{userEmail}</span>.
+                  but your account is linked to: <span className="font-medium">{userEmails.join(", ")}</span>.
                 </p>
               </div>
               <p className="text-sm text-muted-foreground text-center">
-                Please sign out and sign in with the correct email address.
+                Link <span className="font-medium">{email}</span> to your account by signing in with it, or sign out to use a different account.
               </p>
+              <a
+                href={`/login?redirect=/invite/accept?token=${token}&link=true`}
+                className="flex items-center justify-center gap-2 w-full py-3 bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+              >
+                Link {email}
+                <ArrowRight className="h-4 w-4" />
+              </a>
               <form action="/auth/signout" method="post">
                 <button
                   type="submit"
                   className="w-full py-3 border border-border hover:bg-muted/50 font-medium transition-colors"
                 >
-                  Sign Out
+                  Sign Out Instead
                 </button>
               </form>
             </div>
           ) : (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground text-center">
-                Signed in as <span className="font-medium text-foreground">{userEmail}</span>
+                {userEmails.length > 0 && (
+                  <>
+                    Signed in as <span className="font-medium text-foreground">{userEmails[0]}</span>
+                    {userEmails.length > 1 && (
+                      <span className="text-xs text-muted-foreground/60"> (+{userEmails.length - 1} linked)</span>
+                    )}
+                  </>
+                )}
               </p>
               <button
                 onClick={acceptInvite}

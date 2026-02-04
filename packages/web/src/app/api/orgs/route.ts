@@ -82,7 +82,12 @@ export async function POST(request: Request) {
     .single()
 
   if (orgError) {
-    return NextResponse.json({ error: orgError.message }, { status: 500 })
+    console.error("Failed to create organization:", {
+      error: orgError,
+      userId: user.id,
+      orgName: name.trim(),
+    })
+    return NextResponse.json({ error: orgError.message || "Failed to create organization" }, { status: 500 })
   }
 
   // Add creator as owner member
@@ -95,9 +100,20 @@ export async function POST(request: Request) {
     })
 
   if (memberError) {
+    console.error("Failed to add owner as member:", {
+      error: memberError,
+      userId: user.id,
+      orgId: org.id,
+      message: memberError.message,
+      code: memberError.code,
+      details: memberError.details,
+      hint: memberError.hint,
+    })
     // Rollback org creation
     await supabase.from("organizations").delete().eq("id", org.id)
-    return NextResponse.json({ error: memberError.message }, { status: 500 })
+    return NextResponse.json({ 
+      error: memberError.message || "Failed to add you as organization owner. This may be a permissions issue." 
+    }, { status: 500 })
   }
 
   // Set as user's current org if they don't have one

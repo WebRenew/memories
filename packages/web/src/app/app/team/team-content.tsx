@@ -107,10 +107,13 @@ export function TeamContent({
     }
   }
 
+  const [createError, setCreateError] = useState<string | null>(null)
+
   async function createOrganization() {
     if (!newOrgName.trim()) return
     
     setLoading(true)
+    setCreateError(null)
     try {
       const res = await fetch("/api/orgs", {
         method: "POST",
@@ -118,11 +121,19 @@ export function TeamContent({
         body: JSON.stringify({ name: newOrgName.trim() }),
       })
       
+      const data = await res.json()
+      
       if (res.ok) {
         setShowCreateOrg(false)
         setNewOrgName("")
         router.refresh()
+      } else {
+        console.error("Failed to create organization:", data)
+        setCreateError(data.error || "Failed to create organization. Please try again.")
       }
+    } catch (e) {
+      console.error("Network error creating organization:", e)
+      setCreateError("Network error. Please check your connection and try again.")
     } finally {
       setLoading(false)
     }
@@ -240,6 +251,12 @@ export function TeamContent({
               Teams let you share rules and memories with your collaborators.
             </p>
             
+            {createError && (
+              <div className="bg-red-500/10 border border-red-500/20 p-3 mb-4 text-sm text-red-400">
+                {createError}
+              </div>
+            )}
+            
             <input
               type="text"
               value={newOrgName}
@@ -273,7 +290,7 @@ export function TeamContent({
 
             <div className="flex justify-end gap-2">
               <button
-                onClick={() => setShowCreateOrg(false)}
+                onClick={() => { setShowCreateOrg(false); setCreateError(null) }}
                 className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 Cancel

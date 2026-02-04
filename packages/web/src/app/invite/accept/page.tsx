@@ -69,6 +69,22 @@ export default async function AcceptInvitePage({
   // Check if user is logged in
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Collect all linked emails from user's identities
+  const userEmails: string[] = []
+  if (user) {
+    if (user.email) {
+      userEmails.push(user.email.toLowerCase())
+    }
+    if (user.identities) {
+      for (const identity of user.identities) {
+        const identityEmail = identity.identity_data?.email as string | undefined
+        if (identityEmail && !userEmails.includes(identityEmail.toLowerCase())) {
+          userEmails.push(identityEmail.toLowerCase())
+        }
+      }
+    }
+  }
+
   const org = invite.organization as { id: string; name: string; slug: string }
 
   return (
@@ -78,7 +94,7 @@ export default async function AcceptInvitePage({
       role={invite.role}
       email={invite.email}
       isLoggedIn={!!user}
-      userEmail={user?.email}
+      userEmails={userEmails}
     />
   )
 }

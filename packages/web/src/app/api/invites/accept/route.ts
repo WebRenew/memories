@@ -31,17 +31,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid or expired invite" }, { status: 400 })
   }
 
-  // Get user's email
-  const { data: profile } = await supabase
-    .from("users")
-    .select("email")
-    .eq("id", user.id)
-    .single()
+  // Get all emails from user's linked identities
+  const userEmails = new Set<string>()
+  
+  // Primary email from auth
+  if (user.email) {
+    userEmails.add(user.email.toLowerCase())
+  }
+  
+  // Emails from linked identities (GitHub, Google, etc.)
+  if (user.identities) {
+    for (const identity of user.identities) {
+      const identityEmail = identity.identity_data?.email
+      if (identityEmail && typeof identityEmail === "string") {
+        userEmails.add(identityEmail.toLowerCase())
+      }
+    }
+  }
 
-  // Verify email matches (case insensitive)
-  if (profile?.email?.toLowerCase() !== invite.email.toLowerCase()) {
+  // Verify any linked email matches the invite
+  const inviteEmailLower = invite.email.toLowerCase()
+  if (!userEmails.has(inviteEmailLower)) {
+    const linkedEmails = Array.from(userEmails).join(", ")
     return NextResponse.json({ 
-      error: `This invite was sent to ${invite.email}. Please sign in with that email address.` 
+      error: `This invite was sent to ${invite.email}. Your account is linked to: ${linkedEmails}. You can link this email by signing in with it.` 
     }, { status: 403 })
   }
 
@@ -95,6 +108,18 @@ export async function POST(request: Request) {
     // In production you might want to handle this differently
   }
 
+  // Mark invite as accepted FIRST to prevent race conditions
+  const { error: acceptError } = await supabase
+    .from("org_invites")
+    .update({ accepted_at: new Date().toISOString() })
+    .eq("id", invite.id)
+    .is("accepted_at", null) // Only update if not already accepted
+
+  if (acceptError) {
+    console.error("Failed to mark invite as accepted:", acceptError)
+    return NextResponse.json({ error: "Failed to accept invite" }, { status: 500 })
+  }
+
   // Add as member
   const { error: memberError } = await supabase
     .from("org_members")
@@ -106,21 +131,25 @@ export async function POST(request: Request) {
     })
 
   if (memberError) {
+    // Rollback invite acceptance if member insert fails
+    await supabase
+      .from("org_invites")
+      .update({ accepted_at: null })
+      .eq("id", invite.id)
     return NextResponse.json({ error: memberError.message }, { status: 500 })
   }
 
-  // Mark invite as accepted
-  await supabase
-    .from("org_invites")
-    .update({ accepted_at: new Date().toISOString() })
-    .eq("id", invite.id)
-
   // Set as user's current org if they don't have one
-  await supabase
+  const { error: orgError } = await supabase
     .from("users")
     .update({ current_org_id: invite.org_id })
     .eq("id", user.id)
     .is("current_org_id", null)
+
+  if (orgError) {
+    console.error("Failed to set current org:", orgError)
+    // Non-critical, continue
+  }
 
   return NextResponse.json({ 
     success: true,
