@@ -61,13 +61,13 @@ export function BillingContent({ plan, hasStripeCustomer, usage, memberSince }: 
     }
   }
 
-  async function handleUpgrade() {
+  async function handleUpgrade(billing: "monthly" | "annual") {
     setLoading(true)
     try {
       const res = await fetch("/api/stripe/checkout", { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ billing: "monthly" }),
+        body: JSON.stringify({ billing }),
       })
       const data = await res.json()
       if (data.url) {
@@ -134,20 +134,28 @@ export function BillingContent({ plan, hasStripeCustomer, usage, memberSince }: 
               <p className="text-sm text-muted-foreground">
                 You&apos;re on the Free plan. Upgrade to Pro for cloud sync, web dashboard access, and MCP API.
               </p>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <button
-                  onClick={handleUpgrade}
+                  onClick={() => handleUpgrade("monthly")}
                   disabled={loading}
                   className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
                   <Zap className="h-4 w-4" />
-                  {loading ? "Loading..." : "Upgrade to Pro — $10/mo"}
+                  {loading ? "Loading..." : "Upgrade — $15/mo"}
+                </button>
+                <button
+                  onClick={() => handleUpgrade("annual")}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-4 py-2 bg-muted/50 border border-border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  {loading ? "Loading..." : "$150/year"} 
+                  <span className="text-xs text-green-400">(Save $30)</span>
                 </button>
                 <a 
                   href="/pricing" 
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  View pricing details
+                  View details
                 </a>
               </div>
             </>
