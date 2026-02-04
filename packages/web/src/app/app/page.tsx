@@ -4,6 +4,7 @@ import { ProvisioningScreen } from "@/components/dashboard/ProvisioningScreen"
 import { RulesSection } from "@/components/dashboard/RulesSection"
 import { MemoriesList } from "@/components/dashboard/MemoriesList"
 import { ToolsPanel } from "@/components/dashboard/ToolsPanel"
+import { ApiKeySection } from "@/components/dashboard/ApiKeySection"
 
 interface Memory {
   id: string
@@ -53,6 +54,9 @@ export default async function MemoriesPage() {
     <div className="space-y-8">
       {/* Tools Panel */}
       <ToolsPanel ruleCount={rules.length} />
+
+      {/* API Key Section */}
+      <ApiKeySection />
 
       {/* Rules Section */}
       {connectError ? (

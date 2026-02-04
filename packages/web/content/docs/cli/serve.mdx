@@ -56,9 +56,9 @@ Add to your tool's MCP config:
 }
 ```
 
-## SSE Transport (Web Clients)
+## SSE Transport (Local Development)
 
-For web-based tools like v0 that connect over HTTP:
+For local development and testing with web-based tools:
 
 ```bash
 memories serve --sse
@@ -80,9 +80,6 @@ memories serve --sse
 # Custom port
 memories serve --sse --port 8080
 
-# Allow external connections (use with tunnel)
-memories serve --sse --host 0.0.0.0
-
 # Enable CORS for browser clients
 memories serve --sse --cors
 ```
@@ -94,21 +91,9 @@ memories serve --sse --cors
 | `GET/POST /mcp` | MCP Streamable HTTP endpoint |
 | `GET /health` | Health check (returns `{"status":"ok"}`) |
 
-### Exposing for Remote Access
-
-For remote tools, expose your local server:
-
-**ngrok:**
-```bash
-ngrok http 3030
-```
-
-**Cloudflare Tunnel:**
-```bash
-cloudflared tunnel --url http://localhost:3030
-```
-
-Then configure the remote tool to connect to the tunnel URL.
+<Callout type="info">
+**For production use with v0 and web tools**, use the hosted endpoint at `https://memories.sh/api/mcp` with an API key from your dashboard. See the [v0 integration guide](/docs/integrations/v0).
+</Callout>
 
 ## Available Tools
 

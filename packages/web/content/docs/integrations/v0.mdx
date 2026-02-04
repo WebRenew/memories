@@ -1,41 +1,20 @@
 ---
 title: v0 by Vercel
-description: Connect memories.sh to v0 via MCP SSE transport.
+description: Connect v0 to your memories.sh account via MCP.
 ---
 
-[v0](https://v0.dev/) is Vercel's AI-powered tool for generating React components and UI. v0 supports MCP via SSE (Server-Sent Events) transport, allowing it to connect to your memories.sh server.
+[v0](https://v0.dev/) is Vercel's AI-powered tool for generating React components and UI. Connect v0 to memories.sh to access your rules and context.
 
-## Quick Setup
+## Setup
 
-### 1. Start the SSE Server
+### 1. Get Your API Key
 
-```bash
-memories serve --sse --port 3030
-```
+1. Sign up or log in at [memories.sh/app](https://memories.sh/app)
+2. In the dashboard, find the **MCP API Key** section
+3. Click **Generate API Key**
+4. Copy the key (you won't see it again)
 
-This starts an HTTP server that v0 can connect to:
-
-```
-[memories] Starting MCP server with SSE transport
-[memories] Listening on http://127.0.0.1:3030
-[memories] Connect v0 or other clients to: http://127.0.0.1:3030/mcp
-```
-
-### 2. Expose the Server (for remote access)
-
-If v0 is running remotely, expose your local server:
-
-**Option A: ngrok (quick testing)**
-```bash
-ngrok http 3030
-```
-
-**Option B: Cloudflare Tunnel**
-```bash
-cloudflared tunnel --url http://localhost:3030
-```
-
-### 3. Configure v0
+### 2. Configure v0
 
 In v0's MCP settings, add:
 
@@ -43,54 +22,24 @@ In v0's MCP settings, add:
 {
   "mcpServers": {
     "memories": {
-      "url": "http://localhost:3030/mcp"
+      "url": "https://memories.sh/api/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
     }
   }
 }
 ```
 
-Or with a tunnel URL:
-```json
-{
-  "mcpServers": {
-    "memories": {
-      "url": "https://your-tunnel-url.ngrok.io/mcp"
-    }
-  }
-}
-```
+Replace `YOUR_API_KEY` with the key you generated.
 
-## Server Options
+### 3. Verify Connection
 
+Test the connection:
 ```bash
-memories serve --sse [options]
+curl -H "Authorization: Bearer YOUR_API_KEY" https://memories.sh/api/mcp
+# Should return: {"status":"ok","name":"memories.sh MCP Server","version":"0.4.0"}
 ```
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-p, --port <port>` | HTTP port | 3030 |
-| `--host <host>` | Host to bind | 127.0.0.1 |
-| `--cors` | Enable CORS | false |
-
-### Examples
-
-```bash
-# Local only (default)
-memories serve --sse
-
-# Allow external connections (use with tunnel)
-memories serve --sse --host 0.0.0.0
-
-# Custom port with CORS
-memories serve --sse --port 8080 --cors
-```
-
-## Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET/POST /mcp` | MCP Streamable HTTP endpoint |
-| `GET /health` | Health check |
 
 ## Using with v0
 
@@ -111,66 +60,74 @@ Save this as a rule: "Use Tailwind's cn() helper for conditional classes"
 What decisions have I made about design system components?
 ```
 
-## Security
+## Available Tools
 
-<Callout type="warn">
-The SSE server exposes your memories over HTTP. For remote access:
-- Use HTTPS via a reverse proxy
-- Consider IP allowlisting
-- Don't expose sensitive memories
+The hosted MCP server provides these tools:
+
+| Tool | Description |
+|------|-------------|
+| `get_context` | Get rules and relevant memories |
+| `add_memory` | Store a new memory (rule, decision, fact, note) |
+| `search_memories` | Search by content |
+| `list_memories` | List recent memories |
+
+## Syncing with CLI
+
+Memories added via v0 sync to your cloud database. To access them locally:
+
+```bash
+# Login (if not already)
+memories login
+
+# Enable sync
+memories sync enable
+
+# Pull latest memories
+memories sync pull
+```
+
+Now your memories are available both in v0 and your local CLI/IDE tools.
+
+## Managing Your API Key
+
+In the [dashboard](https://memories.sh/app):
+
+- **Regenerate** — Create a new key (invalidates the old one)
+- **Revoke** — Delete the key entirely
+
+<Callout type="info">
+API keys are tied to your account. Anyone with your key can read and write to your memories.
 </Callout>
 
-### Localhost Only (Recommended)
+## Alternative: Local Server (Development)
 
-For local v0 CLI or desktop access, bind to localhost only (default):
+For local development without cloud sync, you can run a local MCP server:
 
-```bash
-memories serve --sse
-# Only accessible from your machine
-```
-
-### With Tunnel
-
-When using ngrok or Cloudflare Tunnel, anyone with the URL can access your memories. Use for temporary testing only, or add authentication via a reverse proxy.
-
-## Alternative: Context Export
-
-If you don't want to run a server, export context manually:
-
-```bash
-# Export rules for v0
-memories prompt --types rule > v0-context.md
-
-# Search for specific context
-memories search "react" --type rule
-```
-
-Then paste into v0's chat.
-
-## Troubleshooting
-
-### Connection refused
-
-Ensure the server is running:
 ```bash
 memories serve --sse --port 3030
 ```
 
-Test the health endpoint:
+Then configure v0 to connect to `http://localhost:3030/mcp` (no auth required for localhost).
+
+## Troubleshooting
+
+### 401 Unauthorized
+
+- Check your API key is correct
+- Ensure the `Authorization` header includes `Bearer ` prefix
+- Regenerate your key in the dashboard
+
+### No memories found
+
+- Verify you have memories: `memories list`
+- Check sync is enabled: `memories sync status`
+- Push local memories to cloud: `memories sync push`
+
+### v0 not using my rules
+
+Make sure your rules are synced to the cloud:
 ```bash
-curl http://localhost:3030/health
-# Should return: {"status":"ok"}
+memories sync push
 ```
 
-### CORS errors
-
-Enable CORS for cross-origin requests:
-```bash
-memories serve --sse --cors
-```
-
-### v0 can't find memories
-
-1. Check your memories exist: `memories list`
-2. Verify the MCP connection in v0's settings
-3. Try the `/health` endpoint to confirm server is reachable
+Then verify in the dashboard that your rules appear.
