@@ -233,7 +233,11 @@ export function TeamContent({
       {showCreateOrg && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-background border border-border p-6 w-full max-w-md">
-            <h2 className="text-lg font-bold mb-4">Create Organization</h2>
+            <h2 className="text-lg font-bold mb-2">Create Organization</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Teams let you share rules and memories with your collaborators.
+            </p>
+            
             <input
               type="text"
               value={newOrgName}
@@ -242,6 +246,29 @@ export function TeamContent({
               className="w-full px-3 py-2 bg-muted/30 border border-border text-sm focus:outline-none focus:border-primary mb-4"
               autoFocus
             />
+
+            <div className="bg-muted/20 border border-border p-4 mb-4">
+              <h3 className="text-sm font-semibold mb-2">Team Pricing</h3>
+              <ul className="space-y-1.5 text-sm text-muted-foreground">
+                <li className="flex items-center gap-2">
+                  <Check className="h-3 w-3 text-green-400" />
+                  <span>You (owner) — <span className="text-foreground">Free</span></span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-3 w-3 text-green-400" />
+                  <span>Each additional member — <span className="text-foreground">$8/month</span></span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-3 w-3 text-green-400" />
+                  <span>Shared rules & memories</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-3 w-3 text-green-400" />
+                  <span>Team dashboard & analytics</span>
+                </li>
+              </ul>
+            </div>
+
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowCreateOrg(false)}
@@ -254,7 +281,7 @@ export function TeamContent({
                 disabled={!newOrgName.trim() || loading}
                 className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
-                {loading ? "Creating..." : "Create"}
+                {loading ? "Creating..." : "Create Organization"}
               </button>
             </div>
           </div>
@@ -265,8 +292,11 @@ export function TeamContent({
         <div className="border border-border bg-card/20 p-12 text-center">
           <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h2 className="text-lg font-bold mb-2">No Organizations Yet</h2>
-          <p className="text-sm text-muted-foreground mb-6">
+          <p className="text-sm text-muted-foreground mb-4">
             Create an organization to collaborate with your team and share rules.
+          </p>
+          <p className="text-xs text-muted-foreground mb-6">
+            Free to create • <span className="text-foreground">$8/month per additional member</span>
           </p>
           <button
             onClick={() => setShowCreateOrg(true)}
@@ -314,8 +344,15 @@ export function TeamContent({
                   </div>
                 </div>
                 <div className="p-4 flex items-center justify-between">
-                  <div className="text-sm text-muted-foreground">
-                    {members.length} {members.length === 1 ? "member" : "members"}
+                  <div className="flex items-center gap-4">
+                    <div className="text-sm text-muted-foreground">
+                      {members.length} {members.length === 1 ? "member" : "members"}
+                    </div>
+                    {isOwner && members.length > 1 && (
+                      <div className="text-xs text-muted-foreground">
+                        Est. billing: <span className="text-foreground font-medium">${(members.length - 1) * 8}/mo</span>
+                      </div>
+                    )}
                   </div>
                   {isAdmin && (
                     <button
@@ -371,7 +408,7 @@ export function TeamContent({
                       </div>
                     ) : (
                       <>
-                        <div className="space-y-4 mb-6">
+                        <div className="space-y-4 mb-4">
                           <input
                             type="email"
                             value={inviteEmail}
@@ -404,6 +441,16 @@ export function TeamContent({
                             )}
                           </div>
                         </div>
+
+                        <div className="bg-amber-500/10 border border-amber-500/20 p-3 mb-4">
+                          <p className="text-sm text-amber-400">
+                            <strong>$8/month</strong> will be added to your bill for this member.
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Billed monthly. You can remove members anytime.
+                          </p>
+                        </div>
+
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={() => setShowInvite(false)}
@@ -416,7 +463,7 @@ export function TeamContent({
                             disabled={!inviteEmail.trim() || loading}
                             className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
                           >
-                            {loading ? "Sending..." : "Send Invite"}
+                            {loading ? "Sending..." : "Send Invite — $8/mo"}
                           </button>
                         </div>
                       </>
