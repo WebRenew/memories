@@ -49,7 +49,7 @@ const tiers = [
     description: "For teams that need shared state and compliance.",
     features: [
       "Everything in Professional",
-      "Team rule sharing",
+      "Custom embedding models",
       "Dedicated support and SLA",
       "SSO and team management",
       "Custom integrations",
