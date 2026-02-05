@@ -66,6 +66,9 @@ export function FeaturesGrid() {
           <div className="mb-20 flex flex-col items-center text-center">
             <div className="text-[11px] uppercase tracking-[0.35em] font-bold text-primary mb-4">Core Features</div>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-foreground text-gradient">Built for durable state</h2>
+            <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
+              Everything you need to make agent context persist—locally by default, synced when you choose.
+            </p>
           </div>
   
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">

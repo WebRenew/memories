@@ -37,6 +37,9 @@ export function FAQ() {
           <div className="mb-16 flex flex-col items-center text-center">
             <div className="text-[11px] uppercase tracking-[0.35em] font-bold text-primary mb-4">Support</div>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-foreground text-gradient">Questions & Answers</h2>
+            <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
+              Common questions about memories.sh and how it works.
+            </p>
           </div>
           <div className="space-y-1">
             {faqs.map((faq, idx) => (

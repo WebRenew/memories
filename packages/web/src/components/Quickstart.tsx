@@ -25,6 +25,9 @@ export function Quickstart() {
         <div className="mb-20 flex flex-col items-center text-center">
           <div className="text-[11px] uppercase tracking-[0.35em] font-bold text-primary mb-4">Quick Start</div>
           <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-foreground text-gradient">Get Started</h2>
+          <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
+            Install in seconds. No account required for local use.
+          </p>
         </div>
 
         <div className="glass-panel overflow-hidden relative group mb-12 rounded-lg">
