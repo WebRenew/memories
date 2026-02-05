@@ -273,9 +273,10 @@ export function Hero() {
           transition={{ duration: 1.1, delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="mt-10 grid lg:grid-cols-[1.1fr_0.9fr] gap-12 lg:gap-16 items-center pt-8"
         >
-          <p className="text-[11px] uppercase tracking-[0.3em] font-bold text-muted-foreground/70">
-            Works with
-          </p>
+          <div className="inline-flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span className="font-mono text-[12px] leading-[100%] tracking-[-0.015rem] uppercase text-muted-foreground">Works with</span>
+          </div>
           <div className="relative overflow-hidden">
             <div className="flex overflow-hidden">
               <div
