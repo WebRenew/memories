@@ -2,9 +2,26 @@
 
 import { motion } from "framer-motion";
 import { useState } from "react";
+import { Check, Copy } from "lucide-react";
 
 export function HowItWorks() {
   const [activeTab, setActiveTab] = useState<"cli" | "mcp">("cli");
+  const [copied, setCopied] = useState(false);
+
+  const installCommands = {
+    cli: "pnpm add -g @memories.sh/cli",
+    mcp: "memories serve",
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(installCommands[activeTab]);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy:", error);
+    }
+  };
 
   const cliSteps = [
     {
@@ -65,7 +82,7 @@ export function HowItWorks() {
         </motion.div>
 
         {/* Tab switcher */}
-        <div className="flex justify-center mb-8">
+        <div className="flex justify-center mb-6">
           <div className="inline-flex items-center p-1 bg-muted border border-border rounded-lg">
             <button
               onClick={() => setActiveTab("cli")}
@@ -86,6 +103,25 @@ export function HowItWorks() {
               }`}
             >
               MCP
+            </button>
+          </div>
+        </div>
+
+        {/* Install command */}
+        <div className="flex justify-center mb-8">
+          <div className="inline-flex items-center gap-3 px-4 py-3 bg-muted/50 border border-border rounded-lg font-mono text-sm">
+            <span className="text-muted-foreground select-none">$</span>
+            <code className="text-foreground">{installCommands[activeTab]}</code>
+            <button
+              onClick={handleCopy}
+              className="p-1.5 hover:bg-foreground/10 rounded-md transition-colors text-muted-foreground hover:text-foreground"
+              aria-label="Copy command"
+            >
+              {copied ? (
+                <Check className="w-4 h-4 text-green-500" />
+              ) : (
+                <Copy className="w-4 h-4" />
+              )}
             </button>
           </div>
         </div>
