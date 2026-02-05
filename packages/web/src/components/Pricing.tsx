@@ -26,8 +26,8 @@ const tiers = [
   {
     name: "Professional",
     monthlyPrice: "$15",
-    yearlyPrice: "$12",
-    yearlyTotal: "$144",
+    yearlyPrice: "$12.50",
+    yearlyTotal: "$150",
     description: "Sync and back up state across machines.",
     features: [
       "Everything in Free",
@@ -105,7 +105,7 @@ export function Pricing({ user }: { user?: User | null }) {
             >
               Yearly
               <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-primary/20 text-primary rounded">
-                Save 20%
+                2 Months Free
               </span>
             </button>
           </div>
