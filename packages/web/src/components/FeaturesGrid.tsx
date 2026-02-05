@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { ScrambleText } from "./animations/ScrambleText";
 
 const FeatureIcon = ({ index }: { index: number }) => {
   const icons = [
@@ -79,14 +80,30 @@ export function FeaturesGrid() {
   ];
 
     return (
-      <section id="features" className="py-28 border-t border-border">
-        <div className="w-full px-6 lg:px-16 xl:px-24">
+      <section id="features" className="py-28 border-t border-border relative overflow-hidden">
+        {/* Background texture */}
+        <div
+          className="absolute inset-0 opacity-15 dark:opacity-25 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: "url(/bg-texture_memories.webp)" }}
+        />
+        {/* Diamond gradient overlay — opaque center, transparent at TL + BR corners */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(135deg, transparent 0%, transparent 5%, var(--background) 25%, var(--background) 75%, transparent 95%, transparent 100%)",
+          }}
+        />
+
+        <div className="relative w-full px-6 lg:px-16 xl:px-24">
           <div className="mb-20 flex flex-col items-center text-center">
             <div className="inline-flex items-center gap-2 mb-4">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="font-mono text-[12px] leading-[100%] tracking-[-0.015rem] uppercase text-muted-foreground">Core Features</span>
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-foreground text-gradient">Built for durable state</h2>
+            <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-foreground text-gradient">
+              <ScrambleText text="Built for durable state" delayMs={200} />
+            </h2>
             <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
               Everything you need to make agent context persist—locally by default, synced when you choose.
             </p>

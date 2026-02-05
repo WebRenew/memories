@@ -1,22 +1,56 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { useState } from "react";
+import { motion, useInView } from "framer-motion";
+import { useState, useEffect, useRef } from "react";
 import { Check, Copy } from "lucide-react";
+import { ScrambleText } from "./animations/ScrambleText";
+
+// ── Module-level constants (stable references for effects) ──────────────────
+
+const cliSteps = [
+  {
+    cmd: "memories add",
+    arg: '"prefer functional components"',
+    note: "Stored to local SQLite database",
+  },
+  {
+    cmd: "memories recall",
+    arg: '"auth flow"',
+    note: "3 memories matched by semantic similarity",
+  },
+  {
+    cmd: "memories generate",
+    arg: "cursor",
+    note: "Wrote .cursor/rules/memories.mdc",
+  },
+];
+
+const mcpSteps = [
+  {
+    tool: "add_memory",
+    params: '{ content: "prefer functional components", type: "rule" }',
+    note: "Agents store context directly",
+  },
+  {
+    tool: "get_context",
+    params: '{ query: "auth flow" }',
+    note: "Returns rules + relevant memories",
+  },
+  {
+    tool: "get_rules",
+    params: "{ }",
+    note: "All active rules for current project",
+  },
+];
+
+// ── Component ───────────────────────────────────────────────────────────────
 
 export function HowItWorks() {
   const [activeTab, setActiveTab] = useState<"cli" | "mcp">("cli");
   const [copied, setCopied] = useState(false);
 
-  const tabs = [
-    { id: "cli" as const, number: "01", label: "CLI", sublabel: "Command Line" },
-    { id: "mcp" as const, number: "02", label: "MCP", sublabel: "Agent Server" },
-  ];
-
-  const installCommands = {
-    cli: "pnpm add -g @memories.sh/cli",
-    mcp: "memories serve",
-  };
+  const tabs = [{ id: "cli" as const, number: "01", label: "CLI", sublabel: "Command Line" }, { id: "mcp" as const, number: "02", label: "MCP", sublabel: "Agent Server" }];
+  const installCommands = { cli: "pnpm add -g @memories.sh/cli", mcp: "memories serve" };
 
   const tabContent = {
     cli: {
@@ -43,41 +77,79 @@ export function HowItWorks() {
     }
   };
 
-  const cliSteps = [
-    {
-      cmd: "memories add",
-      arg: '"prefer functional components"',
-      note: "Store rules and preferences locally",
-    },
-    {
-      cmd: "memories recall",
-      arg: '"auth flow"',
-      note: "Query context by keyword or meaning",
-    },
-    {
-      cmd: "memories generate",
-      arg: "cursor",
-      note: "Output native configs for any tool",
-    },
-  ];
+  // ── Typing animation ────────────────────────────────────────────────────
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const isTerminalInView = useInView(terminalRef, { once: true, amount: 0.3 });
+  const isAutoPlaying = useRef(true);
 
-  const mcpSteps = [
-    {
-      tool: "add_memory",
-      params: '{ content: "prefer functional components", type: "rule" }',
-      note: "Agents store context directly",
-    },
-    {
-      tool: "get_context",
-      params: '{ query: "auth flow" }',
-      note: "Returns rules + relevant memories",
-    },
-    {
-      tool: "get_rules",
-      params: "{ }",
-      note: "All active rules for current project",
-    },
-  ];
+  const [typing, setTyping] = useState({
+    completedSteps: 0,
+    charIndex: 0,
+    noteVisible: false,
+  });
+
+  // Reset when tab changes
+  useEffect(() => {
+    setTyping({ completedSteps: 0, charIndex: 0, noteVisible: false });
+  }, [activeTab]);
+
+  // Drive the typing animation frame-by-frame (works for both tabs)
+  useEffect(() => {
+    if (!isTerminalInView) return;
+
+    const steps = activeTab === "cli" ? cliSteps : mcpSteps;
+    const { completedSteps, charIndex, noteVisible } = typing;
+    if (completedSteps >= steps.length) return;
+
+    // CLI types full "cmd arg"; MCP types only the tool name, then flashes params
+    let typeableLength: number;
+    if (activeTab === "cli") {
+      const step = cliSteps[completedSteps];
+      typeableLength = `${step.cmd} ${step.arg}`.length;
+    } else {
+      typeableLength = mcpSteps[completedSteps].tool.length;
+    }
+
+    if (charIndex < typeableLength) {
+      const delay = completedSteps === 0 && charIndex === 0 ? 600 : 40;
+      const timer = setTimeout(() => {
+        setTyping((prev) => ({ ...prev, charIndex: prev.charIndex + 1 }));
+      }, delay);
+      return () => clearTimeout(timer);
+    }
+
+    if (!noteVisible) {
+      const timer = setTimeout(() => {
+        setTyping((prev) => ({ ...prev, noteVisible: true }));
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+
+    const timer = setTimeout(() => {
+      setTyping({
+        completedSteps: completedSteps + 1,
+        charIndex: 0,
+        noteVisible: false,
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [isTerminalInView, activeTab, typing]);
+
+  // Auto-advance from CLI → MCP after CLI animation completes
+  useEffect(() => {
+    if (!isAutoPlaying.current) return;
+    if (activeTab === "cli" && typing.completedSteps >= cliSteps.length) {
+      const timer = setTimeout(() => {
+        setActiveTab("mcp");
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, typing.completedSteps]);
+
+  const handleTabClick = (tabId: "cli" | "mcp") => {
+    isAutoPlaying.current = false;
+    setActiveTab(tabId);
+  };
 
   return (
     <section id="how-it-works" className="relative py-32 lg:py-44 border-y border-border bg-background-secondary">
@@ -105,7 +177,7 @@ export function HowItWorks() {
 
               {/* Main heading */}
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-semibold tracking-tight text-foreground mb-4">
-                {tabContent[activeTab].heading}
+                <ScrambleText key={activeTab} text={tabContent[activeTab].heading} delayMs={0} duration={0.6} />
               </h2>
               
               {/* Description */}
@@ -204,7 +276,7 @@ export function HowItWorks() {
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => handleTabClick(tab.id)}
                     className={`text-left py-1.5 transition-all duration-200 group ${
                       activeTab === tab.id 
                         ? "text-foreground" 
@@ -232,7 +304,7 @@ export function HowItWorks() {
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => handleTabClick(tab.id)}
                     className={`px-4 py-2 text-sm font-mono uppercase tracking-wider rounded-md transition-all duration-200 ${
                       activeTab === tab.id
                         ? "bg-background text-foreground shadow-sm"
@@ -263,7 +335,10 @@ export function HowItWorks() {
               </div>
 
               {/* Terminal frame */}
-              <div className="rounded-xl border border-border bg-card overflow-hidden shadow-lg dark:shadow-2xl dark:shadow-black/50">
+              <div
+                ref={terminalRef}
+                className="rounded-xl border border-border bg-card overflow-hidden shadow-lg dark:shadow-2xl dark:shadow-black/50"
+              >
                 {/* Title bar */}
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/50">
                   <div className="flex gap-1.5">
@@ -280,57 +355,124 @@ export function HowItWorks() {
                 <div className="p-6 md:p-8 space-y-6 font-mono">
                   {activeTab === "cli" ? (
                     <>
-                      {cliSteps.map((step, i) => (
-                        <motion.div
-                          key={`cli-${i}`}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ 
-                            duration: 0.5, 
-                            delay: 0.1 + i * 0.1,
-                            ease: [0.16, 1, 0.3, 1]
-                          }}
-                          className="group"
-                        >
-                          <div className="flex items-baseline gap-3 text-sm md:text-base">
-                            <span className="text-primary/60 select-none">$</span>
-                            <span className="text-foreground font-medium">{step.cmd}</span>
-                            <span className="text-primary">{step.arg}</span>
+                      {cliSteps.map((step, i) => {
+                        const fullCmd = `${step.cmd} ${step.arg}`;
+                        const isComplete = i < typing.completedSteps;
+                        const isCurrent =
+                          i === typing.completedSteps &&
+                          typing.completedSteps < cliSteps.length;
+
+                        if (!isComplete && !isCurrent) return (
+                          <div key={`cli-${i}`} className="invisible" aria-hidden>
+                            <div className="flex items-baseline gap-3 text-sm md:text-base">
+                              <span>$</span><span>{fullCmd}</span>
+                            </div>
+                            <div className="mt-1.5 ml-5 text-xs">{step.note}</div>
                           </div>
-                          <div className="mt-1.5 ml-5 text-xs text-muted-foreground">
-                            <span className="text-muted-foreground/50">→</span> {step.note}
+                        );
+
+                        const displayChars = isComplete ? fullCmd.length : typing.charIndex;
+                        const cmdEnd = step.cmd.length;
+                        const typedCmd = fullCmd.slice(0, Math.min(displayChars, cmdEnd));
+                        const hasSpace = displayChars > cmdEnd;
+                        const typedArg = displayChars > cmdEnd + 1 ? step.arg.slice(0, displayChars - cmdEnd - 1) : "";
+                        const showNote = isComplete || (isCurrent && typing.noteVisible);
+                        const showCursor = isCurrent && !typing.noteVisible;
+
+                        return (
+                          <div key={`cli-${i}`}>
+                            <div className="flex items-baseline gap-3 text-sm md:text-base">
+                              <span className="text-primary/60 select-none">
+                                $
+                              </span>
+                              <span>
+                                <span className="text-foreground font-medium">
+                                  {typedCmd}
+                                </span>
+                                {hasSpace && " "}
+                                {typedArg && (
+                                  <span className="text-primary">
+                                    {typedArg}
+                                  </span>
+                                )}
+                                {showCursor && (
+                                  <span className="inline-block w-2 h-4 bg-primary/70 animate-pulse ml-px" />
+                                )}
+                              </span>
+                            </div>
+                            <div
+                              className={`mt-1.5 ml-5 text-xs text-muted-foreground transition-opacity duration-300 ${
+                                showNote ? "opacity-100" : "opacity-0"
+                              }`}
+                            >
+                              {step.note}
+                            </div>
                           </div>
-                        </motion.div>
-                      ))}
+                        );
+                      })}
                       <div className="flex items-center gap-3 text-sm md:text-base">
                         <span className="text-primary/60 select-none">$</span>
-                        <span className="w-2 h-4 bg-primary/70 animate-pulse" />
+                        {typing.completedSteps >= cliSteps.length && (
+                          <span className="w-2 h-4 bg-primary/70 animate-pulse" />
+                        )}
                       </div>
                     </>
                   ) : (
                     <>
-                      {mcpSteps.map((step, i) => (
-                        <motion.div
-                          key={`mcp-${i}`}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ 
-                            duration: 0.5, 
-                            delay: 0.1 + i * 0.1,
-                            ease: [0.16, 1, 0.3, 1]
-                          }}
-                          className="group"
-                        >
-                          <div className="flex items-baseline gap-2 text-sm md:text-base flex-wrap">
-                            <span className="text-primary font-medium">{step.tool}</span>
-                            <span className="text-muted-foreground text-xs">{step.params}</span>
+                      {mcpSteps.map((step, i) => {
+                        const isComplete = i < typing.completedSteps;
+                        const isCurrent =
+                          i === typing.completedSteps &&
+                          typing.completedSteps < mcpSteps.length;
+
+                        if (!isComplete && !isCurrent) return (
+                          <div key={`mcp-${i}`} className="invisible" aria-hidden>
+                            <div className="flex items-baseline gap-2 text-sm md:text-base flex-wrap">
+                              <span>{step.tool}</span><span className="text-xs">{step.params}</span>
+                            </div>
+                            <div className="mt-1.5 text-xs">{step.note}</div>
                           </div>
-                          <div className="mt-1.5 text-xs text-muted-foreground">
-                            <span className="text-muted-foreground/50">→</span> {step.note}
+                        );
+
+                        const displayChars = isComplete ? step.tool.length : typing.charIndex;
+                        const typedTool = step.tool.slice(0, displayChars);
+                        const showParams = isComplete || displayChars >= step.tool.length;
+                        const showNote = isComplete || (isCurrent && typing.noteVisible);
+                        const showCursor = isCurrent && displayChars < step.tool.length;
+
+                        return (
+                          <div key={`mcp-${i}`}>
+                            <div className="flex items-baseline gap-2 text-sm md:text-base flex-wrap">
+                              <span className="text-primary font-medium">
+                                {typedTool}
+                              </span>
+                              {showParams && (
+                                <motion.span
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 1 }}
+                                  transition={{ duration: 0.15 }}
+                                  className="text-muted-foreground text-xs"
+                                >
+                                  {step.params}
+                                </motion.span>
+                              )}
+                              {showCursor && (
+                                <span className="inline-block w-2 h-4 bg-primary/70 animate-pulse ml-px" />
+                              )}
+                            </div>
+                            <div
+                              className={`mt-1.5 text-xs text-muted-foreground transition-opacity duration-300 ${
+                                showNote ? "opacity-100" : "opacity-0"
+                              }`}
+                            >
+                              {step.note}
+                            </div>
                           </div>
-                        </motion.div>
-                      ))}
-                      <div className="text-xs text-muted-foreground/60 pt-4 border-t border-border">
+                        );
+                      })}
+                      <div className={`text-xs text-muted-foreground/60 pt-4 border-t border-border transition-opacity duration-300 ${
+                        typing.completedSteps >= mcpSteps.length ? "opacity-100" : "opacity-0"
+                      }`}>
                         + 4 more tools: search_memories, list_memories, edit_memory, forget_memory
                       </div>
                     </>

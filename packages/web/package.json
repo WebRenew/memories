@@ -53,6 +53,7 @@
     "fumadocs-core": "^15.8.5",
     "fumadocs-mdx": "^14.2.6",
     "fumadocs-ui": "^15.8.5",
+    "gsap": "^3.14.2",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.563.0",
     "nanoid": "^5.1.6",

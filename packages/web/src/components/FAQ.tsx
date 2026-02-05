@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { ScrambleText } from "./animations/ScrambleText";
 
 export function FAQ() {
   const faqs = [
@@ -39,7 +40,9 @@ export function FAQ() {
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="font-mono text-[12px] leading-[100%] tracking-[-0.015rem] uppercase text-muted-foreground">Support</span>
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-foreground text-gradient">Questions & Answers</h2>
+            <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-foreground text-gradient">
+              <ScrambleText text="Questions & Answers" delayMs={200} />
+            </h2>
             <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
               Common questions about memories.sh and how it works.
             </p>

@@ -5,6 +5,7 @@ import { Check } from "@/components/icons/ui";
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { useState } from "react";
+import { ScrambleText } from "./animations/ScrambleText";
 
 const tiers = [
   {
@@ -75,7 +76,7 @@ export function Pricing({ user }: { user?: User | null }) {
             Pricing
           </motion.div>
           <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6 text-gradient">
-            Simple, Transparent Pricing
+            <ScrambleText text="Simple, Transparent Pricing" delayMs={200} />
           </h2>
           <p className="text-muted-foreground max-w-2xl mx-auto text-lg font-light leading-relaxed">
             Free gives you durable local state and recall on your machine. Pro adds sync and backup for that state across every device you work on.

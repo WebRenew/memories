@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
+import { ScrambleText } from "./animations/ScrambleText";
 
 const ShaderBackground = dynamic(
   () => import("./ShaderBackground").then((mod) => mod.ShaderBackground),
@@ -198,9 +199,9 @@ export function Hero() {
 
             <motion.h1 
               variants={itemVariants} 
-              className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-[-0.03em] mb-6 leading-[1.05] text-foreground"
+              className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-[-0.03em] mb-6 leading-[0.95] text-foreground"
             >
-              The unified agent memory layer.
+              <ScrambleText text="The unified agent memory layer." delayMs={300} duration={1.2} />
             </motion.h1>
 
             <motion.p variants={itemVariants} className="text-lg md:text-xl text-muted-foreground mb-8 max-w-xl leading-relaxed font-light">

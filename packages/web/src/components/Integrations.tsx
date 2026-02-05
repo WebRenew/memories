@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
+import { ScrambleText } from "./animations/ScrambleText";
 
 export function Integrations() {
   const adapters = [
@@ -58,7 +59,9 @@ export function Integrations() {
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="font-mono text-[12px] leading-[100%] tracking-[-0.015rem] uppercase text-muted-foreground">Integrations</span>
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-foreground text-gradient">Works With Your Tools</h2>
+            <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-foreground text-gradient">
+              <ScrambleText text="Works With Your Tools" delayMs={200} />
+            </h2>
             <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
               One memory store, every coding agent. Generate native config files for each tool so your context follows you—no copy-paste, no manual sync.
             </p>
