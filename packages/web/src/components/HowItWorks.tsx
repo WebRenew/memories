@@ -24,6 +24,22 @@ export function HowItWorks() {
   return (
     <section id="how-it-works" className="relative py-32 lg:py-44">
       <div className="w-full max-w-4xl mx-auto px-6">
+        {/* Section header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="text-center mb-16"
+        >
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-semibold tracking-tight text-white mb-4">
+            Three commands. That&apos;s it.
+          </h2>
+          <p className="text-lg text-white/50 max-w-xl mx-auto">
+            Store context, recall it anywhere, and generate configs for any tool—all from your terminal.
+          </p>
+        </motion.div>
+
         {/* Single terminal window showing the workflow */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
