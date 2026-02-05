@@ -51,7 +51,7 @@ export function Integrations() {
   ];
 
     return (
-      <section id="integrations" className="py-28 border-t border-white/5">
+      <section id="integrations" className="py-28 border-t border-border">
         <div className="w-full px-6 lg:px-16 xl:px-24">
           <div className="mb-20 flex flex-col items-center text-center">
             <div className="text-[11px] uppercase tracking-[0.35em] font-bold text-primary mb-4">Integrations</div>
@@ -74,14 +74,14 @@ export function Integrations() {
                   <div className="flex items-center justify-between w-full mb-12">
                     <div className="w-8 h-8 flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity duration-500">
                       {a.logo ? (
-                        <Image src={a.logo} alt={a.name} width={32} height={32} />
+                        <Image src={a.logo} alt={a.name} width={32} height={32} className="dark:invert-0 invert" />
                       ) : (
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
                           <path d="M4 17l6-6-6-6M12 19h8" />
                         </svg>
                       )}
                     </div>
-                    <span className="text-[10px] font-bold uppercase tracking-[0.25em] px-2 py-0.5 border border-white/10 text-muted-foreground rounded-md">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.25em] px-2 py-0.5 border border-border text-muted-foreground rounded-md">
                       {a.status}
                     </span>
                   </div>

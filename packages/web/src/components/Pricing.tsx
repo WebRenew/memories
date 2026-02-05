@@ -4,11 +4,13 @@ import { motion } from "framer-motion";
 import { Check } from "@/components/icons/ui";
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
+import { useState } from "react";
 
 const tiers = [
   {
     name: "Free",
-    price: "$0",
+    monthlyPrice: "$0",
+    yearlyPrice: "$0",
     description: "Durable state on your machine. No account required.",
     features: [
       "Unlimited local memories",
@@ -23,7 +25,9 @@ const tiers = [
   },
   {
     name: "Professional",
-    price: "$15",
+    monthlyPrice: "$15",
+    yearlyPrice: "$12",
+    yearlyTotal: "$144",
     description: "Sync and back up state across machines.",
     features: [
       "Everything in Free",
@@ -38,7 +42,8 @@ const tiers = [
   },
   {
     name: "Enterprise",
-    price: "Custom",
+    monthlyPrice: "Custom",
+    yearlyPrice: "Custom",
     description: "For teams that need shared state and compliance.",
     features: [
       "Everything in Professional",
@@ -54,10 +59,12 @@ const tiers = [
 ];
 
 export function Pricing({ user }: { user?: User | null }) {
+  const [isYearly, setIsYearly] = useState(false);
+
   return (
-    <section id="pricing" className="py-28 border-t border-white/5 relative overflow-hidden">
+    <section id="pricing" className="py-28 border-t border-border relative overflow-hidden">
       <div className="w-full px-6 lg:px-16 xl:px-24 relative z-10">
-        <div className="text-center mb-20">
+        <div className="text-center mb-12">
           <motion.div 
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
@@ -75,8 +82,41 @@ export function Pricing({ user }: { user?: User | null }) {
           </p>
         </div>
 
+        {/* Billing Toggle */}
+        <div className="flex justify-center mb-12">
+          <div className="inline-flex items-center gap-3 p-1 bg-muted border border-border rounded-lg">
+            <button
+              onClick={() => setIsYearly(false)}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                !isYearly
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setIsYearly(true)}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 flex items-center gap-2 ${
+                isYearly
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Yearly
+              <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-primary/20 text-primary rounded">
+                Save 20%
+              </span>
+            </button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {tiers.map((tier) => (
+          {tiers.map((tier) => {
+            const price = isYearly ? tier.yearlyPrice : tier.monthlyPrice;
+            const isCustom = price === "Custom";
+            
+            return (
               <motion.div
                 key={tier.name}
                 initial={{ opacity: 0 }}
@@ -89,60 +129,69 @@ export function Pricing({ user }: { user?: User | null }) {
                     : "bg-card/20"
                 } transition-all duration-500 hover:border-primary/40 glass-panel-soft rounded-lg`}
               >
-              {tier.highlighted && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-widest rounded-md">
-                  Recommended
-                </div>
-              )}
+                {tier.highlighted && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-widest rounded-md">
+                    Recommended
+                  </div>
+                )}
 
-              <div className="mb-8">
-                <h3 className="text-xl font-bold mb-2 uppercase tracking-wider">{tier.name}</h3>
-                <div className="flex items-baseline gap-1 mb-4">
-                  <span className="text-4xl font-mono font-bold">{tier.price}</span>
-                  {tier.price !== "Custom" && (
-                    <span className="text-muted-foreground text-sm">/month</span>
+                <div className="mb-8">
+                  <h3 className="text-xl font-bold mb-2 uppercase tracking-wider">{tier.name}</h3>
+                  <div className="flex items-baseline gap-1 mb-1">
+                    <span className="text-4xl font-mono font-bold">{price}</span>
+                    {!isCustom && (
+                      <span className="text-muted-foreground text-sm">/month</span>
+                    )}
+                  </div>
+                  {isYearly && tier.yearlyTotal && (
+                    <div className="text-xs text-muted-foreground mb-3">
+                      Billed annually at {tier.yearlyTotal}/year
+                    </div>
                   )}
+                  {!isYearly && tier.yearlyTotal && (
+                    <div className="h-5 mb-3" /> 
+                  )}
+                  <p className="text-sm text-muted-foreground leading-relaxed italic">
+                    {tier.description}
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed italic">
-                  {tier.description}
-                </p>
-              </div>
 
-              <div className="flex-grow mb-10">
-                <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-6">
-                  Included Features
+                <div className="flex-grow mb-10">
+                  <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-6">
+                    Included Features
+                  </div>
+                  <ul className="space-y-4">
+                    {tier.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-3 text-sm text-muted-foreground">
+                        <Check className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <ul className="space-y-4">
-                  {tier.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-3 text-sm text-muted-foreground">
-                      <Check className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
 
                 <Link 
                   href={tier.name === "Enterprise" ? "mailto:hello@memories.sh" : user ? "/app/upgrade" : "/login"}
                   className={`block w-full py-4 text-xs font-bold uppercase tracking-[0.2em] transition-all duration-300 text-center rounded-md ${
                     tier.highlighted
                       ? "bg-primary text-primary-foreground hover:opacity-90 shadow-[0_0_20px_rgba(var(--primary),0.3)]"
-                      : "bg-white/5 text-foreground border border-white/10 hover:bg-white/10"
+                      : "bg-foreground/5 text-foreground border border-border hover:bg-foreground/10"
                   }`}
                 >
                   {tier.cta}
                 </Link>
               </motion.div>
-            ))}
-          </div>
+            );
+          })}
         </div>
+      </div>
 
-        {/* Decorative background elements */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full pointer-events-none opacity-20">
-          <div className="absolute top-0 left-1/4 w-px h-full bg-gradient-to-b from-transparent via-border to-transparent" />
-          <div className="absolute top-0 left-2/4 w-px h-full bg-gradient-to-b from-transparent via-border to-transparent" />
-          <div className="absolute top-0 left-3/4 w-px h-full bg-gradient-to-b from-transparent via-border to-transparent" />
-        </div>
+      {/* Decorative background elements */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full pointer-events-none opacity-20">
+        <div className="absolute top-0 left-1/4 w-px h-full bg-gradient-to-b from-transparent via-border to-transparent" />
+        <div className="absolute top-0 left-2/4 w-px h-full bg-gradient-to-b from-transparent via-border to-transparent" />
+        <div className="absolute top-0 left-3/4 w-px h-full bg-gradient-to-b from-transparent via-border to-transparent" />
+      </div>
     </section>
   );
 }

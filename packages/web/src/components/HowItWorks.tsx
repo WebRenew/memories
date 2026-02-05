@@ -32,10 +32,10 @@ export function HowItWorks() {
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="text-center mb-16"
         >
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-semibold tracking-tight text-white mb-4">
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-semibold tracking-tight text-foreground mb-4">
             Three commands. That&apos;s it.
           </h2>
-          <p className="text-lg text-white/50 max-w-xl mx-auto">
+          <p className="text-lg text-muted-foreground max-w-xl mx-auto">
             Store context, recall it anywhere, and generate configs for any tool—all from your terminal.
           </p>
         </motion.div>
@@ -49,15 +49,15 @@ export function HowItWorks() {
           className="relative"
         >
           {/* Terminal frame */}
-          <div className="rounded-xl border border-white/[0.08] bg-[#09090b] overflow-hidden shadow-2xl shadow-black/50">
+          <div className="rounded-xl border border-border bg-card overflow-hidden shadow-lg dark:shadow-2xl dark:shadow-black/50">
             {/* Title bar */}
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06] bg-white/[0.02]">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/50">
               <div className="flex gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
                 <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
                 <div className="w-3 h-3 rounded-full bg-[#28c840]" />
               </div>
-              <span className="ml-3 text-xs text-white/30 font-mono">~/project</span>
+              <span className="ml-3 text-xs text-muted-foreground font-mono">~/project</span>
             </div>
 
             {/* Terminal content */}
@@ -78,13 +78,13 @@ export function HowItWorks() {
                   {/* Command line */}
                   <div className="flex items-baseline gap-3 text-base md:text-lg">
                     <span className="text-primary/60 select-none">$</span>
-                    <span className="text-white font-medium">{step.cmd}</span>
+                    <span className="text-foreground font-medium">{step.cmd}</span>
                     <span className="text-primary">{step.arg}</span>
                   </div>
                   
                   {/* Output/description */}
-                  <div className="mt-2 ml-6 text-sm text-white/40">
-                    <span className="text-white/20">→</span> {step.note}
+                  <div className="mt-2 ml-6 text-sm text-muted-foreground">
+                    <span className="text-muted-foreground/50">→</span> {step.note}
                   </div>
                 </motion.div>
               ))}
@@ -107,7 +107,7 @@ export function HowItWorks() {
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.6 }}
-          className="text-center text-white/40 text-sm mt-8"
+          className="text-center text-muted-foreground text-sm mt-8"
         >
           Local SQLite database. Works offline. Syncs when you want it to.
         </motion.p>

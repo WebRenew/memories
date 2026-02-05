@@ -14,7 +14,7 @@ export default async function Home() {
   const { data: { user } } = await supabase.auth.getUser()
 
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-primary/30 home-theme dark">
+    <div className="min-h-screen bg-background text-foreground selection:bg-primary/30">
       
       <TopNav user={user} />
       

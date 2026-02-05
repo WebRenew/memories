@@ -111,7 +111,7 @@ function CopyCommand() {
       transition={{ duration: 1, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className="flex flex-col gap-3"
     >
-      <div className="flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/10 rounded-md font-mono text-sm">
+      <div className="flex items-center gap-3 px-4 py-3 bg-foreground/5 border border-border rounded-md font-mono text-sm">
         <span className="text-muted-foreground select-none">$</span>
         <code className="text-foreground">npm install -g @memories.sh/cli</code>
         <button 
@@ -191,7 +191,7 @@ export function Hero() {
               animate="visible"
               className="flex flex-col items-start text-left"
             >
-            <motion.div variants={itemVariants} className="inline-flex items-center gap-3 px-3 py-1.5 bg-white/8 border border-white/12 text-[11px] uppercase tracking-[0.2em] font-bold mb-6 text-foreground/90 rounded-md">
+            <motion.div variants={itemVariants} className="inline-flex items-center gap-3 px-3 py-1.5 bg-foreground/8 border border-foreground/12 text-[11px] uppercase tracking-[0.2em] font-bold mb-6 text-foreground/90 rounded-md">
               <span className="w-1.5 h-1.5 bg-primary animate-pulse" />
               Stop Re-Teaching Agents
             </motion.div>
@@ -216,18 +216,18 @@ export function Hero() {
               animate="visible"
               className="glass-panel p-6 md:p-8 lg:p-10 relative overflow-hidden rounded-lg"
             >
-              <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/5 via-transparent to-transparent" />
+              <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-foreground/5 via-transparent to-transparent" />
               <div className="relative z-10 space-y-6">
                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.25em] font-bold text-muted-foreground">
                   <span>Live State</span>
-                  <span className="px-2 py-0.5 rounded-full border border-white/10 text-accent-secondary">Local</span>
+                  <span className="px-2 py-0.5 rounded-full border border-border text-accent-secondary">Local</span>
                 </div>
 
-                <div className="rounded-lg border border-white/10 bg-black/40">
+                <div className="rounded-lg border border-border bg-card/60">
                   <div className="px-4 py-3 text-xs text-muted-foreground">
                     Ask your agent to pick up where you left off...
                   </div>
-                  <div className="border-t border-white/10 px-4 py-3 text-[11px] text-foreground/80">
+                  <div className="border-t border-border px-4 py-3 text-[11px] text-foreground/80">
                     &ldquo;Continue the auth refactor with the same error-handling rules.&rdquo;
                   </div>
                 </div>
@@ -250,7 +250,7 @@ export function Hero() {
                         delay: 1.2 + index * 0.15,
                         ease: [0.16, 1, 0.3, 1]
                       }}
-                      className="flex items-center justify-between gap-4 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-foreground/80"
+                      className="flex items-center justify-between gap-4 rounded-md border border-border bg-foreground/5 px-3 py-2 text-xs text-foreground/80"
                     >
                       <span>{item}</span>
                       <span className="text-[10px] uppercase tracking-[0.2em] text-accent-secondary">Stored</span>
@@ -293,7 +293,7 @@ export function Hero() {
                       alt={tool.name}
                       width={56}
                       height={56}
-                      className="w-14 h-14 opacity-90"
+                      className="w-14 h-14 opacity-90 dark:invert-0 invert"
                     />
                   </div>
                 ))}

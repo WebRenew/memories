@@ -28,7 +28,7 @@ export function TopNav({ user }: { user?: User | null }) {
         animate={{ y: 0, opacity: 1 }}
         className="fixed top-0 left-0 w-full z-[100] border-b border-white/10 bg-background/60 backdrop-blur-2xl"
       >
-        <div className="w-full px-6 lg:px-16 xl:px-24 h-20 flex items-center justify-between">
+        <div className="w-full px-6 lg:px-16 xl:px-24 h-16 flex items-center justify-between">
           {/* Logo */}
             <Link href="/" className="flex items-center gap-3 group">
               <Image src="/memories.svg" alt="memories.sh logo" width={32} height={32} className="w-8 h-8 dark:invert group-hover:scale-110 transition-transform duration-500" />

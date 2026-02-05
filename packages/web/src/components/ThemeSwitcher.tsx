@@ -13,28 +13,48 @@ export function ThemeSwitcher() {
     setMounted(true);
   }, []);
 
+  // Button widths: active buttons show label and are wider
+  const activeWidth = {
+    dark: 62,
+    light: 62,
+    system: 82,
+  };
+  const inactiveWidth = 24;
+
+  // Calculate indicator position and width based on active theme
+  const getIndicatorConfig = () => {
+    switch (theme) {
+      case "dark":
+        return { x: 0, width: activeWidth.dark };
+      case "light":
+        return { x: inactiveWidth, width: activeWidth.light };
+      case "system":
+      default:
+        return { x: inactiveWidth * 2, width: activeWidth.system };
+    }
+  };
+
+  // Calculate button widths based on active state
+  const getDarkWidth = () => (theme === "dark" ? activeWidth.dark : inactiveWidth);
+  const getLightWidth = () => (theme === "light" ? activeWidth.light : inactiveWidth);
+  const getSystemWidth = () => (theme === "system" ? activeWidth.system : inactiveWidth);
+
   if (!mounted) {
     return (
-      <div className="border-base-800 bg-dark-base-secondary relative flex rounded-lg border p-1 min-w-max h-8 w-[132px] opacity-50" />
+      <div className="border-border bg-muted relative flex rounded-lg border p-1 min-w-max h-8 opacity-50" />
     );
   }
 
-  const configs = {
-    dark: { x: 0, width: 24 },
-    light: { x: 24, width: 24 },
-    system: { x: 48, width: 76 },
-  };
-
-  const currentConfig = configs[theme as keyof typeof configs] || configs.system;
+  const indicatorConfig = getIndicatorConfig();
 
   return (
-    <div className="border-base-800 bg-dark-base-secondary relative flex rounded-lg border p-1 min-w-max">
+    <div className="border-border bg-muted relative flex rounded-lg border p-1 min-w-max">
       <motion.div
-        className="theme-selector-indicator bg-light-base-secondary absolute top-1 left-1 rounded-sm ease-out h-6"
+        className="theme-selector-indicator bg-background absolute top-1 left-1 rounded-sm ease-out h-6 shadow-sm"
         initial={false}
         animate={{
-          x: currentConfig.x,
-          width: currentConfig.width,
+          x: indicatorConfig.x,
+          width: indicatorConfig.width,
         }}
         transition={{
           type: "spring",
@@ -44,14 +64,15 @@ export function ThemeSwitcher() {
       />
       
       {/* Dark Button */}
-      <button
+      <motion.button
         onClick={() => setTheme("dark")}
-        className={`theme-selector-button relative z-10 flex cursor-pointer items-center justify-center rounded-sm h-6 gap-1 px-2 transition-all duration-200 ${
-          theme === "dark" ? "text-light-base-primary" : "text-base-500 hover:text-dark-base-primary"
+        className={`theme-selector-button relative z-10 flex cursor-pointer items-center justify-center rounded-sm h-6 gap-1 px-2 transition-colors duration-200 ${
+          theme === "dark" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
         }`}
         title="Dark"
         aria-label="Switch to Dark theme"
-        style={{ width: 24 }}
+        animate={{ width: getDarkWidth() }}
+        transition={{ type: "spring", stiffness: 400, damping: 30 }}
       >
         <span className="flex-shrink-0">
           <svg width="15" height="14" viewBox="0 0 15 14" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -61,44 +82,56 @@ export function ThemeSwitcher() {
             />
           </svg>
         </span>
-      </button>
+        {theme === "dark" && (
+          <motion.p
+            initial={{ opacity: 0, width: 0 }}
+            animate={{ opacity: 1, width: "auto" }}
+            exit={{ opacity: 0, width: 0 }}
+            className="font-mono text-[12px] leading-[100%] tracking-[-0.015rem] uppercase whitespace-nowrap"
+          >
+            Dark
+          </motion.p>
+        )}
+      </motion.button>
 
       {/* Light Button */}
-      <button
+      <motion.button
         onClick={() => setTheme("light")}
-        className={`theme-selector-button relative z-10 flex cursor-pointer items-center justify-center rounded-sm h-6 gap-1 px-2 transition-all duration-200 ${
-          theme === "light" ? "text-light-base-primary" : "text-base-500 hover:text-dark-base-primary"
+        className={`theme-selector-button relative z-10 flex cursor-pointer items-center justify-center rounded-sm h-6 gap-1 px-2 transition-colors duration-200 ${
+          theme === "light" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
         }`}
         title="Light"
         aria-label="Switch to Light theme"
-        style={{ width: 24 }}
+        animate={{ width: getLightWidth() }}
+        transition={{ type: "spring", stiffness: 400, damping: 30 }}
       >
         <span className="flex-shrink-0">
-          <svg width="15" height="14" viewBox="0 0 15 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g clipPath="url(#clip0_4659_3941)">
-              <path
-                d="M7.0625 2.1875V0.875C7.0625 0.758968 7.10859 0.647688 7.19064 0.565641C7.27269 0.483594 7.38397 0.4375 7.5 0.4375C7.61603 0.4375 7.72731 0.483594 7.80936 0.565641C7.89141 0.647688 7.9375 0.758968 7.9375 0.875V2.1875C7.9375 2.30353 7.89141 2.41481 7.80936 2.49686C7.72731 2.57891 7.61603 2.625 7.5 2.625C7.38397 2.625 7.27269 2.57891 7.19064 2.49686C7.10859 2.41481 7.0625 2.30353 7.0625 2.1875ZM11 7C11 7.69223 10.7947 8.36892 10.4101 8.9445C10.0256 9.52007 9.47893 9.96867 8.83939 10.2336C8.19985 10.4985 7.49612 10.5678 6.81718 10.4327C6.13825 10.2977 5.51461 9.96436 5.02513 9.47487C4.53564 8.98539 4.2023 8.36175 4.06725 7.68282C3.9322 7.00388 4.00151 6.30015 4.26642 5.66061C4.53133 5.02107 4.97993 4.47444 5.5555 4.08986C6.13108 3.70527 6.80777 3.5 7.5 3.5C8.42795 3.50101 9.3176 3.87009 9.97375 4.52625C10.6299 5.1824 10.999 6.07205 11 7ZM10.125 7C10.125 6.48082 9.97105 5.97331 9.68261 5.54163C9.39417 5.10995 8.9842 4.7735 8.50454 4.57482C8.02489 4.37614 7.49709 4.32415 6.98789 4.42544C6.47869 4.52672 6.01096 4.77673 5.64384 5.14384C5.27673 5.51096 5.02672 5.97869 4.92544 6.48789C4.82415 6.99709 4.87614 7.52489 5.07482 8.00454C5.2735 8.4842 5.60995 8.89417 6.04163 9.18261C6.47331 9.47105 6.98082 9.625 7.5 9.625C8.19597 9.62428 8.86323 9.34748 9.35536 8.85536C9.84748 8.36323 10.1243 7.69597 10.125 7ZM3.69047 3.80953C3.77256 3.89162 3.8839 3.93774 4 3.93774C4.1161 3.93774 4.22744 3.89162 4.30953 3.80953C4.39162 3.72744 4.43774 3.6161 4.43774 3.5C4.43774 3.3839 4.39162 3.27256 4.30953 3.19047L3.43453 2.31547C3.35244 2.23338 3.2411 2.18726 3.125 2.18726C3.0089 2.18726 2.89756 2.23338 2.81547 2.31547C2.73338 2.39756 2.68726 2.5089 2.68726 2.625C2.68726 2.7411 2.73338 2.85244 2.81547 2.93453L3.69047 3.80953ZM3.69047 10.1905L2.81547 11.0655C2.73338 11.1476 2.68726 11.2589 2.68726 11.375C2.68726 11.4911 2.73338 11.6024 2.81547 11.6845C2.89756 11.7666 3.0089 11.8127 3.125 11.8127C3.2411 11.8127 3.35244 11.7666 3.43453 11.6845L4.30953 10.8095"
-                fill="currentColor"
-              />
-            </g>
-            <defs>
-              <clipPath id="clip0_4659_3941">
-                <rect width="14" height="14" fill="white" transform="translate(0.5)" />
-              </clipPath>
-            </defs>
+          <svg width="15" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M12 5l0 -2"/><path d="M17 7l1.4 -1.4"/><path d="M19 12l2 0"/><path d="M17 17l1.4 1.4"/><path d="M12 19l0 2"/><path d="M7 17l-1.4 1.4"/><path d="M6 12l-2 0"/><path d="M7 7l-1.4 -1.4"/>
           </svg>
         </span>
-      </button>
+        {theme === "light" && (
+          <motion.p
+            initial={{ opacity: 0, width: 0 }}
+            animate={{ opacity: 1, width: "auto" }}
+            exit={{ opacity: 0, width: 0 }}
+            className="font-mono text-[12px] leading-[100%] tracking-[-0.015rem] uppercase whitespace-nowrap"
+          >
+            Light
+          </motion.p>
+        )}
+      </motion.button>
 
       {/* System Button */}
-      <button
+      <motion.button
         onClick={() => setTheme("system")}
-        className={`theme-selector-button relative z-10 flex cursor-pointer items-center justify-center rounded-sm h-6 gap-1 px-2 transition-all duration-200 ${
-          theme === "system" ? "text-light-base-primary" : "text-base-500 hover:text-dark-base-primary"
+        className={`theme-selector-button relative z-10 flex cursor-pointer items-center justify-center rounded-sm h-6 gap-1 px-2 transition-colors duration-200 ${
+          theme === "system" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
         }`}
         title="System"
         aria-label="Switch to System theme"
-        style={{ width: 76 }}
+        animate={{ width: getSystemWidth() }}
+        transition={{ type: "spring", stiffness: 400, damping: 30 }}
       >
         <span className="flex-shrink-0">
           <svg width="15" height="14" viewBox="0 0 15 14" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -108,10 +141,17 @@ export function ThemeSwitcher() {
             />
           </svg>
         </span>
-        <p className="font-mono text-[12px] leading-[100%] tracking-[-0.015rem] uppercase whitespace-nowrap">
-          System
-        </p>
-      </button>
+        {theme === "system" && (
+          <motion.p
+            initial={{ opacity: 0, width: 0 }}
+            animate={{ opacity: 1, width: "auto" }}
+            exit={{ opacity: 0, width: 0 }}
+            className="font-mono text-[12px] leading-[100%] tracking-[-0.015rem] uppercase whitespace-nowrap"
+          >
+            System
+          </motion.p>
+        )}
+      </motion.button>
     </div>
   );
 }

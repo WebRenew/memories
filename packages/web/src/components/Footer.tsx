@@ -51,9 +51,9 @@ export function Footer() {
           </p>
           <div className="flex items-center gap-8">
             <ThemeSwitcher />
-            <div className="flex items-center gap-4">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary/20" />
-              <span className="text-[9px] text-primary/40 font-mono tracking-widest uppercase">system_status: stable</span>
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] text-muted-foreground font-mono tracking-wide uppercase">Stable</span>
             </div>
           </div>
         </div>
