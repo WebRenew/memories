@@ -8,24 +8,30 @@ import { AnthropicIcon } from "@/components/icons/AnthropicIcon";
 import { V0Icon } from "@/components/icons/V0Icon";
 import { WindsurfIcon } from "@/components/icons/WindsurfIcon";
 
-// Cursor deeplinks require base64-encoded config
-// See: https://cursor.com/docs/context/mcp/install-links
-const MCP_CONFIG = {
-  url: "https://memories.sh/api/mcp",
-  headers: {
-    Authorization: "Bearer YOUR_API_KEY",
-  },
+// Cursor config uses stdio transport (more reliable than HTTP)
+const CURSOR_MCP_CONFIG = {
+  command: "npx",
+  args: ["-y", "@memories.sh/cli", "serve", "--api-key", "YOUR_API_KEY"],
 };
 
-// Base64 encode the config for Cursor deeplink (must be base64, not URL-encoded JSON)
+// Base64 encode the config for Cursor deeplink
 const CURSOR_CONFIG_BASE64 =
   typeof window !== "undefined"
-    ? btoa(JSON.stringify(MCP_CONFIG))
-    : Buffer.from(JSON.stringify(MCP_CONFIG)).toString("base64");
+    ? btoa(JSON.stringify(CURSOR_MCP_CONFIG))
+    : Buffer.from(JSON.stringify(CURSOR_MCP_CONFIG)).toString("base64");
 
 const CURSOR_INSTALL_URL = `cursor://anysphere.cursor-deeplink/mcp/install?name=${encodeURIComponent(
   "memories"
 )}&config=${CURSOR_CONFIG_BASE64}`;
+
+const CURSOR_MANUAL_CONFIG = `{
+  "mcpServers": {
+    "memories": {
+      "command": "npx",
+      "args": ["-y", "@memories.sh/cli", "serve", "--api-key", "YOUR_API_KEY"]
+    }
+  }
+}`;
 
 const CLAUDE_CODE_COMMAND =
   'claude mcp add memories -e API_KEY=YOUR_API_KEY -- npx -y @memories.sh/cli serve --api-key "$API_KEY"';
@@ -66,6 +72,7 @@ function CopyButton({ value, className = "" }: CopyButtonProps) {
 }
 
 export function MCPInstallButtons() {
+  const [showCursorConfig, setShowCursorConfig] = useState(false);
   const [showClaudeCodeCommand, setShowClaudeCodeCommand] = useState(false);
   const [copiedSSE, setCopiedSSE] = useState(false);
 
@@ -94,20 +101,24 @@ export function MCPInstallButtons() {
 
         {/* Row 1: Primary installs */}
         <div className="grid gap-4 sm:grid-cols-2">
-          {/* Cursor Button - One-click */}
-          <a
-            href={CURSOR_INSTALL_URL}
-            className="flex items-center gap-3 p-4 rounded-lg border border-border bg-card hover:bg-accent/50 hover:border-primary/50 transition-all group"
+          {/* Cursor Button */}
+          <button
+            onClick={() => setShowCursorConfig(!showCursorConfig)}
+            className="flex items-center gap-3 p-4 rounded-lg border border-border bg-card hover:bg-accent/50 hover:border-primary/50 transition-all group text-left"
           >
             <div className="p-2 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
               <CursorIcon className="w-5 h-5 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-medium text-sm">Cursor</div>
-              <div className="text-xs text-muted-foreground">One-click install</div>
+              <div className="text-xs text-muted-foreground">Config file</div>
             </div>
-            <ExternalLink className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-          </a>
+            <ChevronDown
+              className={`w-4 h-4 text-muted-foreground group-hover:text-primary transition-all ${
+                showCursorConfig ? "rotate-180" : ""
+              }`}
+            />
+          </button>
 
           {/* Claude Code Button */}
           <button
@@ -128,6 +139,34 @@ export function MCPInstallButtons() {
             />
           </button>
         </div>
+
+        {/* Cursor Config (Expandable) */}
+        {showCursorConfig && (
+          <div className="mt-4 p-4 rounded-lg border border-border bg-muted/40">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-xs font-mono text-muted-foreground">
+                Add to <code className="bg-muted px-1 rounded">.cursor/mcp.json</code>:
+              </span>
+              <CopyButton value={CURSOR_MANUAL_CONFIG} />
+            </div>
+            <pre className="text-sm font-mono text-foreground/80 overflow-x-auto whitespace-pre-wrap">
+              {CURSOR_MANUAL_CONFIG}
+            </pre>
+            <div className="mt-3 flex items-center gap-3">
+              <p className="text-xs text-muted-foreground flex-1">
+                Replace <code className="bg-muted px-1 rounded">YOUR_API_KEY</code> with your key from
+                the dashboard.
+              </p>
+              <a
+                href={CURSOR_INSTALL_URL}
+                className="text-xs text-primary hover:underline flex items-center gap-1 shrink-0"
+              >
+                Try one-click
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          </div>
+        )}
 
         {/* Claude Code Command (Expandable) */}
         {showClaudeCodeCommand && (

@@ -25,22 +25,36 @@ memories login
 
 ### Cursor
 
-**Option 1: One-click install** — Use the button above to add memories.sh to Cursor instantly. After clicking, open Cursor settings and replace `YOUR_API_KEY` with your actual key.
-
-**Option 2: Manual setup** — Add to `.cursor/mcp.json` in your project (or `~/.cursor/mcp.json` globally):
+**Recommended: stdio transport** — Add to `.cursor/mcp.json` in your project (or `~/.cursor/mcp.json` globally):
 
 ```json
 {
   "mcpServers": {
     "memories": {
-      "url": "https://memories.sh/api/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY"
-      }
+      "command": "npx",
+      "args": ["-y", "@memories.sh/cli", "serve", "--api-key", "YOUR_API_KEY"]
     }
   }
 }
 ```
+
+This runs the MCP server locally and connects via stdio, which is more reliable than HTTP transport.
+
+**Alternative: HTTP transport** — If you prefer not to run a local process:
+
+```json
+{
+  "mcpServers": {
+    "memories": {
+      "url": "https://memories.sh/api/mcp?api_key=YOUR_API_KEY"
+    }
+  }
+}
+```
+
+<Callout type="info">
+Replace `YOUR_API_KEY` with your key from the [dashboard](/app/settings).
+</Callout>
 
 <div id="claude-code" />
 
