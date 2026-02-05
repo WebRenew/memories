@@ -14,10 +14,9 @@ const API_KEY_PLACEHOLDER = "REPLACE_WITH_YOUR_API_KEY";
 // SSE endpoint for cloud-based MCP
 const SSE_ENDPOINT = "https://memories.sh/api/mcp";
 
-// Cursor deeplink config - uses CLI that connects to cloud via API key
+// Cursor deeplink config - SSE URL to cloud server
 const CURSOR_DEEPLINK_CONFIG = {
-  command: "npx",
-  args: ["-y", "@memories.sh/cli@latest", "serve", "--api-key", API_KEY_PLACEHOLDER],
+  url: `${SSE_ENDPOINT}?api_key=${API_KEY_PLACEHOLDER}`,
 };
 
 // Base64 encode for Cursor deeplink
