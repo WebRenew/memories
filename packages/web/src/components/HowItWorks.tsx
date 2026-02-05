@@ -80,7 +80,7 @@ export function HowItWorks() {
   ];
 
   return (
-    <section id="how-it-works" className="relative py-32 lg:py-44">
+    <section id="how-it-works" className="relative py-32 lg:py-44 border-y border-border bg-muted/30 dark:bg-muted/10">
       <div className="w-full px-6 lg:px-16 xl:px-24">
         {/* Two column grid */}
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 xl:gap-24 min-h-[600px]">
