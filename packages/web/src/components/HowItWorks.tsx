@@ -64,6 +64,7 @@ export function HowItWorks() {
       description: "Agents interact with your memory store directly via the built-in MCP server.",
       cardTitle: "Direct agent access",
       cardDescription: "Works with any MCP-compatible client.",
+      endpoint: "https://memories.sh/api/mcp",
     },
   };
 
@@ -243,6 +244,15 @@ export function HowItWorks() {
                 <p className="text-sm text-muted-foreground mb-4">
                   {tabContent[activeTab].cardDescription}
                 </p>
+                
+                {/* MCP Endpoint URL */}
+                {activeTab === "mcp" && (
+                  <div className="mb-4 p-3 bg-muted/50 border border-border rounded-lg">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Endpoint</span>
+                    <code className="text-sm text-primary font-mono">https://memories.sh/api/mcp</code>
+                  </div>
+                )}
+                
                 <a
                   href={activeTab === "cli" ? "/docs/cli" : "/docs/mcp-server"}
                   className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors font-medium"
