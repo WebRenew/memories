@@ -27,11 +27,38 @@ export interface SyncConfig {
   dbName: string;
 }
 
+// Cloud mode - when set, uses cloud DB directly instead of local
+let cloudCredentials: { url: string; token: string } | null = null;
+
+export function setCloudMode(url: string, token: string): void {
+  cloudCredentials = { url, token };
+  // Reset client so next getDb() uses cloud
+  if (client) {
+    client.close();
+    client = undefined;
+  }
+}
+
+export function isCloudMode(): boolean {
+  return cloudCredentials !== null;
+}
+
 let client: Client | undefined;
 
 export async function getDb(): Promise<Client> {
   if (client) return client;
 
+  // Cloud mode - connect directly to remote Turso DB
+  if (cloudCredentials) {
+    client = createClient({
+      url: cloudCredentials.url,
+      authToken: cloudCredentials.token,
+    });
+    // Don't run migrations on cloud DB - it's managed by the web app
+    return client;
+  }
+
+  // Local mode - use local SQLite file
   const configDir = resolveConfigDir();
   const dbPath = getDbPath();
 

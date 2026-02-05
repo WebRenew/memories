@@ -20,6 +20,12 @@ import {
   type MemoryType,
 } from "../lib/memory.js";
 import { getProjectId } from "../lib/git.js";
+import { setCloudMode } from "../lib/db.js";
+
+// Re-export for use by serve command
+export function setCloudCredentials(url: string, token: string): void {
+  setCloudMode(url, token);
+}
 
 const TYPE_LABELS: Record<MemoryType, string> = {
   rule: "📌 RULE",

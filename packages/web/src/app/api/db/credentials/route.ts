@@ -1,36 +1,37 @@
-import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { NextRequest, NextResponse } from "next/server"
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  // Get API key from Authorization header
   const authHeader = request.headers.get("authorization")
-  const token = authHeader?.replace("Bearer ", "")
-
-  if (!token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!authHeader?.startsWith("Bearer ")) {
+    return NextResponse.json({ error: "Missing or invalid Authorization header" }, { status: 401 })
   }
 
-  // Look up user by CLI token
+  const apiKey = authHeader.slice(7)
+  if (!apiKey.startsWith("mcp_")) {
+    return NextResponse.json({ error: "Invalid API key format" }, { status: 401 })
+  }
+
+  // Look up user by API key
   const admin = createAdminClient()
   const { data: user, error } = await admin
     .from("users")
-    .select("turso_db_url, turso_db_token, turso_db_name")
-    .eq("cli_token", token)
+    .select("turso_db_url, turso_db_token")
+    .eq("mcp_api_key", apiKey)
     .single()
 
   if (error || !user) {
-    return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    console.error("Credentials lookup error:", error)
+    return NextResponse.json({ error: "Invalid API key" }, { status: 401 })
   }
 
   if (!user.turso_db_url || !user.turso_db_token) {
-    return NextResponse.json(
-      { error: "No database provisioned" },
-      { status: 404 }
-    )
+    return NextResponse.json({ error: "Database not provisioned" }, { status: 400 })
   }
 
   return NextResponse.json({
-    url: user.turso_db_url,
-    token: user.turso_db_token,
-    dbName: user.turso_db_name ?? "",
+    turso_db_url: user.turso_db_url,
+    turso_db_token: user.turso_db_token,
   })
 }
