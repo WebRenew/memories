@@ -2,15 +2,15 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient as createTurso } from "@libsql/client"
 import { NextRequest, NextResponse } from "next/server"
 
-// Authenticate via API key and return user's Turso client
-async function authenticateAndGetTurso(request: NextRequest) {
-  // Get API key from Authorization header
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) {
-    return { error: "Missing or invalid Authorization header", status: 401 }
-  }
+// Store active SSE connections and their message queues
+const connections = new Map<string, {
+  controller: ReadableStreamDefaultController<Uint8Array>
+  turso: ReturnType<typeof createTurso>
+  userId: string
+}>()
 
-  const apiKey = authHeader.slice(7) // Remove "Bearer "
+// Authenticate via API key and return user's Turso client
+async function authenticateAndGetTurso(apiKey: string) {
   if (!apiKey.startsWith("mcp_")) {
     return { error: "Invalid API key format", status: 401 }
   }
@@ -39,24 +39,237 @@ async function authenticateAndGetTurso(request: NextRequest) {
   return { turso, user }
 }
 
-// Handle MCP JSON-RPC requests
-export async function POST(request: NextRequest) {
-  const auth = await authenticateAndGetTurso(request)
+// Extract API key from request (header or query param)
+function getApiKey(request: NextRequest): string | null {
+  // Try Authorization header first
+  const authHeader = request.headers.get("authorization")
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice(7)
+  }
+  
+  // Try query parameter (for SSE connections)
+  const url = new URL(request.url)
+  return url.searchParams.get("api_key")
+}
+
+// Format SSE message
+function formatSSE(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+}
+
+// Handle tool execution
+async function executeTool(
+  toolName: string, 
+  args: Record<string, unknown>, 
+  turso: ReturnType<typeof createTurso>
+): Promise<{ content: Array<{ type: string; text: string }> }> {
+  switch (toolName) {
+    case "get_context": {
+      // Get all rules
+      const rulesResult = await turso.execute(
+        "SELECT content, scope FROM memories WHERE type = 'rule' AND deleted_at IS NULL ORDER BY created_at DESC"
+      )
+      const rules = rulesResult.rows.map(r => `- ${r.content}`).join("\n")
+
+      // Get relevant memories if query provided
+      let memories = ""
+      if (args.query) {
+        const limit = (args.limit as number) || 10
+        const searchResult = await turso.execute({
+          sql: `SELECT content, type, scope FROM memories 
+                WHERE deleted_at IS NULL AND content LIKE ? 
+                ORDER BY created_at DESC LIMIT ?`,
+          args: [`%${args.query}%`, limit],
+        })
+        if (searchResult.rows.length > 0) {
+          memories = "\n\n## Relevant Memories\n" + 
+            searchResult.rows.map(m => `- [${m.type}] ${m.content}`).join("\n")
+        }
+      }
+
+      return {
+        content: [{ 
+          type: "text", 
+          text: rules ? `## Rules\n${rules}${memories}` : "No rules defined." 
+        }],
+      }
+    }
+
+    case "add_memory": {
+      const memoryId = crypto.randomUUID().replace(/-/g, "").slice(0, 12)
+      const now = new Date().toISOString()
+      const type = (args.type as string) || "note"
+      const tags = Array.isArray(args.tags) ? args.tags.join(",") : null
+
+      await turso.execute({
+        sql: `INSERT INTO memories (id, content, type, scope, tags, created_at, updated_at) 
+              VALUES (?, ?, ?, 'global', ?, ?, ?)`,
+        args: [memoryId, args.content as string, type, tags, now, now],
+      })
+
+      return {
+        content: [{ type: "text", text: `Stored ${type} ${memoryId}: ${args.content}` }],
+      }
+    }
+
+    case "search_memories": {
+      const limit = (args.limit as number) || 20
+      const searchResult = await turso.execute({
+        sql: `SELECT id, content, type, scope FROM memories 
+              WHERE deleted_at IS NULL AND content LIKE ? 
+              ORDER BY created_at DESC LIMIT ?`,
+        args: [`%${args.query}%`, limit],
+      })
+
+      if (searchResult.rows.length === 0) {
+        return { content: [{ type: "text", text: "No memories found." }] }
+      }
+      
+      const formatted = searchResult.rows
+        .map(m => `[${m.type}] ${m.id}: ${m.content}`)
+        .join("\n")
+      return {
+        content: [{ type: "text", text: `Found ${searchResult.rows.length} memories:\n\n${formatted}` }],
+      }
+    }
+
+    case "list_memories": {
+      const limit = (args.limit as number) || 50
+      let sql = "SELECT id, content, type, scope FROM memories WHERE deleted_at IS NULL"
+      const sqlArgs: (string | number)[] = []
+
+      if (args.type) {
+        sql += " AND type = ?"
+        sqlArgs.push(args.type as string)
+      }
+
+      sql += " ORDER BY created_at DESC LIMIT ?"
+      sqlArgs.push(limit)
+
+      const listResult = await turso.execute({ sql, args: sqlArgs })
+
+      if (listResult.rows.length === 0) {
+        return { content: [{ type: "text", text: "No memories found." }] }
+      }
+      
+      const formatted = listResult.rows
+        .map(m => `[${m.type}] ${m.id}: ${m.content}`)
+        .join("\n")
+      return {
+        content: [{ type: "text", text: `${listResult.rows.length} memories:\n\n${formatted}` }],
+      }
+    }
+
+    default:
+      throw new Error(`Unknown tool: ${toolName}`)
+  }
+}
+
+// SSE endpoint for MCP - GET opens the event stream
+export async function GET(request: NextRequest) {
+  const apiKey = getApiKey(request)
+  
+  // If no API key, return server info (health check)
+  if (!apiKey) {
+    return NextResponse.json({ 
+      status: "ok",
+      name: "memories.sh MCP Server",
+      version: "0.5.0",
+      transport: "sse",
+      endpoints: {
+        sse: "GET /api/mcp?api_key=YOUR_KEY",
+        messages: "POST /api/mcp",
+      }
+    })
+  }
+
+  // Authenticate
+  const auth = await authenticateAndGetTurso(apiKey)
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status })
   }
 
-  const { turso } = auth
+  const { turso, user } = auth
+  const sessionId = crypto.randomUUID()
+
+  // Create SSE stream
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      // Store connection
+      connections.set(sessionId, { controller, turso, userId: user.id })
+
+      // Send endpoint event (required by MCP SSE transport)
+      const encoder = new TextEncoder()
+      controller.enqueue(encoder.encode(formatSSE("endpoint", `/api/mcp?session=${sessionId}`)))
+    },
+    cancel() {
+      connections.delete(sessionId)
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no", // Disable nginx buffering
+    },
+  })
+}
+
+// Handle MCP JSON-RPC messages via POST
+export async function POST(request: NextRequest) {
+  const url = new URL(request.url)
+  const sessionId = url.searchParams.get("session")
+  
+  let turso: ReturnType<typeof createTurso>
+  let controller: ReadableStreamDefaultController<Uint8Array> | null = null
+
+  // Check if this is a session-based request (from SSE)
+  if (sessionId && connections.has(sessionId)) {
+    const conn = connections.get(sessionId)!
+    turso = conn.turso
+    controller = conn.controller
+  } else {
+    // Fallback to header-based auth for direct POST
+    const apiKey = getApiKey(request)
+    if (!apiKey) {
+      return NextResponse.json({ error: "Missing API key" }, { status: 401 })
+    }
+
+    const auth = await authenticateAndGetTurso(apiKey)
+    if ("error" in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status })
+    }
+    turso = auth.turso
+  }
 
   try {
     const body = await request.json()
-    
-    // Handle JSON-RPC request
     const { method, params, id } = body
 
     let result: unknown
 
     switch (method) {
+      case "initialize": {
+        result = {
+          protocolVersion: "2024-11-05",
+          serverInfo: {
+            name: "memories.sh",
+            version: "0.5.0",
+          },
+          capabilities: {
+            tools: {},
+          },
+        }
+        break
+      }
+
+      case "notifications/initialized": {
+        // Client acknowledges initialization - no response needed
+        return new Response(null, { status: 204 })
+      }
+
       case "tools/list": {
         result = {
           tools: [
@@ -116,128 +329,21 @@ export async function POST(request: NextRequest) {
         const toolName = params?.name
         const args = params?.arguments || {}
 
-        switch (toolName) {
-          case "get_context": {
-            // Get all rules
-            const rulesResult = await turso.execute(
-              "SELECT content, scope FROM memories WHERE type = 'rule' AND deleted_at IS NULL ORDER BY created_at DESC"
-            )
-            const rules = rulesResult.rows.map(r => `- ${r.content}`).join("\n")
-
-            // Get relevant memories if query provided
-            let memories = ""
-            if (args.query) {
-              const limit = args.limit || 10
-              const searchResult = await turso.execute({
-                sql: `SELECT content, type, scope FROM memories 
-                      WHERE deleted_at IS NULL AND content LIKE ? 
-                      ORDER BY created_at DESC LIMIT ?`,
-                args: [`%${args.query}%`, limit],
-              })
-              if (searchResult.rows.length > 0) {
-                memories = "\n\n## Relevant Memories\n" + 
-                  searchResult.rows.map(m => `- [${m.type}] ${m.content}`).join("\n")
-              }
-            }
-
-            result = {
-              content: [{ 
-                type: "text", 
-                text: rules ? `## Rules\n${rules}${memories}` : "No rules defined." 
-              }],
-            }
-            break
-          }
-
-          case "add_memory": {
-            const memoryId = crypto.randomUUID().replace(/-/g, "").slice(0, 12)
-            const now = new Date().toISOString()
-            const type = args.type || "note"
-            const tags = args.tags?.join(",") || null
-
-            await turso.execute({
-              sql: `INSERT INTO memories (id, content, type, scope, tags, created_at, updated_at) 
-                    VALUES (?, ?, ?, 'global', ?, ?, ?)`,
-              args: [memoryId, args.content, type, tags, now, now],
-            })
-
-            result = {
-              content: [{ type: "text", text: `Stored ${type} ${memoryId}: ${args.content}` }],
-            }
-            break
-          }
-
-          case "search_memories": {
-            const limit = args.limit || 20
-            const searchResult = await turso.execute({
-              sql: `SELECT id, content, type, scope FROM memories 
-                    WHERE deleted_at IS NULL AND content LIKE ? 
-                    ORDER BY created_at DESC LIMIT ?`,
-              args: [`%${args.query}%`, limit],
-            })
-
-            if (searchResult.rows.length === 0) {
-              result = { content: [{ type: "text", text: "No memories found." }] }
-            } else {
-              const formatted = searchResult.rows
-                .map(m => `[${m.type}] ${m.id}: ${m.content}`)
-                .join("\n")
-              result = {
-                content: [{ type: "text", text: `Found ${searchResult.rows.length} memories:\n\n${formatted}` }],
-              }
-            }
-            break
-          }
-
-          case "list_memories": {
-            const limit = args.limit || 50
-            let sql = "SELECT id, content, type, scope FROM memories WHERE deleted_at IS NULL"
-            const sqlArgs: (string | number)[] = []
-
-            if (args.type) {
-              sql += " AND type = ?"
-              sqlArgs.push(args.type)
-            }
-
-            sql += " ORDER BY created_at DESC LIMIT ?"
-            sqlArgs.push(limit)
-
-            const listResult = await turso.execute({ sql, args: sqlArgs })
-
-            if (listResult.rows.length === 0) {
-              result = { content: [{ type: "text", text: "No memories found." }] }
-            } else {
-              const formatted = listResult.rows
-                .map(m => `[${m.type}] ${m.id}: ${m.content}`)
-                .join("\n")
-              result = {
-                content: [{ type: "text", text: `${listResult.rows.length} memories:\n\n${formatted}` }],
-              }
-            }
-            break
-          }
-
-          default:
-            return NextResponse.json({
-              jsonrpc: "2.0",
-              id,
-              error: { code: -32601, message: `Unknown tool: ${toolName}` },
-            })
+        try {
+          result = await executeTool(toolName, args, turso)
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : "Tool execution failed"
+          return NextResponse.json({
+            jsonrpc: "2.0",
+            id,
+            error: { code: -32601, message: errorMessage },
+          })
         }
         break
       }
 
-      case "initialize": {
-        result = {
-          protocolVersion: "2024-11-05",
-          serverInfo: {
-            name: "memories.sh",
-            version: "0.4.0",
-          },
-          capabilities: {
-            tools: {},
-          },
-        }
+      case "ping": {
+        result = {}
         break
       }
 
@@ -249,11 +355,23 @@ export async function POST(request: NextRequest) {
         })
     }
 
-    return NextResponse.json({
+    const response = {
       jsonrpc: "2.0",
       id,
       result,
-    })
+    }
+
+    // If we have an SSE connection, also push via SSE
+    if (controller) {
+      try {
+        const encoder = new TextEncoder()
+        controller.enqueue(encoder.encode(formatSSE("message", response)))
+      } catch {
+        // Connection might be closed, ignore
+      }
+    }
+
+    return NextResponse.json(response)
   } catch (err) {
     console.error("MCP error:", err)
     return NextResponse.json({
@@ -264,11 +382,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Health check
-export async function GET() {
-  return NextResponse.json({ 
-    status: "ok",
-    name: "memories.sh MCP Server",
-    version: "0.4.0",
+// Handle OPTIONS for CORS
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
   })
 }
