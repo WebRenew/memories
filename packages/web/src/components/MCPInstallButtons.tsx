@@ -11,10 +11,12 @@ import { WindsurfIcon } from "@/components/icons/WindsurfIcon";
 // Placeholder that's obviously meant to be replaced
 const API_KEY_PLACEHOLDER = "REPLACE_WITH_YOUR_API_KEY";
 
-// Cursor config uses stdio transport (more reliable than HTTP)
+// SSE endpoint for cloud-based MCP
+const SSE_ENDPOINT = "https://memories.sh/api/mcp";
+
+// Cursor config uses SSE transport with API key in URL
 const CURSOR_MCP_CONFIG = {
-  command: "npx",
-  args: ["-y", "@memories.sh/cli", "serve", "--api-key", API_KEY_PLACEHOLDER],
+  url: `${SSE_ENDPOINT}?api_key=${API_KEY_PLACEHOLDER}`,
 };
 
 // Base64 encode the config for Cursor deeplink
@@ -30,15 +32,12 @@ const CURSOR_INSTALL_URL = `cursor://anysphere.cursor-deeplink/mcp/install?name=
 const CURSOR_MANUAL_CONFIG = `{
   "mcpServers": {
     "memories": {
-      "command": "npx",
-      "args": ["-y", "@memories.sh/cli", "serve", "--api-key", "${API_KEY_PLACEHOLDER}"]
+      "url": "${SSE_ENDPOINT}?api_key=${API_KEY_PLACEHOLDER}"
     }
   }
 }`;
 
-const CLAUDE_CODE_COMMAND = `claude mcp add memories -e API_KEY=${API_KEY_PLACEHOLDER} -- npx -y @memories.sh/cli serve --api-key "$API_KEY"`;
-
-const SSE_ENDPOINT = "https://memories.sh/api/mcp";
+const CLAUDE_CODE_COMMAND = `claude mcp add memories -- npx -y @memories.sh/cli serve --api-key ${API_KEY_PLACEHOLDER}`;
 
 interface CopyButtonProps {
   value: string;
