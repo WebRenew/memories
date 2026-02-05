@@ -36,7 +36,7 @@ export function FAQ() {
         <div className="max-w-[1000px] mx-auto">
           <div className="mb-16 flex flex-col items-center text-center">
             <div className="inline-flex items-center gap-2 mb-4">
-              <div className="size-2 rounded-full bg-primary animate-pulse" />
+              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="font-mono text-[12px] leading-[100%] tracking-[-0.015rem] uppercase text-muted-foreground">Support</span>
             </div>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-foreground text-gradient">Questions & Answers</h2>

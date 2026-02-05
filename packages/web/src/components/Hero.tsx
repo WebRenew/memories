@@ -192,7 +192,7 @@ export function Hero() {
               className="flex flex-col items-start text-left"
             >
             <motion.div variants={itemVariants} className="inline-flex items-center gap-2 mb-6">
-              <div className="size-2 rounded-full bg-primary animate-pulse" />
+              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="font-mono text-[12px] leading-[100%] tracking-[-0.015rem] uppercase text-muted-foreground">Stop Re-Teaching Agents</span>
             </motion.div>
 

@@ -24,7 +24,7 @@ export function Quickstart() {
       <div className="max-w-[1200px] mx-auto">
         <div className="mb-20 flex flex-col items-center text-center">
           <div className="inline-flex items-center gap-2 mb-4">
-            <div className="size-2 rounded-full bg-primary animate-pulse" />
+            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
             <span className="font-mono text-[12px] leading-[100%] tracking-[-0.015rem] uppercase text-muted-foreground">Quick Start</span>
           </div>
           <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-foreground text-gradient">Get Started</h2>
