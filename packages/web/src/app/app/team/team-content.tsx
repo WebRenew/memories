@@ -6,7 +6,6 @@ import Image from "next/image"
 import { 
   Users, 
   Plus, 
-  Settings, 
   Crown, 
   Shield, 
   User, 
@@ -15,7 +14,6 @@ import {
   Copy,
   Check,
   X,
-  ChevronDown
 } from "lucide-react"
 
 interface Organization {
@@ -79,18 +77,12 @@ export function TeamContent({
   const isOwner = selectedOrg?.role === "owner"
   const isAdmin = selectedOrg?.role === "admin" || isOwner
 
-  useEffect(() => {
-    if (selectedOrgId) {
-      fetchOrgData()
-    }
-  }, [selectedOrgId])
-
-  async function fetchOrgData() {
+  async function fetchOrgData(orgId: string) {
     setLoading(true)
     try {
       const [membersRes, invitesRes] = await Promise.all([
-        fetch(`/api/orgs/${selectedOrgId}/members`),
-        fetch(`/api/orgs/${selectedOrgId}/invites`),
+        fetch(`/api/orgs/${orgId}/members`),
+        fetch(`/api/orgs/${orgId}/invites`),
       ])
       
       if (membersRes.ok) {
@@ -106,6 +98,12 @@ export function TeamContent({
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (selectedOrgId) {
+      fetchOrgData(selectedOrgId)
+    }
+  }, [selectedOrgId])
 
   const [createError, setCreateError] = useState<string | null>(null)
 
@@ -156,7 +154,7 @@ export function TeamContent({
         setInviteUrl(data.inviteUrl)
         setEmailSent(data.emailSent || false)
         setInviteEmail("")
-        fetchOrgData()
+        if (selectedOrgId) fetchOrgData(selectedOrgId)
       } else {
         alert(data.error || "Failed to send invite")
       }
@@ -173,8 +171,8 @@ export function TeamContent({
         method: "DELETE",
       })
       
-      if (res.ok) {
-        fetchOrgData()
+      if (res.ok && selectedOrgId) {
+        fetchOrgData(selectedOrgId)
       }
     } catch (e) {
       console.error(e)
@@ -186,7 +184,7 @@ export function TeamContent({
       await fetch(`/api/orgs/${selectedOrgId}/invites?inviteId=${inviteId}`, {
         method: "DELETE",
       })
-      fetchOrgData()
+      if (selectedOrgId) fetchOrgData(selectedOrgId)
     } catch (e) {
       console.error(e)
     }
@@ -200,8 +198,8 @@ export function TeamContent({
         body: JSON.stringify({ userId: memberUserId, role: newRole }),
       })
       
-      if (res.ok) {
-        fetchOrgData()
+      if (res.ok && selectedOrgId) {
+        fetchOrgData(selectedOrgId)
       }
     } catch (e) {
       console.error(e)

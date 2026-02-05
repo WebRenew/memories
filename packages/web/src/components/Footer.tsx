@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ThemeSwitcher } from "./ThemeSwitcher";
+import { StatusIndicator } from "./StatusIndicator";
 
 export function Footer() {
   return (
@@ -39,8 +40,8 @@ export function Footer() {
             <div className="flex flex-col gap-6">
               <h5 className="text-[10px] uppercase tracking-[0.3em] font-bold text-foreground">Legal</h5>
               <div className="flex flex-col gap-4 text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.15em]">
-                <Link href="#" className="hover:text-primary transition-colors">Privacy</Link>
-                <Link href="#" className="hover:text-primary transition-colors">Terms</Link>
+                <a href="https://www.webrenew.com/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Privacy</a>
+                <a href="https://www.webrenew.com/terms" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Terms</a>
               </div>
             </div>
           </div>
@@ -57,10 +58,7 @@ export function Footer() {
           </a>
           <div className="flex items-center gap-8">
             <ThemeSwitcher />
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] text-muted-foreground font-mono tracking-wide uppercase">Stable</span>
-            </div>
+            <StatusIndicator />
           </div>
         </div>
       </div>

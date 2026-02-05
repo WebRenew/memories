@@ -9,6 +9,7 @@ import defaultMdxComponents from 'fumadocs-ui/mdx';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { CopyMarkdownButton } from '@/components/CopyMarkdownButton';
+import { MCPInstallButtons } from '@/components/MCPInstallButtons';
 
 interface PageProps {
   params: Promise<{ slug?: string[] }>;
@@ -31,7 +32,7 @@ export default async function Page({ params }: PageProps) {
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
-        <MDX components={{ ...defaultMdxComponents }} />
+        <MDX components={{ ...defaultMdxComponents, MCPInstallButtons }} />
       </DocsBody>
     </DocsPage>
   );

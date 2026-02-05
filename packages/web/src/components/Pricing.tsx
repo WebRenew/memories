@@ -124,19 +124,35 @@ export function Pricing({ user }: { user?: User | null }) {
                 whileInView={{ opacity: 1 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.4 }}
-                className={`relative flex flex-col p-8 ${
+                className={`relative flex flex-col p-8 overflow-hidden ${
                   tier.highlighted 
                     ? "bg-primary/10 ring-1 ring-primary/40 shadow-[0_0_40px_rgba(99,102,241,0.25)]" 
                     : "bg-card/20"
                 } transition-all duration-500 hover:border-primary/40 glass-panel-soft rounded-lg`}
               >
+                {/* Background texture and overlay for highlighted card */}
                 {tier.highlighted && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-widest rounded-md">
+                  <>
+                    <div
+                      className="absolute inset-0 opacity-15 dark:opacity-25 bg-cover bg-center bg-no-repeat"
+                      style={{ backgroundImage: "url(/bg-texture_memories.webp)" }}
+                    />
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        background:
+                          "linear-gradient(135deg, transparent 0%, transparent 5%, var(--background) 25%, var(--background) 75%, transparent 95%, transparent 100%)",
+                      }}
+                    />
+                  </>
+                )}
+                {tier.highlighted && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-widest rounded-md z-10">
                     Recommended
                   </div>
                 )}
 
-                <div className="mb-8">
+                <div className="mb-8 relative z-10">
                   <h3 className="text-xl font-bold mb-2 uppercase tracking-wider">{tier.name}</h3>
                   <div className="flex items-baseline gap-1 mb-1">
                     <span className="text-4xl font-mono font-bold">{price}</span>
@@ -157,7 +173,7 @@ export function Pricing({ user }: { user?: User | null }) {
                   </p>
                 </div>
 
-                <div className="flex-grow mb-10">
+                <div className="flex-grow mb-10 relative z-10">
                   <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-6">
                     Included Features
                   </div>
@@ -173,7 +189,7 @@ export function Pricing({ user }: { user?: User | null }) {
 
                 <Link 
                   href={tier.name === "Enterprise" ? "mailto:hello@memories.sh" : user ? "/app/upgrade" : "/login"}
-                  className={`block w-full py-4 text-xs font-bold uppercase tracking-[0.2em] transition-all duration-300 text-center rounded-md ${
+                  className={`block w-full py-4 text-xs font-bold uppercase tracking-[0.2em] transition-all duration-300 text-center rounded-md relative z-10 ${
                     tier.highlighted
                       ? "bg-primary text-primary-foreground hover:opacity-90 shadow-[0_0_20px_rgba(var(--primary),0.3)]"
                       : "bg-foreground/5 text-foreground border border-border hover:bg-foreground/10"

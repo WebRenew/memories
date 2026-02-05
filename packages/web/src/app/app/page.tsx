@@ -40,7 +40,14 @@ export default async function MemoriesPage() {
     const result = await turso.execute(
       "SELECT id, content, tags, type, scope, created_at FROM memories WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 200"
     )
-    memories = result.rows as Memory[]
+    memories = result.rows.map(row => ({
+      id: row.id as string,
+      content: row.content as string,
+      tags: row.tags as string | null,
+      type: row.type as string | null,
+      scope: row.scope as string | null,
+      created_at: row.created_at as string,
+    }))
   } catch (err) {
     console.error("Turso connection error:", err)
     connectError = true

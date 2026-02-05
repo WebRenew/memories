@@ -5,11 +5,7 @@ description: Connect memories directly to AI tools via the Model Context Protoco
 
 memories.sh includes a built-in MCP (Model Context Protocol) server that allows AI tools to read and write memories directly, without generating intermediate files.
 
-**MCP Endpoint**
-
-```txt title="Endpoint URL"
-https://memories.sh/api/mcp
-```
+<MCPInstallButtons />
 
 ## Why Use the MCP Server?
 
@@ -34,22 +30,14 @@ memories login
 
 ### 2. Configure Your Tool
 
-Add to your tool's MCP configuration:
+See the [MCP Integration Guide](/docs/integrations/mcp) for tool-specific setup instructions, including:
 
-```json
-{
-  "mcpServers": {
-    "memories": {
-      "url": "https://memories.sh/api/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY"
-      }
-    }
-  }
-}
-```
-
-Replace `YOUR_API_KEY` with the key from your dashboard.
+- **Cursor** — One-click install or manual config
+- **Claude Code** — CLI command
+- **Claude Desktop** — Config file
+- **Windsurf** — Config file
+- **VS Code** — Config file
+- **v0 / Web Tools** — Paste endpoint URL
 
 <Callout>
 Cloud MCP syncs memories across all your devices and doesn't require the CLI to be running locally.

@@ -85,7 +85,20 @@ export default async function AcceptInvitePage({
     }
   }
 
-  const org = invite.organization as { id: string; name: string; slug: string }
+  type OrgData = { id: string; name: string; slug: string }
+  const orgRaw = invite.organization as OrgData | OrgData[] | null
+  const org = Array.isArray(orgRaw) ? orgRaw[0] : orgRaw
+
+  if (!org) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-2">Invalid Invite</h1>
+          <p className="text-muted-foreground">Organization not found.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <AcceptInviteContent

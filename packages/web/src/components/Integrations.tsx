@@ -75,15 +75,29 @@ export function Integrations() {
                   whileInView={{ opacity: 1 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.4 }}
-                  className="p-8 lg:p-10 bg-card/20 flex flex-col items-start group hover:border-primary/40 transition-all h-full cursor-pointer glass-panel-soft rounded-lg relative"
+                  className="p-8 lg:p-10 bg-card/20 flex flex-col items-start group hover:border-primary/40 transition-all h-full cursor-pointer glass-panel-soft rounded-lg relative overflow-hidden"
                 >
+                  {/* Background texture - visible on hover */}
+                  <div
+                    className="absolute inset-0 opacity-0 group-hover:opacity-15 dark:group-hover:opacity-25 bg-cover bg-center bg-no-repeat transition-opacity duration-500"
+                    style={{ backgroundImage: "url(/bg-texture_memories.webp)" }}
+                  />
+                  {/* Diamond gradient overlay - visible on hover */}
+                  <div
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, transparent 0%, transparent 5%, var(--background) 25%, var(--background) 75%, transparent 95%, transparent 100%)",
+                    }}
+                  />
+
                   {/* Status badge - top right */}
-                  <span className="absolute top-8 right-8 lg:top-10 lg:right-10 text-[10px] font-bold uppercase tracking-[0.25em] px-2 py-0.5 border border-border text-muted-foreground rounded-md">
+                  <span className="absolute top-8 right-8 lg:top-10 lg:right-10 text-[10px] font-bold uppercase tracking-[0.25em] px-2 py-0.5 border border-border text-muted-foreground rounded-md z-10">
                     {a.status}
                   </span>
                   
                   {/* Icon - left aligned with headings */}
-                  <div className="h-14 mb-12 opacity-80 group-hover:opacity-100 transition-opacity duration-500">
+                  <div className="h-14 mb-12 opacity-80 group-hover:opacity-100 transition-opacity duration-500 relative z-10">
                     {a.logo ? (
                       <Image src={a.logo} alt={a.name} width={40} height={40} className="dark:invert-0 invert" />
                     ) : (
@@ -93,10 +107,10 @@ export function Integrations() {
                     )}
                   </div>
                   
-                  <h4 className="text-lg font-bold mb-3 tracking-tight text-foreground">{a.name}</h4>
-                  <p className="text-[13px] text-muted-foreground leading-relaxed mb-10 font-light">{a.desc}</p>
+                  <h4 className="text-lg font-bold mb-3 tracking-tight text-foreground relative z-10">{a.name}</h4>
+                  <p className="text-[13px] text-muted-foreground leading-relaxed mb-10 font-light relative z-10">{a.desc}</p>
                   
-                  <span className="mt-auto text-[11px] font-bold uppercase tracking-[0.25em] text-muted-foreground group-hover:text-primary transition-colors flex items-center gap-2">
+                  <span className="mt-auto text-[11px] font-bold uppercase tracking-[0.25em] text-muted-foreground group-hover:text-primary transition-colors flex items-center gap-2 relative z-10">
                     View Docs <span className="text-lg opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">→</span>
                   </span>
                 </motion.div>

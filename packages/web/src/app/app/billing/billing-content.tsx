@@ -32,7 +32,8 @@ interface BillingContentProps {
   memberSince: string | null
 }
 
-const FREE_LIMITS = {
+// Reserved for future Free tier comparison UI
+const _FREE_LIMITS = {
   memories: "Unlimited",
   projects: "Unlimited",
   sync: "Cloud sync",

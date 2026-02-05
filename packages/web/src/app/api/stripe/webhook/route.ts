@@ -167,9 +167,9 @@ export async function POST(request: Request) {
     }
 
     case "invoice.payment_failed": {
-      const invoice = event.data.object
+      const invoice = event.data.object as Stripe.Invoice
       const customerId = invoice.customer as string
-      const subscriptionId = invoice.subscription
+      const subscriptionId = (invoice as { subscription?: string | null }).subscription
 
       // Only act on invoices for our Pro prices
       if (!invoice.lines?.data || !hasProPrice(invoice.lines.data as { price?: { id: string } | null }[])) break
@@ -202,9 +202,9 @@ export async function POST(request: Request) {
     }
 
     case "invoice.marked_uncollectible": {
-      const invoice = event.data.object
+      const invoice = event.data.object as Stripe.Invoice
       const customerId = invoice.customer as string
-      const subscriptionId = invoice.subscription
+      const subscriptionId = (invoice as { subscription?: string | null }).subscription
 
       // Only act on invoices for our Pro prices
       if (!invoice.lines?.data || !hasProPrice(invoice.lines.data as { price?: { id: string } | null }[])) break

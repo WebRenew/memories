@@ -148,7 +148,8 @@ export function ScrambleText({
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (animationRef.current) animationRef.current.kill();
     };
-  }, []); // Empty deps - only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally run once on mount only
+  }, []);
 
   // Handle text prop changes after initial animation
   useEffect(() => {

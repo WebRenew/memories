@@ -30,17 +30,23 @@ export default async function TeamPage() {
     `)
     .eq("user_id", user.id)
 
-  const organizations = memberships?.map(m => ({
-    ...m.organization as {
-      id: string
-      name: string
-      slug: string
-      owner_id: string
-      plan: string
-      created_at: string
-    },
-    role: m.role,
-  })) || []
+  interface Organization {
+    id: string
+    name: string
+    slug: string
+    owner_id: string
+    plan: string
+    created_at: string
+  }
+
+  const organizations = memberships?.map(m => {
+    const org = m.organization as Organization | Organization[] | null
+    const orgData = Array.isArray(org) ? org[0] : org
+    return {
+      ...(orgData || { id: "", name: "", slug: "", owner_id: "", plan: "", created_at: "" }),
+      role: m.role,
+    }
+  }).filter(o => o.id) || []
 
   // Get user's current org
   const { data: profile } = await supabase

@@ -8,10 +8,22 @@ export const metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-6">
-      <div className="memory-lattice" />
+    <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-6 relative overflow-hidden">
+      {/* Background texture */}
+      <div
+        className="absolute inset-0 opacity-15 dark:opacity-25 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url(/bg-texture_memories.webp)" }}
+      />
+      {/* Diamond gradient overlay — opaque center, transparent at corners */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(135deg, transparent 0%, transparent 5%, var(--background) 25%, var(--background) 75%, transparent 95%, transparent 100%)",
+        }}
+      />
 
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm relative z-10">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 justify-center mb-12 group">
           <Image
@@ -27,7 +39,7 @@ export default function LoginPage() {
         </Link>
 
         {/* Card */}
-        <div className="border border-border bg-card/20 p-8">
+        <div className="border border-border bg-card/20 p-8 rounded-md">
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold tracking-tight mb-2">Sign in or create account</h1>
             <p className="text-sm text-muted-foreground italic">
@@ -39,13 +51,13 @@ export default function LoginPage() {
 
           <p className="text-xs text-muted-foreground text-center mt-8 leading-relaxed">
             By continuing, you agree to our{" "}
-            <Link href="/terms" className="underline hover:text-foreground transition-colors">
+            <a href="https://www.webrenew.com/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">
               Terms of Service
-            </Link>{" "}
+            </a>{" "}
             and{" "}
-            <Link href="/privacy" className="underline hover:text-foreground transition-colors">
+            <a href="https://www.webrenew.com/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">
               Privacy Policy
-            </Link>
+            </a>
             .
           </p>
         </div>
