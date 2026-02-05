@@ -8,10 +8,13 @@ import { AnthropicIcon } from "@/components/icons/AnthropicIcon";
 import { V0Icon } from "@/components/icons/V0Icon";
 import { WindsurfIcon } from "@/components/icons/WindsurfIcon";
 
+// Placeholder that's obviously meant to be replaced
+const API_KEY_PLACEHOLDER = "REPLACE_WITH_YOUR_API_KEY";
+
 // Cursor config uses stdio transport (more reliable than HTTP)
 const CURSOR_MCP_CONFIG = {
   command: "npx",
-  args: ["-y", "@memories.sh/cli", "serve", "--api-key", "YOUR_API_KEY"],
+  args: ["-y", "@memories.sh/cli", "serve", "--api-key", API_KEY_PLACEHOLDER],
 };
 
 // Base64 encode the config for Cursor deeplink
@@ -28,13 +31,12 @@ const CURSOR_MANUAL_CONFIG = `{
   "mcpServers": {
     "memories": {
       "command": "npx",
-      "args": ["-y", "@memories.sh/cli", "serve", "--api-key", "YOUR_API_KEY"]
+      "args": ["-y", "@memories.sh/cli", "serve", "--api-key", "${API_KEY_PLACEHOLDER}"]
     }
   }
 }`;
 
-const CLAUDE_CODE_COMMAND =
-  'claude mcp add memories -e API_KEY=YOUR_API_KEY -- npx -y @memories.sh/cli serve --api-key "$API_KEY"';
+const CLAUDE_CODE_COMMAND = `claude mcp add memories -e API_KEY=${API_KEY_PLACEHOLDER} -- npx -y @memories.sh/cli serve --api-key "$API_KEY"`;
 
 const SSE_ENDPOINT = "https://memories.sh/api/mcp";
 
@@ -154,7 +156,7 @@ export function MCPInstallButtons() {
             </pre>
             <div className="mt-3 flex items-center gap-3">
               <p className="text-xs text-muted-foreground flex-1">
-                Replace <code className="bg-muted px-1 rounded">YOUR_API_KEY</code> with your key from
+                <strong>Replace</strong> <code className="bg-muted px-1 rounded">{API_KEY_PLACEHOLDER}</code> with your key from
                 the dashboard.
               </p>
               <a
@@ -179,7 +181,7 @@ export function MCPInstallButtons() {
               {CLAUDE_CODE_COMMAND}
             </pre>
             <p className="text-xs text-muted-foreground mt-2">
-              Replace <code className="bg-muted px-1 rounded">YOUR_API_KEY</code> with your key from
+              <strong>Replace</strong> <code className="bg-muted px-1 rounded">{API_KEY_PLACEHOLDER}</code> with your key from
               the dashboard.
             </p>
           </div>
