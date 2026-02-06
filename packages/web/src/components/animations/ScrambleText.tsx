@@ -102,6 +102,9 @@ export function ScrambleText({
             text,
             duration,
             setDisplayText,
+            () => {
+              animationRef.current = null
+            },
           )
         }, delayMs)
       },
