@@ -166,8 +166,8 @@ export function StatsCharts({
                     borderRadius: "4px",
                     fontSize: 12,
                   }}
-                  labelFormatter={formatDate}
-                  formatter={(value: number, name: string) => [value, TYPE_LABELS[name] || name]}
+                  labelFormatter={(dateStr) => formatDate(String(dateStr))}
+                  formatter={(value, name) => [value, TYPE_LABELS[String(name)] || name]}
                 />
                 <Legend 
                   formatter={(value: string) => TYPE_LABELS[value] || value}
@@ -218,10 +218,10 @@ export function StatsCharts({
                     ))}
                   </Pie>
                   <Tooltip 
-                    formatter={(value: number, _name: string, props: { payload?: { type?: string } }) => [
-                      value, 
-                      TYPE_LABELS[props.payload?.type || ""] || props.payload?.type
-                    ]}
+                    formatter={(value, _name, item) => {
+                      const typeName = (item as { payload?: { type?: string } })?.payload?.type || "";
+                      return [value, TYPE_LABELS[typeName] || typeName];
+                    }}
                   />
                 </PieChart>
               </ResponsiveContainer>
