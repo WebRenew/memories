@@ -4,9 +4,28 @@
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "prepare": "husky"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "sharp", "protobufjs", "unrs-resolver"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "protobufjs",
+      "unrs-resolver"
+    ]
+  },
+  "lint-staged": {
+    "packages/cli/src/**/*.ts": [
+      "bash -c 'cd packages/cli && npx tsc --noEmit'"
+    ],
+    "packages/web/src/**/*.{ts,tsx}": [
+      "bash -c 'cd packages/web && npx eslint --max-warnings 0'"
+    ]
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7"
   }
 }
