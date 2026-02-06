@@ -25,6 +25,7 @@ const tools = [
   { name: "Amp", logo: "/logos/amp.svg" },
   { name: "Trae", logo: "/logos/trae.svg" },
   { name: "Goose", logo: "/logos/goose.svg" },
+  { name: "Blackbox", logo: "/logos/blackbox.svg" },
 ];
 
 const marqueeTools = [...tools, ...tools, ...tools];
