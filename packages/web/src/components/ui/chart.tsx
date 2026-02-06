@@ -8,6 +8,10 @@ import { cn } from "@/lib/utils"
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const
 
+// --- Recharts v3 type aliases for readability ---
+type TooltipEntry = RechartsPrimitive.TooltipPayloadEntry<number, string>
+type LegendEntry = RechartsPrimitive.LegendPayload
+
 export type ChartConfig = {
   [k in string]: {
     label?: React.ReactNode
@@ -104,31 +108,60 @@ ${colorConfig
 
 const ChartTooltip = RechartsPrimitive.Tooltip
 
+/** Concrete formatter types using our TooltipEntry alias. */
+type ChartLabelFormatter = (
+  label: React.ReactNode,
+  payload: ReadonlyArray<TooltipEntry>
+) => React.ReactNode
+
+type ChartFormatter = (
+  value: number | undefined,
+  name: string | undefined,
+  item: TooltipEntry,
+  index: number,
+  payload: ReadonlyArray<TooltipEntry>
+) => [React.ReactNode, string] | React.ReactNode
+
+interface ChartTooltipContentProps {
+  className?: string
+  indicator?: "line" | "dot" | "dashed"
+  hideLabel?: boolean
+  hideIndicator?: boolean
+  labelFormatter?: ChartLabelFormatter
+  labelClassName?: string
+  formatter?: ChartFormatter
+  color?: string
+  nameKey?: string
+  labelKey?: string
+}
+
+/**
+ * Custom tooltip content component for recharts v3.
+ *
+ * Uses v3 context hooks (useIsTooltipActive, useActiveTooltipLabel,
+ * useActiveTooltipDataPoints) so we no longer need to fish `active`,
+ * `payload`, and `label` out of rest-props with unsafe casts.
+ */
 function ChartTooltipContent({
-  active,
-  payload,
   className,
   indicator = "dot",
   hideLabel = false,
   hideIndicator = false,
-  label,
   labelFormatter,
   labelClassName,
   formatter,
   color,
   nameKey,
   labelKey,
-}: React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
-  React.ComponentProps<"div"> & {
-    hideLabel?: boolean
-    hideIndicator?: boolean
-    indicator?: "line" | "dot" | "dashed"
-    nameKey?: string
-    labelKey?: string
-  }) {
+}: ChartTooltipContentProps) {
   const { config } = useChart()
 
-  const tooltipLabel = React.useMemo(() => {
+  // Recharts v3 context hooks — no type casts needed
+  const active = RechartsPrimitive.useIsTooltipActive()
+  const tooltipLabel = RechartsPrimitive.useActiveTooltipLabel()
+  const payload = RechartsPrimitive.useActiveTooltipDataPoints<TooltipEntry>()
+
+  const renderedLabel = React.useMemo(() => {
     if (hideLabel || !payload?.length) {
       return null
     }
@@ -137,8 +170,8 @@ function ChartTooltipContent({
     const key = `${labelKey || item?.dataKey || item?.name || "value"}`
     const itemConfig = getPayloadConfigFromPayload(config, item, key)
     const value =
-      !labelKey && typeof label === "string"
-        ? config[label as keyof typeof config]?.label || label
+      !labelKey && typeof tooltipLabel === "string"
+        ? config[tooltipLabel as keyof typeof config]?.label || tooltipLabel
         : itemConfig?.label
 
     if (labelFormatter) {
@@ -155,7 +188,7 @@ function ChartTooltipContent({
 
     return <div className={cn("font-medium", labelClassName)}>{value}</div>
   }, [
-    label,
+    tooltipLabel,
     labelFormatter,
     payload,
     hideLabel,
@@ -177,25 +210,28 @@ function ChartTooltipContent({
         className
       )}
     >
-      {!nestLabel ? tooltipLabel : null}
+      {!nestLabel ? renderedLabel : null}
       <div className="grid gap-1.5">
         {payload
           .filter((item) => item.type !== "none")
           .map((item, index) => {
             const key = `${nameKey || item.name || item.dataKey || "value"}`
             const itemConfig = getPayloadConfigFromPayload(config, item, key)
-            const indicatorColor = color || item.payload.fill || item.color
+            const indicatorColor =
+              color ||
+              (item.payload as Record<string, string> | undefined)?.fill ||
+              item.color
 
             return (
               <div
-                key={item.dataKey}
+                key={String(item.dataKey)}
                 className={cn(
                   "[&>svg]:text-muted-foreground flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5",
                   indicator === "dot" && "items-center"
                 )}
               >
                 {formatter && item?.value !== undefined && item.name ? (
-                  formatter(item.value, item.name, item, index, item.payload)
+                  formatter(item.value, item.name, item, index, payload)
                 ) : (
                   <>
                     {itemConfig?.icon ? (
@@ -229,7 +265,7 @@ function ChartTooltipContent({
                       )}
                     >
                       <div className="grid gap-1.5">
-                        {nestLabel ? tooltipLabel : null}
+                        {nestLabel ? renderedLabel : null}
                         <span className="text-muted-foreground">
                           {itemConfig?.label || item.name}
                         </span>
@@ -259,9 +295,10 @@ function ChartLegendContent({
   verticalAlign = "bottom",
   nameKey,
 }: React.ComponentProps<"div"> &
-  Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
+  Pick<RechartsPrimitive.LegendProps, "verticalAlign"> & {
     hideIcon?: boolean
     nameKey?: string
+    payload?: LegendEntry[]
   }) {
   const { config } = useChart()
 
