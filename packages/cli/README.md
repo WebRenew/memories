@@ -1,75 +1,64 @@
 # @memories.sh/cli
 
-A local-first memory layer for AI coding agents — persistent context for Claude, Cursor, Copilot, and more.
+The unified agent memory layer. Store rules once, generate configs for every AI tool.
 
-## Installation
+[![npm version](https://img.shields.io/npm/v/@memories.sh/cli?color=000&labelColor=1a1a2e)](https://www.npmjs.com/package/@memories.sh/cli)
+[![License: MIT](https://img.shields.io/npm/l/@memories.sh/cli?color=000&labelColor=1a1a2e)](https://github.com/WebRenew/memories/blob/main/LICENSE)
+
+## Install
 
 ```bash
-pnpm add -g @memories.sh/cli
+npm install -g @memories.sh/cli
 ```
+
+Requires Node.js >= 20.
 
 ## Quick Start
 
 ```bash
-# Initialize in your project (auto-configures MCP for detected tools)
+# Initialize in your project (auto-detects tools, configures MCP)
 memories init
 
-# Add your first rule
+# Add memories
 memories add --rule "Always use TypeScript strict mode"
+memories add --decision "Chose Supabase for auth — built-in RLS"
+memories add --rule "Use RESTful naming" --paths "src/api/**" --category api
 
-# Add a decision
-memories add --decision "Chose PostgreSQL over MySQL for JSONB support"
+# Generate configs for all detected tools
+memories generate
 
-# Generate config files for all your tools
-memories generate all
+# Start the MCP server
+memories serve
 ```
 
 ## Features
 
-- **One store, every tool** — Add a memory once, generate files for Cursor, Claude Code, Copilot, Windsurf, and more
-- **Local-first** — Your data stays on your machine in a SQLite database
-- **Semantic search** — AI-powered search finds related memories, not just keyword matches
-- **MCP server** — Built-in Model Context Protocol server for direct agent access
-- **Auto-setup** — Detects your tools and configures MCP automatically
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `memories init` | Initialize memories in the current project |
-| `memories add` | Add a new memory (rule, decision, fact, or note) |
-| `memories list` | List all memories |
-| `memories search <query>` | Search memories (add `--semantic` for AI search) |
-| `memories recall <query>` | Recall memories matching a query |
-| `memories generate <target>` | Generate config files for AI tools |
-| `memories serve` | Start the MCP server |
-| `memories sync` | Sync memories to the cloud (Pro) |
-| `memories export` | Export memories to JSON/YAML |
-| `memories import` | Import memories from JSON/YAML |
+- **One store, every tool** — generate native configs for Cursor, Claude Code, Copilot, Windsurf, Gemini, Cline, Roo, and more
+- **Path-scoped rules** — `--paths "src/api/**"` becomes `paths:` in Claude, `globs:` in Cursor
+- **Skills** — define reusable agent workflows following the [Agent Skills](https://agentskills.io) standard
+- **`.agents/` directory** — canonical, tool-agnostic config format
+- **Semantic search** — AI-powered embeddings find related memories
+- **MCP server** — 7 tools for direct AI agent access
+- **Local-first** — SQLite database, fully offline capable
+- **Cloud sync** — optional Turso-powered cross-machine sync
 
 ## Memory Types
 
-```bash
-# Rules - always-active coding standards
-memories add --rule "Use early returns to reduce nesting"
-
-# Decisions - architectural choices with reasoning
-memories add --decision "Chose Tailwind for utility-first approach"
-
-# Facts - project-specific knowledge
-memories add --fact "API rate limit is 100 req/min"
-
-# Notes - general-purpose (default)
-memories add "Legacy API deprecated in Q3 2026"
-```
+| Type | Flag | Description |
+|------|------|-------------|
+| `rule` | `--rule` | Always-active coding standards |
+| `decision` | `--decision` | Architectural choices with reasoning |
+| `fact` | `--fact` | Concrete project knowledge |
+| `note` | *(default)* | General-purpose notes |
+| `skill` | `--type skill` | Reusable agent workflows |
 
 ## Generation Targets
 
 | Target | Output Path |
 |--------|-------------|
-| `cursor` | `.cursor/rules/memories.mdc` |
-| `claude` | `CLAUDE.md` |
-| `agents` | `AGENTS.md` |
+| `agents` | `.agents/` (canonical directory) |
+| `cursor` | `.cursor/rules/*.mdc` |
+| `claude` | `CLAUDE.md` + `.claude/` |
 | `copilot` | `.github/copilot-instructions.md` |
 | `windsurf` | `.windsurf/rules/memories.md` |
 | `cline` | `.clinerules/memories.md` |
@@ -78,13 +67,7 @@ memories add "Legacy API deprecated in Q3 2026"
 
 ## MCP Server
 
-The CLI includes a built-in MCP server that exposes your memories to AI tools:
-
-```bash
-# Start the server
-memories serve
-
-# Or configure in your tool's MCP settings
+```json
 {
   "mcpServers": {
     "memories": {
@@ -95,10 +78,12 @@ memories serve
 }
 ```
 
+**Tools**: `get_context`, `add_memory`, `search_memories`, `get_rules`, `list_memories`, `edit_memory`, `forget_memory`
+
 ## Documentation
 
 Full documentation at [memories.sh/docs](https://memories.sh/docs)
 
 ## License
 
-MIT
+[MIT](https://github.com/WebRenew/memories/blob/main/LICENSE)

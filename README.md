@@ -1,39 +1,38 @@
-# memories.sh
+<p align="center">
+  <a href="https://memories.sh">
+    <img src="packages/web/public/readme.jpg" alt="memories.sh — The unified agent memory layer" />
+  </a>
+</p>
 
-**One Memory, Every AI Tool.**
+<p align="center">
+  <a href="https://www.npmjs.com/package/@memories.sh/cli"><img src="https://img.shields.io/npm/v/@memories.sh/cli?color=000&label=npm&labelColor=1a1a2e" alt="npm version"></a>
+  <a href="https://github.com/WebRenew/memories/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/WebRenew/memories/ci.yml?branch=main&color=000&label=ci&labelColor=1a1a2e" alt="CI"></a>
+  <a href="https://github.com/WebRenew/memories/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@memories.sh/cli?color=000&labelColor=1a1a2e" alt="License"></a>
+  <a href="https://memories.sh/docs"><img src="https://img.shields.io/badge/docs-memories.sh-000?labelColor=1a1a2e" alt="Documentation"></a>
+</p>
 
-A local-first memory layer for AI coding agents. Store your coding rules, decisions, and project knowledge once — then generate native config files for Claude Code, Cursor, GitHub Copilot, Windsurf, and more.
+<p align="center">
+  <b>Store rules once. Generate configs for every AI tool. Offline by default, sync when you need it.</b>
+</p>
+
+<p align="center">
+  <a href="https://memories.sh/docs/getting-started">Getting Started</a> ·
+  <a href="https://memories.sh/docs">Documentation</a> ·
+  <a href="https://memories.sh">Website</a> ·
+  <a href="https://www.npmjs.com/package/@memories.sh/cli">npm</a>
+</p>
+
+---
 
 ## Why
 
-Every AI coding tool has its own instruction format: `CLAUDE.md`, `.cursor/rules/`, `.github/copilot-instructions.md`, and so on. As you add more tools, you end up maintaining the same context in multiple places. **memories.sh** gives you a single source of truth — a local SQLite database of memories — and generates the right files for each tool automatically.
+Every AI coding tool ships its own instruction format — `CLAUDE.md`, `.cursor/rules/`, `.github/copilot-instructions.md`, and on and on. Add a second tool and you're copy-pasting. Add a third and things drift.
 
-## How It Works
+**memories.sh** gives you one local database of memories and a two-step pipeline that generates the richest possible config for each tool:
 
 ```
-memories add "Always use early returns to reduce nesting" --type rule --scope global
-memories add "Use Supabase for auth, Stripe for billing" --type decision --scope project
-memories generate                 # writes CLAUDE.md, .cursor/rules/, etc.
-memories serve                    # starts an MCP server for direct agent access
+Memory Store → .agents/ (canonical) → Claude, Cursor, Copilot, Windsurf, …
 ```
-
-1. **Add** memories — rules, decisions, facts, notes — scoped globally or per-project
-2. **Generate** native config files for any supported AI tool
-3. **Serve** memories via MCP so agents can query them in real time
-4. **Sync** across machines with optional cloud backup (Turso)
-
-## Features
-
-- **Local-first** — SQLite database at `~/.config/memories/local.db`, works offline
-- **Full-text search** — FTS5-powered search across all memories
-- **Multi-tool generation** — one command outputs configs for Claude, Cursor, Copilot, Windsurf, etc.
-- **MCP server** — Model Context Protocol server with 7 tools and 3 resources for direct agent integration
-- **Cloud sync** — optional sync via Turso embedded replicas (local speed, cloud backup)
-- **Project scoping** — memories can be global or tied to a specific project (detected via git remote)
-- **Import/Export** — YAML-based import and export for sharing and backup
-- **Git hooks** — auto-generate config files on commit
-- **Tagging** — organize memories with tags for flexible retrieval
-- **Diff** — compare generated output against existing config files
 
 ## Install
 
@@ -41,98 +40,97 @@ memories serve                    # starts an MCP server for direct agent access
 npm install -g @memories.sh/cli
 ```
 
-Requires Node.js >= 20.
+Requires Node.js >= 20. Also available via `pnpm add -g @memories.sh/cli`.
 
 ## Quick Start
 
 ```bash
-# Initialize memories in your project
+# Initialize in your project (auto-detects tools, configures MCP)
 memories init
 
-# Add some memories
-memories add "Use pnpm as the package manager" --type rule
-memories add "Prefer server components, minimize client bundles" --type rule --tag react,nextjs
-memories add "Chose Supabase over Firebase for better Postgres access" --type decision
+# Add memories
+memories add --rule "Always use TypeScript strict mode"
+memories add --decision "Chose Supabase for auth — built-in RLS, generous free tier"
+memories add --fact "API rate limit is 100 req/min per user"
 
-# Search your memories
-memories search "package manager"
+# Path-scoped rules — only apply to matching files
+memories add --rule "Use RESTful naming" --paths "src/api/**" --category api
 
-# Generate AI tool configs
+# Generate configs for all detected tools
 memories generate
-
-# Start the MCP server
-memories serve
 ```
 
-## CLI Commands
+## Features
 
-### Core
+- **One store, every tool** — add a memory once, generate native configs for 8+ tools
+- **Local-first** — SQLite at `~/.config/memories/local.db`, works fully offline
+- **Path-scoped rules** — `--paths "src/api/**"` becomes `paths:` in Claude, `globs:` in Cursor
+- **Skills** — define reusable agent workflows following the [Agent Skills](https://agentskills.io) standard
+- **`.agents/` canonical directory** — tool-agnostic intermediate format, checked into git
+- **Semantic search** — AI-powered embeddings find related memories, not just keyword matches
+- **MCP server** — built-in Model Context Protocol server with 7 tools for direct agent access
+- **Auto-setup** — `memories init` detects installed tools and configures MCP automatically
+- **Cloud sync** — optional sync via Turso embedded replicas (local speed, cloud backup)
+- **Import/Export** — ingest existing rule files, export to YAML for sharing
 
-| Command | Description |
-|---------|-------------|
-| `memories init` | Initialize memories in the current project |
-| `memories add <content>` | Add a new memory |
-| `memories recall` | Get context-aware memories for the current project |
-| `memories prompt` | Generate a system prompt from your memories |
+## Supported Tools
 
-### Query
+| Tool | Target | Output |
+|------|--------|--------|
+| **Cursor** | `cursor` | `.cursor/rules/*.mdc` |
+| **Claude Code** | `claude` | `CLAUDE.md` + `.claude/rules/` + `.claude/skills/` |
+| **GitHub Copilot** | `copilot` | `.github/copilot-instructions.md` |
+| **Windsurf** | `windsurf` | `.windsurf/rules/memories.md` |
+| **Gemini** | `gemini` | `GEMINI.md` |
+| **Cline** | `cline` | `.clinerules/memories.md` |
+| **Roo** | `roo` | `.roo/rules/memories.md` |
+| **Amp / Codex / Goose / Kilo / OpenCode** | `agents` | `AGENTS.md` |
 
-| Command | Description |
-|---------|-------------|
-| `memories search <query>` | Full-text search across memories |
-| `memories list` | List memories with optional filters |
+## Memory Types
 
-### Management
+```bash
+memories add --rule "Use early returns to reduce nesting"          # Always-active standards
+memories add --decision "Chose Tailwind for utility-first approach" # Architectural choices
+memories add --fact "Deploy target is Vercel with Edge Functions"   # Concrete project knowledge
+memories add "Legacy API deprecated Q3 2026"                       # General notes (default)
+memories add --type skill "..." --category deploy                  # Reusable agent workflows
+```
 
-| Command | Description |
-|---------|-------------|
-| `memories edit <id>` | Edit an existing memory |
-| `memories forget <id>` | Soft-delete a memory |
-| `memories tag <id> <tags>` | Add or update tags on a memory |
-| `memories generate` | Generate native config files for AI tools |
-| `memories export` | Export memories to YAML |
-| `memories import <file>` | Import memories from YAML |
-| `memories diff` | Compare generated configs against existing files |
-| `memories ingest` | Import existing rule files as memories |
-| `memories stats` | Show memory statistics |
-| `memories doctor` | Check for common issues |
-| `memories config` | View or set configuration |
-| `memories hook` | Manage git hooks for auto-generation |
-| `memories sync` | Sync local database with cloud |
-| `memories serve` | Start the MCP server |
+## Generation Pipeline
 
-### Auth
+```bash
+# Step 1: Write canonical .agents/ directory from memory store
+memories generate agents
 
-| Command | Description |
-|---------|-------------|
-| `memories login` | Authenticate with memories.sh cloud |
-| `memories logout` | Remove stored credentials |
+# Step 2: Adapt to specific tools (or let it auto-detect)
+memories generate cursor    # .agents/ → .cursor/rules/
+memories generate claude    # .agents/ → CLAUDE.md + .claude/
+memories generate all       # detect tools, generate everything
+```
+
+The `.agents/` directory is the canonical, tool-agnostic intermediate:
+
+```
+.agents/
+├── instructions.md           # Global rules, decisions, facts
+├── rules/                    # Path-scoped rules with YAML frontmatter
+│   ├── api.md
+│   └── testing.md
+├── skills/                   # Agent Skills standard (SKILL.md)
+│   └── deploy/
+│       └── SKILL.md
+└── settings.json             # Permissions, hooks, env vars
+```
 
 ## MCP Server
 
-The built-in MCP server lets AI agents interact with your memories directly. Start it with `memories serve` or configure it in your tool's MCP settings.
+The CLI includes a built-in MCP server for direct agent access:
 
-### Tools
+```bash
+memories serve
+```
 
-| Tool | Description |
-|------|-------------|
-| `get_context` | Get relevant memories for the current context |
-| `add_memory` | Store a new memory |
-| `search_memories` | Full-text search |
-| `get_rules` | Get all rule-type memories |
-| `list_memories` | List memories with filters |
-| `edit_memory` | Update an existing memory |
-| `forget_memory` | Soft-delete a memory |
-
-### Resources
-
-| URI | Description |
-|-----|-------------|
-| `memories://rules` | All rule-type memories |
-| `memories://recent` | Recently added memories |
-| `memories://project/{id}` | Memories for a specific project |
-
-### Configuration Example (Claude Code)
+Or configure in your tool's MCP settings:
 
 ```json
 {
@@ -145,70 +143,46 @@ The built-in MCP server lets AI agents interact with your memories directly. Sta
 }
 ```
 
-## Memory Types
+**7 tools**: `get_context`, `add_memory`, `search_memories`, `get_rules`, `list_memories`, `edit_memory`, `forget_memory`
 
-| Type | Use Case |
-|------|----------|
-| `rule` | Coding standards, style preferences, tool configs |
-| `decision` | Architectural decisions and their rationale |
-| `fact` | Project facts — stack choices, API keys locations, team conventions |
-| `note` | General notes, TODOs, context for future sessions |
+**3 resources**: `memories://rules`, `memories://recent`, `memories://project/{id}`
 
-## Scopes
+## CLI Reference
 
-- **`global`** — applies to all projects (e.g., "always use TypeScript strict mode")
-- **`project`** — applies only to the current project, identified by git remote URL
+| Command | Description |
+|---------|-------------|
+| `memories init` | Initialize in current project, auto-detect tools |
+| `memories add <content>` | Add a memory with type, tags, paths, category |
+| `memories edit [id]` | Edit a memory (interactive picker or by ID) |
+| `memories forget <id>` | Soft-delete a memory |
+| `memories search <query>` | Full-text search (`--semantic` for embeddings) |
+| `memories list` | List memories with optional filters |
+| `memories recall` | Get context-aware memories for the current project |
+| `memories generate [target]` | Generate native config files |
+| `memories ingest [source]` | Import from existing rule files |
+| `memories diff` | Compare generated output against existing files |
+| `memories serve` | Start the MCP server |
+| `memories sync` | Sync local database with cloud |
+| `memories hook` | Manage git hooks for auto-generation |
+| `memories stats` | Show memory statistics |
+| `memories doctor` | Check for common issues |
 
-## Cloud Sync
+Full docs at [memories.sh/docs/cli](https://memories.sh/docs/cli).
 
-memories.sh uses [Turso](https://turso.tech) embedded replicas for cloud sync. Your database stays local for speed, with optional remote backup for cross-machine access.
+## Ingesting Existing Rules
+
+Already have rules scattered across tools? Import them:
 
 ```bash
-# Log in to enable cloud features
-memories login
-
-# Sync your local database
-memories sync
+memories ingest cursor           # .cursorrules, .cursor/rules/
+memories ingest claude           # CLAUDE.md
+memories ingest claude-rules     # .claude/rules/*.md (extracts paths)
+memories ingest cursor-rules     # .cursor/rules/*.mdc (extracts globs)
+memories ingest skills           # .agents/skills/, .claude/skills/
+memories ingest --all            # scan everything
 ```
 
-## Web Dashboard
-
-The web dashboard at [memories.sh](https://memories.sh) provides:
-
-- Browse and search your memories
-- Usage statistics and charts
-- Account settings and plan management
-- CLI authentication approval
-
-Sign in with GitHub or Google.
-
-## Project Structure
-
-```
-memories/
-├── packages/
-│   ├── cli/                 # @memories.sh/cli — the core CLI tool
-│   │   ├── src/
-│   │   │   ├── commands/    # 20 CLI commands
-│   │   │   ├── lib/         # Core libraries (db, memory, auth, git, turso, config)
-│   │   │   └── mcp/         # MCP server implementation
-│   │   └── package.json
-│   └── web/                 # Next.js marketing site + dashboard
-│       ├── src/
-│       │   ├── app/         # App Router pages and API routes
-│       │   ├── components/  # UI components (shadcn/ui)
-│       │   └── lib/         # Auth, Stripe, Supabase, Turso clients
-│       └── package.json
-├── supabase/                # Database migrations
-├── pnpm-workspace.yaml
-└── package.json
-```
-
-## Tech Stack
-
-**CLI**: Node.js, Commander.js, libSQL/SQLite, MCP SDK, Zod
-
-**Web**: Next.js 15, Tailwind CSS v4, shadcn/ui, Supabase Auth, Turso, Stripe, Framer Motion
+Directory-based ingestion preserves path scoping, categories, and skill metadata.
 
 ## Development
 
@@ -219,57 +193,71 @@ pnpm install
 # Build all packages
 pnpm build
 
-# Run CLI in watch mode
-cd packages/cli && pnpm dev
-
-# Run web dev server
-cd packages/web && pnpm dev
-
 # Type check
 pnpm typecheck
 
+# Lint
+pnpm lint
+
 # Run tests
 pnpm test
+
+# CLI watch mode
+cd packages/cli && pnpm dev
+
+# Web dev server
+cd packages/web && pnpm dev
 ```
 
-## Environment Variables
+### Project Structure
 
-Create a `.env` file at the project root:
-
-```env
-# Turso (cloud sync)
-TURSO_TOKEN=
-TURSO_PLATFORM_API_TOKEN=
-
-# Supabase (auth + user management)
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-
-# Stripe (billing)
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-STRIPE_PRO_PRICE_ID=
-STRIPE_PRO_PRICE_ID_ANNUAL=
-
-# npm (publishing)
-NODE_TOKEN=
+```
+memories/
+├── packages/
+│   ├── cli/                 # @memories.sh/cli — CLI + MCP server
+│   │   ├── src/
+│   │   │   ├── commands/    # CLI commands
+│   │   │   ├── lib/         # Core: db, memory, markers, agents-generator, tool-adapters
+│   │   │   └── mcp/         # MCP server implementation
+│   │   └── package.json
+│   └── web/                 # Next.js marketing site + dashboard
+│       ├── src/
+│       │   ├── app/         # App Router pages and API routes
+│       │   ├── components/  # UI components (shadcn/ui)
+│       │   └── lib/         # Auth, Stripe, Supabase, Turso clients
+│       └── content/docs/    # Documentation (fumadocs)
+├── .github/                 # CI, Dependabot
+├── pnpm-workspace.yaml
+└── package.json
 ```
 
-## Pricing
+### Tech Stack
 
-| Plan | Price | Includes |
-|------|-------|----------|
-| **Free** | $0/month | Local-only, unlimited memories, all CLI features |
-| **Pro** | $15/month | Cloud sync, web dashboard, cross-machine access |
-| **Enterprise** | Contact us | Team features, priority support |
+**CLI**: TypeScript, Commander.js, libSQL/SQLite, MCP SDK, Zod, yaml
+
+**Web**: Next.js 16, React 19, Tailwind CSS v4, shadcn/ui, Supabase, Turso, Stripe, Framer Motion, fumadocs
+
+## Contributing
+
+Contributions are welcome. Please open an issue first to discuss what you'd like to change.
+
+1. Fork the repo
+2. Create your branch (`git checkout -b feat/my-feature`)
+3. Commit your changes (`git commit -m 'feat: add my feature'`)
+4. Push (`git push origin feat/my-feature`)
+5. Open a Pull Request
+
+CI runs lint, typecheck, tests, and build on every PR. All checks must pass before merging.
 
 ## License
 
-MIT
+[MIT](LICENSE)
 
-## Links
+---
 
-- [Website](https://memories.sh)
-- [GitHub](https://github.com/WebRenew/memories)
-- [npm](https://www.npmjs.com/package/@memories.sh/cli)
+<p align="center">
+  <a href="https://memories.sh">memories.sh</a> ·
+  <a href="https://memories.sh/docs">Docs</a> ·
+  <a href="https://www.npmjs.com/package/@memories.sh/cli">npm</a> ·
+  <a href="https://github.com/WebRenew/memories">GitHub</a>
+</p>
