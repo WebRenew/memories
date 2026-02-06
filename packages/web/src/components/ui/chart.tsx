@@ -8,6 +8,10 @@ import { cn } from "@/lib/utils"
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const
 
+// --- Recharts v3 type aliases for readability ---
+type TooltipEntry = RechartsPrimitive.TooltipPayloadEntry<number, string>
+type LegendEntry = RechartsPrimitive.LegendPayload
+
 export type ChartConfig = {
   [k in string]: {
     label?: React.ReactNode
@@ -104,8 +108,41 @@ ${colorConfig
 
 const ChartTooltip = RechartsPrimitive.Tooltip
 
+/** Concrete formatter types using our TooltipEntry alias. */
+type ChartLabelFormatter = (
+  label: React.ReactNode,
+  payload: ReadonlyArray<TooltipEntry>
+) => React.ReactNode
+
+type ChartFormatter = (
+  value: number | undefined,
+  name: string | undefined,
+  item: TooltipEntry,
+  index: number,
+  payload: ReadonlyArray<TooltipEntry>
+) => [React.ReactNode, string] | React.ReactNode
+
+interface ChartTooltipContentProps {
+  className?: string
+  indicator?: "line" | "dot" | "dashed"
+  hideLabel?: boolean
+  hideIndicator?: boolean
+  labelFormatter?: ChartLabelFormatter
+  labelClassName?: string
+  formatter?: ChartFormatter
+  color?: string
+  nameKey?: string
+  labelKey?: string
+}
+
+/**
+ * Custom tooltip content component for recharts v3.
+ *
+ * Uses v3 context hooks (useIsTooltipActive, useActiveTooltipLabel,
+ * useActiveTooltipDataPoints) so we no longer need to fish `active`,
+ * `payload`, and `label` out of rest-props with unsafe casts.
+ */
 function ChartTooltipContent({
-  active,
   className,
   indicator = "dot",
   hideLabel = false,
@@ -116,42 +153,31 @@ function ChartTooltipContent({
   color,
   nameKey,
   labelKey,
-  ...rest
-}: React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
-  React.ComponentProps<"div"> & {
-    hideLabel?: boolean
-    hideIndicator?: boolean
-    indicator?: "line" | "dot" | "dashed"
-    nameKey?: string
-    labelKey?: string
-  }) {
+}: ChartTooltipContentProps) {
   const { config } = useChart()
 
-  // In recharts v3, payload and label come through rest props
-  const resolvedPayload = (rest as Record<string, unknown>).payload as
-    | RechartsPrimitive.TooltipPayloadEntry<number, string>[]
-    | undefined
-  const resolvedLabel = (rest as Record<string, unknown>).label as
-    | string
-    | undefined
+  // Recharts v3 context hooks — no type casts needed
+  const active = RechartsPrimitive.useIsTooltipActive()
+  const tooltipLabel = RechartsPrimitive.useActiveTooltipLabel()
+  const payload = RechartsPrimitive.useActiveTooltipDataPoints<TooltipEntry>()
 
-  const tooltipLabel = React.useMemo(() => {
-    if (hideLabel || !resolvedPayload?.length) {
+  const renderedLabel = React.useMemo(() => {
+    if (hideLabel || !payload?.length) {
       return null
     }
 
-    const [item] = resolvedPayload
+    const [item] = payload
     const key = `${labelKey || item?.dataKey || item?.name || "value"}`
     const itemConfig = getPayloadConfigFromPayload(config, item, key)
     const value =
-      !labelKey && typeof resolvedLabel === "string"
-        ? config[resolvedLabel as keyof typeof config]?.label || resolvedLabel
+      !labelKey && typeof tooltipLabel === "string"
+        ? config[tooltipLabel as keyof typeof config]?.label || tooltipLabel
         : itemConfig?.label
 
     if (labelFormatter) {
       return (
         <div className={cn("font-medium", labelClassName)}>
-          {(labelFormatter as (label: React.ReactNode, payload: ReadonlyArray<RechartsPrimitive.TooltipPayloadEntry<number, string>>) => React.ReactNode)(value, resolvedPayload ?? [])}
+          {labelFormatter(value, payload)}
         </div>
       )
     }
@@ -162,20 +188,20 @@ function ChartTooltipContent({
 
     return <div className={cn("font-medium", labelClassName)}>{value}</div>
   }, [
-    resolvedLabel,
+    tooltipLabel,
     labelFormatter,
-    resolvedPayload,
+    payload,
     hideLabel,
     labelClassName,
     config,
     labelKey,
   ])
 
-  if (!active || !resolvedPayload?.length) {
+  if (!active || !payload?.length) {
     return null
   }
 
-  const nestLabel = resolvedPayload.length === 1 && indicator !== "dot"
+  const nestLabel = payload.length === 1 && indicator !== "dot"
 
   return (
     <div
@@ -184,14 +210,17 @@ function ChartTooltipContent({
         className
       )}
     >
-      {!nestLabel ? tooltipLabel : null}
+      {!nestLabel ? renderedLabel : null}
       <div className="grid gap-1.5">
-        {resolvedPayload
-          .filter((item: RechartsPrimitive.TooltipPayloadEntry<number, string>) => item.type !== "none")
-          .map((item: RechartsPrimitive.TooltipPayloadEntry<number, string>, index: number) => {
+        {payload
+          .filter((item) => item.type !== "none")
+          .map((item, index) => {
             const key = `${nameKey || item.name || item.dataKey || "value"}`
             const itemConfig = getPayloadConfigFromPayload(config, item, key)
-            const indicatorColor = color || item.payload.fill || item.color
+            const indicatorColor =
+              color ||
+              (item.payload as Record<string, string> | undefined)?.fill ||
+              item.color
 
             return (
               <div
@@ -202,13 +231,7 @@ function ChartTooltipContent({
                 )}
               >
                 {formatter && item?.value !== undefined && item.name ? (
-                  (formatter as (value: number, name: string, item: RechartsPrimitive.TooltipPayloadEntry<number, string>, index: number, payload: ReadonlyArray<RechartsPrimitive.TooltipPayloadEntry<number, string>>) => React.ReactNode)(
-                    item.value,
-                    item.name,
-                    item,
-                    index,
-                    resolvedPayload as ReadonlyArray<RechartsPrimitive.TooltipPayloadEntry<number, string>>
-                  )
+                  formatter(item.value, item.name, item, index, payload)
                 ) : (
                   <>
                     {itemConfig?.icon ? (
@@ -242,7 +265,7 @@ function ChartTooltipContent({
                       )}
                     >
                       <div className="grid gap-1.5">
-                        {nestLabel ? tooltipLabel : null}
+                        {nestLabel ? renderedLabel : null}
                         <span className="text-muted-foreground">
                           {itemConfig?.label || item.name}
                         </span>
@@ -275,13 +298,7 @@ function ChartLegendContent({
   Pick<RechartsPrimitive.LegendProps, "verticalAlign"> & {
     hideIcon?: boolean
     nameKey?: string
-    payload?: Array<{
-      value: string
-      type?: string
-      id?: string
-      color?: string
-      dataKey?: string
-    }>
+    payload?: LegendEntry[]
   }) {
   const { config } = useChart()
 
@@ -298,8 +315,8 @@ function ChartLegendContent({
       )}
     >
       {payload
-        .filter((item: { type?: string }) => item.type !== "none")
-        .map((item: { value: string; type?: string; color?: string; dataKey?: string }) => {
+        .filter((item) => item.type !== "none")
+        .map((item) => {
           const key = `${nameKey || item.dataKey || "value"}`
           const itemConfig = getPayloadConfigFromPayload(config, item, key)
 
