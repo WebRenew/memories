@@ -1,6 +1,6 @@
 # RFC-001: Memory Model Refactor for Agentic Harness Portability
 
-> **Status**: Draft
+> **Status**: Implemented
 > **Date**: 2026-02-06
 > **Goal**: Make `.agents/` the canonical, tool-agnostic configuration directory. Memories generate into `.agents/`, then adapt to detected editors/CLIs via linking or format translation.
 
@@ -263,21 +263,21 @@ Rules returned with their `paths` and `category`, so agents know which rules app
 
 ## Implementation Order
 
-- [ ] **1a**: Schema migration — add `paths`, `category`, `metadata` columns to `memories` table
-- [ ] **1b**: Update `Memory` interface + `addMemory()` / `updateMemory()` to handle new fields
-- [ ] **1c**: Add `skill` to `MemoryType` union
-- [ ] **2a**: Add `--paths` and `--category` flags to `memories add` and `memories edit` CLI
-- [ ] **2b**: Update MCP `add_memory` tool with new optional parameters
-- [ ] **3a**: `.agents/` generator — write `instructions.md` from rules/decisions/facts
-- [ ] **3b**: `.agents/` generator — write `rules/*.md` from path-scoped memories
-- [ ] **3c**: `.agents/` generator — write `skills/**/SKILL.md` from skill-type memories
-- [ ] **3d**: `.agents/` generator — write `settings.json` (future: from permission-type memories)
-- [ ] **4a**: Claude Code adapter — translate `.agents/` → `.claude/` + `CLAUDE.md`
-- [ ] **4b**: Cursor adapter — translate `.agents/` → `.cursor/` (paths→globs, md→mdc)
-- [ ] **4c**: Flat-file adapters — merge `.agents/` into single file per target
-- [ ] **5a**: Enhanced ingestion — parse `.claude/rules/*.md` with paths frontmatter
-- [ ] **5b**: Enhanced ingestion — parse `.cursor/rules/*.mdc` with globs frontmatter
-- [ ] **5c**: Enhanced ingestion — parse SKILL.md files into skill-type memories
+- [x] **1a**: Schema migration — add `paths`, `category`, `metadata` columns to `memories` table
+- [x] **1b**: Update `Memory` interface + `addMemory()` / `updateMemory()` to handle new fields
+- [x] **1c**: Add `skill` to `MemoryType` union
+- [x] **2a**: Add `--paths` and `--category` flags to `memories add` and `memories edit` CLI
+- [x] **2b**: Update MCP `add_memory` tool with new optional parameters
+- [x] **3a**: `.agents/` generator — write `instructions.md` from rules/decisions/facts
+- [x] **3b**: `.agents/` generator — write `rules/*.md` from path-scoped memories
+- [x] **3c**: `.agents/` generator — write `skills/**/SKILL.md` from skill-type memories
+- [x] **3d**: `.agents/` generator — write `settings.json` (future: from permission-type memories)
+- [x] **4a**: Claude Code adapter — translate `.agents/` → `.claude/` + `CLAUDE.md`
+- [x] **4b**: Cursor adapter — translate `.agents/` → `.cursor/` (paths→globs, md→mdc)
+- [x] **4c**: Flat-file adapters — merge `.agents/` into single file per target
+- [x] **5a**: Enhanced ingestion — parse `.claude/rules/*.md` with paths frontmatter
+- [x] **5b**: Enhanced ingestion — parse `.cursor/rules/*.mdc` with globs frontmatter
+- [x] **5c**: Enhanced ingestion — parse SKILL.md files into skill-type memories
 
 ---
 
