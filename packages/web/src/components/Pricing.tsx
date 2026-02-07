@@ -73,7 +73,7 @@ export function Pricing({ user }: { user?: User | null }) {
             viewport={{ once: true }}
             className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 border border-primary/30 text-[11px] uppercase tracking-[0.25em] font-bold mb-6 text-primary rounded-md"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            <span className="w-1.5 h-1.5 bg-primary animate-pulse" />
             Pricing
           </motion.div>
           <h2 className="font-mono font-normal text-2xl sm:text-4xl mb-6 text-foreground">
@@ -106,7 +106,7 @@ export function Pricing({ user }: { user?: User | null }) {
               }`}
             >
               Yearly
-              <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded ${isYearly ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/20 text-primary"}`}>
+              <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-primary/20 text-primary rounded">
                 2 Months Free
               </span>
             </button>

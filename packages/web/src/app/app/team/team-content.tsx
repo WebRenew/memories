@@ -88,12 +88,18 @@ export function TeamContent({
       if (membersRes.ok) {
         const data = await membersRes.json()
         setMembers(data.members || [])
+      } else {
+        console.error("Failed to fetch members:", membersRes.status, await membersRes.text())
       }
       
       if (invitesRes.ok) {
         const data = await invitesRes.json()
         setInvites(data.invites || [])
+      } else {
+        console.error("Failed to fetch invites:", invitesRes.status, await invitesRes.text())
       }
+    } catch (error) {
+      console.error("Error fetching org data:", error)
     } finally {
       setLoading(false)
     }
@@ -124,6 +130,10 @@ export function TeamContent({
       if (res.ok) {
         setShowCreateOrg(false)
         setNewOrgName("")
+        // Select the newly created org so it's shown immediately
+        if (data.organization?.id) {
+          setSelectedOrgId(data.organization.id)
+        }
         router.refresh()
       } else {
         console.error("Failed to create organization:", data)
