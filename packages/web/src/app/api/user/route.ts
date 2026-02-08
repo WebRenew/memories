@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 
 // Valid embedding models (must match CLI)
 const VALID_EMBEDDING_MODELS = [
@@ -17,6 +18,9 @@ export async function PATCH(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  if (rateLimited) return rateLimited
 
   const body = await request.json().catch(() => ({}))
 

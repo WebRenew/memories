@@ -2,6 +2,7 @@ import { authenticateRequest } from "@/lib/auth"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createDatabase, createDatabaseToken, initSchema } from "@/lib/turso"
 import { NextResponse } from "next/server"
+import { checkRateLimit, strictRateLimit } from "@/lib/rate-limit"
 
 const TURSO_ORG = "webrenew"
 
@@ -11,6 +12,9 @@ export async function POST(request: Request) {
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(strictRateLimit, auth.userId)
+  if (rateLimited) return rateLimited
 
   const admin = createAdminClient()
 

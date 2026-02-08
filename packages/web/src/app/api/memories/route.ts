@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createTurso } from "@libsql/client"
 import { NextRequest, NextResponse } from "next/server"
+import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 
 export async function GET() {
   const supabase = await createClient()
@@ -9,6 +10,9 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  if (rateLimited) return rateLimited
 
   const { data: profile } = await supabase
     .from("users")
@@ -43,6 +47,9 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  if (rateLimited) return rateLimited
 
   const { content, type = "rule", scope = "global", tags } = await request.json()
   if (!content) {
@@ -97,6 +104,9 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  if (rateLimited) return rateLimited
+
   const { id, content, tags } = await request.json()
   if (!id || !content) {
     return NextResponse.json({ error: "ID and content required" }, { status: 400 })
@@ -136,6 +146,9 @@ export async function DELETE(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  if (rateLimited) return rateLimited
 
   const { id } = await request.json()
   if (!id) {

@@ -1,0 +1,87 @@
+import { Ratelimit } from "@upstash/ratelimit"
+import { Redis } from "@upstash/redis"
+import { NextResponse } from "next/server"
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+})
+
+/**
+ * Standard rate limiter for authenticated API routes.
+ * 60 requests per 60 seconds per user.
+ */
+export const apiRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(60, "60 s"),
+  prefix: "rl:api",
+})
+
+/**
+ * Strict rate limiter for expensive operations (db provisioning, account deletion).
+ * 5 requests per 60 seconds per user.
+ */
+export const strictRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, "60 s"),
+  prefix: "rl:strict",
+})
+
+/**
+ * Rate limiter for public/unauthenticated endpoints (CLI auth polling).
+ * 30 requests per 60 seconds per IP.
+ */
+export const publicRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(30, "60 s"),
+  prefix: "rl:public",
+})
+
+/**
+ * Rate limiter for MCP endpoint (higher limit, long-lived sessions).
+ * 120 requests per 60 seconds per API key.
+ */
+export const mcpRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(120, "60 s"),
+  prefix: "rl:mcp",
+})
+
+/**
+ * Check rate limit and return 429 response if exceeded.
+ * Returns null if the request is allowed.
+ */
+export async function checkRateLimit(
+  limiter: Ratelimit,
+  identifier: string
+): Promise<NextResponse | null> {
+  const { success, limit, remaining, reset } = await limiter.limit(identifier)
+
+  if (!success) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      {
+        status: 429,
+        headers: {
+          "X-RateLimit-Limit": limit.toString(),
+          "X-RateLimit-Remaining": remaining.toString(),
+          "X-RateLimit-Reset": reset.toString(),
+          "Retry-After": Math.ceil((reset - Date.now()) / 1000).toString(),
+        },
+      }
+    )
+  }
+
+  return null
+}
+
+/**
+ * Extract client IP from request headers for public endpoint rate limiting.
+ */
+export function getClientIp(request: Request): string {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    "unknown"
+  )
+}

@@ -2,6 +2,7 @@ import { authenticateRequest } from "@/lib/auth"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient as createTurso } from "@libsql/client"
 import { NextResponse } from "next/server"
+import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 
 const FREE_LIMIT = 5000
 
@@ -11,6 +12,9 @@ export async function GET(request: Request) {
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, auth.userId)
+  if (rateLimited) return rateLimited
 
   const admin = createAdminClient()
   const { data: profile } = await admin

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { sendTeamInviteEmail } from "@/lib/resend"
 import { NextResponse } from "next/server"
+import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 
 // GET /api/orgs/[orgId]/invites - List pending invites
 export async function GET(
@@ -14,6 +15,9 @@ export async function GET(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  if (rateLimited) return rateLimited
 
   // Check user is admin or owner
   const { data: membership } = await supabase
@@ -61,6 +65,9 @@ export async function POST(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  if (rateLimited) return rateLimited
 
   // Check user is admin or owner
   const { data: membership } = await supabase
@@ -200,6 +207,9 @@ export async function DELETE(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  if (rateLimited) return rateLimited
 
   // Check user is admin or owner
   const { data: membership } = await supabase

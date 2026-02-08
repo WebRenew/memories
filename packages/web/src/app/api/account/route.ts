@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { getStripe } from "@/lib/stripe"
 import { NextResponse } from "next/server"
+import { checkRateLimit, strictRateLimit } from "@/lib/rate-limit"
 
 export async function DELETE() {
   const supabase = await createClient()
@@ -10,6 +11,9 @@ export async function DELETE() {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(strictRateLimit, user.id)
+  if (rateLimited) return rateLimited
 
   try {
     // Get user profile

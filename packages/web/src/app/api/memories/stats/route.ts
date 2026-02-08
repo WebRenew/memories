@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createTurso } from "@libsql/client"
 import { NextResponse } from "next/server"
+import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 
 export async function GET() {
   const supabase = await createClient()
@@ -9,6 +10,9 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  if (rateLimited) return rateLimited
 
   const { data: profile } = await supabase
     .from("users")

@@ -2,8 +2,12 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 import { randomBytes } from "node:crypto"
+import { checkRateLimit, getClientIp, publicRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request: Request) {
+  const rateLimited = await checkRateLimit(publicRateLimit, getClientIp(request))
+  if (rateLimited) return rateLimited
+
   const body = await request.json().catch(() => ({}))
 
   // Validate code format on both actions

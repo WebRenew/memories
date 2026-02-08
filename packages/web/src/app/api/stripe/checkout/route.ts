@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getStripe } from "@/lib/stripe"
 import { NextResponse } from "next/server"
+import { checkRateLimit, strictRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -9,6 +10,9 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(strictRateLimit, user.id)
+  if (rateLimited) return rateLimited
 
   const body = await request.json().catch(() => ({}))
   const billing = body.billing === "monthly" ? "monthly" : "annual"

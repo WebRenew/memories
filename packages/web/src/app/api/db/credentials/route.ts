@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { NextRequest, NextResponse } from "next/server"
+import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 
 export async function GET(request: NextRequest) {
   // Get API key from Authorization header
@@ -12,6 +13,9 @@ export async function GET(request: NextRequest) {
   if (!apiKey.startsWith("mcp_")) {
     return NextResponse.json({ error: "Invalid API key format" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, apiKey)
+  if (rateLimited) return rateLimited
 
   // Look up user by API key
   const admin = createAdminClient()

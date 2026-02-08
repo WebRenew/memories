@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient as createTurso } from "@libsql/client"
 import { NextRequest, NextResponse } from "next/server"
+import { checkRateLimit, mcpRateLimit } from "@/lib/rate-limit"
 
 // Store active SSE connections
 const connections = new Map<string, {
@@ -364,6 +365,9 @@ export async function GET(request: NextRequest) {
     })
   }
 
+  const rateLimited = await checkRateLimit(mcpRateLimit, apiKey)
+  if (rateLimited) return rateLimited
+
   const auth = await authenticateAndGetTurso(apiKey)
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status })
@@ -406,10 +410,14 @@ export async function POST(request: NextRequest) {
     turso = conn.turso
     controller = conn.controller
   } else {
+    // Stateless mode
     const apiKey = getApiKey(request)
     if (!apiKey) {
       return NextResponse.json({ error: "Missing API key" }, { status: 401 })
     }
+
+    const rateLimited = await checkRateLimit(mcpRateLimit, apiKey)
+    if (rateLimited) return rateLimited
 
     const auth = await authenticateAndGetTurso(apiKey)
     if ("error" in auth) {

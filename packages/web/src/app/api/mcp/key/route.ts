@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 import { randomBytes } from "node:crypto"
+import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 
 // GET - Get current API key
 export async function GET() {
@@ -11,6 +12,9 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  if (rateLimited) return rateLimited
 
   const admin = createAdminClient()
   const { data: userData } = await admin
@@ -38,6 +42,9 @@ export async function POST() {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  if (rateLimited) return rateLimited
 
   // Generate a new API key
   const apiKey = `mcp_${randomBytes(32).toString("hex")}`
@@ -67,6 +74,9 @@ export async function DELETE() {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  if (rateLimited) return rateLimited
 
   const admin = createAdminClient()
   const { error } = await admin
