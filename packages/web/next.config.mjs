@@ -19,9 +19,6 @@ const nextConfig = {
     ],
   },
   outputFileTracingRoot: path.resolve(__dirname, '../../'),
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   // Temporarily disabled for Next.js 16 compatibility
   // turbopack: {
   //   root: path.resolve(__dirname, '../../'),
