@@ -64,7 +64,7 @@ export function FeaturesGrid() {
     },
     {
       title: "Scoped Memory",
-      detail: "Keep global preferences separate from repo rules, auto-scoped via git remote.",
+      detail: "Global preferences, repo rules auto-scoped via git remote, and path-scoped rules with glob patterns like src/api/**.",
       metric: "Right context",
       docsUrl: "/docs/concepts/scopes"
     },
@@ -150,7 +150,7 @@ export function FeaturesGrid() {
               
               <h4 className="text-lg font-bold tracking-tight text-foreground mb-4">MCP Server</h4>
               <p className="text-[13px] text-muted-foreground leading-relaxed font-light mb-8">
-                For browser-based agents or when static configs aren't enough, the built-in MCP server provides real-time access.
+                7 tools with FTS5 search at full CLI parity. For browser-based agents or any MCP client that needs real-time access.
               </p>
               
               <div className="flex items-center justify-between pt-6 border-t border-border">

@@ -28,13 +28,13 @@ const cliSteps = [
 const mcpSteps = [
   {
     tool: "add_memory",
-    params: '{ content: "prefer functional components", type: "rule" }',
-    note: "Agents store context directly",
+    params: '{ content: "use zod for validation", type: "rule", paths: ["src/api/**"] }',
+    note: "Path-scoped rules with glob patterns",
   },
   {
     tool: "get_context",
     params: '{ query: "auth flow" }',
-    note: "Returns rules + relevant memories",
+    note: "FTS5-ranked rules + relevant memories",
   },
   {
     tool: "get_rules",
@@ -62,9 +62,9 @@ export function HowItWorks() {
     },
     mcp: {
       heading: "MCP when you need it.",
-      description: "For browser-based agents like v0, bolt.new, and Lovable—or any MCP client that can't run the CLI—the built-in server gives direct access to your memory store.",
+      description: "For browser-based agents like v0, bolt.new, and Lovable—or any MCP client that can't run the CLI—7 tools with FTS5 search give full access to your memory store.",
       cardTitle: "Direct agent fallback",
-      cardDescription: "Ideal for browser-based tools. Available for any MCP-compatible client.",
+      cardDescription: "Same 7 tools as CLI. FTS5 search, path-scoped rules, skills, and full field support.",
       endpoint: "https://memories.sh/api/mcp",
     },
   };

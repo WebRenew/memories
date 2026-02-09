@@ -8,7 +8,7 @@ export function FAQ() {
   const faqs = [
     {
       q: "What problem does memories.sh solve?",
-      a: "Agents forget and switching tools resets context. memories.sh gives you a durable, local-first state layer so rules and decisions persist, plus recall and native config generation for 13+ tools."
+      a: "Agents forget and switching tools resets context. memories.sh gives you a durable, local-first state layer so rules, decisions, facts, and skills persist—with path-scoped rules, FTS5 search, and native config generation for 13+ tools."
     },
     {
       q: "Can I switch between coding agents easily?",
@@ -16,7 +16,7 @@ export function FAQ() {
     },
     {
       q: "What's the difference between global and project memory?",
-      a: "Global memory is your persistent state across tools and projects. Project memory is repo-specific and auto-scoped via git remote, keeping context aligned with the current codebase."
+      a: "Global memory is your persistent state across tools and projects. Project memory is repo-specific and auto-scoped via git remote. You can also create path-scoped rules with glob patterns (e.g. src/api/**) for fine-grained context."
     },
     {
       q: "Am I locked into memories.sh?",

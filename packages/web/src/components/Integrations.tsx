@@ -43,7 +43,7 @@ export function Integrations() {
       name: "Any MCP Client",
       logo: "/logos/mcp.svg",
       status: "Available",
-      desc: "For v0, bolt.new, Lovable, and any MCP client where the CLI can't run.",
+      desc: "7 tools at full CLI parity with FTS5 search. For v0, bolt.new, Lovable, and any MCP client.",
       docsUrl: "/docs/integrations/mcp",
     }
   ];
