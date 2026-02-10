@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { StatsCharts } from "./stats-charts"
 import { ProvisioningScreen } from "@/components/dashboard/ProvisioningScreen"
+import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 
 export const metadata = {
   title: "Stats",
@@ -55,13 +56,8 @@ export default async function StatsPage() {
 
   if (!user) return null
 
-  const { data: profile } = await supabase
-    .from("users")
-    .select("turso_db_url, turso_db_token")
-    .eq("id", user.id)
-    .single()
-
-  const hasTurso = profile?.turso_db_url && profile?.turso_db_token
+  const context = await resolveActiveMemoryContext(supabase, user.id)
+  const hasTurso = context?.turso_db_url && context?.turso_db_token
 
   if (!hasTurso) {
     return <ProvisioningScreen />
@@ -82,7 +78,7 @@ export default async function StatsPage() {
 
   try {
     const { createClient: createTurso } = await import("@libsql/client")
-    const turso = createTurso({ url: profile.turso_db_url!, authToken: profile.turso_db_token! })
+    const turso = createTurso({ url: context.turso_db_url!, authToken: context.turso_db_token! })
 
     const [
       totalResult,

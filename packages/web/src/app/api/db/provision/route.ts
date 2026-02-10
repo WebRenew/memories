@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { createDatabase, createDatabaseToken, initSchema } from "@/lib/turso"
 import { NextResponse } from "next/server"
 import { checkRateLimit, strictRateLimit } from "@/lib/rate-limit"
+import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 
 const TURSO_ORG = "webrenew"
 
@@ -17,23 +18,12 @@ export async function POST(request: Request) {
   if (rateLimited) return rateLimited
 
   const admin = createAdminClient()
+  let context = await resolveActiveMemoryContext(admin, auth.userId, {
+    fallbackToUserWithoutOrgCredentials: false,
+  })
 
-  // Check if user already has a provisioned database
-  const { data: profile } = await admin
-    .from("users")
-    .select("turso_db_url, turso_db_token")
-    .eq("id", auth.userId)
-    .single()
-
-  if (profile?.turso_db_url && profile?.turso_db_token) {
-    return NextResponse.json({
-      url: profile.turso_db_url,
-      provisioned: false,
-    })
-  }
-
-  // Ensure user row exists (trigger may not have fired yet)
-  if (!profile) {
+  // Ensure user row exists (trigger may not have fired yet).
+  if (!context) {
     const { error: insertError } = await admin
       .from("users")
       .upsert({ id: auth.userId, email: auth.email }, { onConflict: "id" })
@@ -45,6 +35,41 @@ export async function POST(request: Request) {
         { status: 500 }
       )
     }
+
+    context = await resolveActiveMemoryContext(admin, auth.userId, {
+      fallbackToUserWithoutOrgCredentials: false,
+    })
+  }
+
+  if (!context) {
+    return NextResponse.json(
+      { error: "Failed to resolve active memory target" },
+      { status: 500 }
+    )
+  }
+
+  if (context.turso_db_url && context.turso_db_token) {
+    return NextResponse.json({
+      url: context.turso_db_url,
+      provisioned: false,
+    })
+  }
+
+  if (
+    context.ownerType === "organization" &&
+    !["owner", "admin"].includes(context.orgRole ?? "")
+  ) {
+    return NextResponse.json(
+      { error: "Only owners or admins can provision organization memory" },
+      { status: 403 }
+    )
+  }
+
+  if (context.ownerType === "organization" && !context.orgId) {
+    return NextResponse.json(
+      { error: "Failed to resolve organization context" },
+      { status: 500 }
+    )
   }
 
   try {
@@ -59,11 +84,20 @@ export async function POST(request: Request) {
     // Initialize the schema
     await initSchema(url, token)
 
-    // Save credentials and dbName via admin client
-    const { error } = await admin
-      .from("users")
-      .update({ turso_db_url: url, turso_db_token: token, turso_db_name: db.name })
-      .eq("id", auth.userId)
+    let error: { message?: string } | null = null
+    if (context.ownerType === "organization" && context.orgId) {
+      const res = await admin
+        .from("organizations")
+        .update({ turso_db_url: url, turso_db_token: token, turso_db_name: db.name })
+        .eq("id", context.orgId)
+      error = res.error
+    } else {
+      const res = await admin
+        .from("users")
+        .update({ turso_db_url: url, turso_db_token: token, turso_db_name: db.name })
+        .eq("id", auth.userId)
+      error = res.error
+    }
 
     if (error) {
       return NextResponse.json(

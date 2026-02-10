@@ -112,4 +112,5 @@ const VALID_EMBEDDING_MODELS = [
 export const updateUserSchema = z.object({
   name: z.string().max(200).optional(),
   embedding_model: z.enum(VALID_EMBEDDING_MODELS).optional(),
+  current_org_id: z.string().min(1, "Organization id is required").nullable().optional(),
 })

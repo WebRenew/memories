@@ -17,7 +17,7 @@ export async function PATCH(request: Request) {
   const parsed = parseBody(updateUserSchema, await request.json().catch(() => ({})))
   if (!parsed.success) return parsed.response
 
-  const updates: Record<string, string> = {}
+  const updates: Record<string, string | null> = {}
 
   if (parsed.data.name !== undefined) {
     updates.name = parsed.data.name
@@ -25,6 +25,28 @@ export async function PATCH(request: Request) {
 
   if (parsed.data.embedding_model !== undefined) {
     updates.embedding_model = parsed.data.embedding_model
+  }
+
+  if (parsed.data.current_org_id !== undefined) {
+    if (parsed.data.current_org_id === null) {
+      updates.current_org_id = null
+    } else {
+      const { data: membership } = await supabase
+        .from("org_members")
+        .select("id")
+        .eq("org_id", parsed.data.current_org_id)
+        .eq("user_id", user.id)
+        .single()
+
+      if (!membership) {
+        return NextResponse.json(
+          { error: "You are not a member of that organization" },
+          { status: 403 }
+        )
+      }
+
+      updates.current_org_id = parsed.data.current_org_id
+    }
   }
 
   if (Object.keys(updates).length === 0) {

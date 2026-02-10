@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createClient as createTurso } from "@libsql/client"
 import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
+import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 
 export async function GET() {
   const supabase = await createClient()
@@ -14,20 +15,15 @@ export async function GET() {
   const rateLimited = await checkRateLimit(apiRateLimit, user.id)
   if (rateLimited) return rateLimited
 
-  const { data: profile } = await supabase
-    .from("users")
-    .select("turso_db_url, turso_db_token")
-    .eq("id", user.id)
-    .single()
-
-  if (!profile?.turso_db_url || !profile?.turso_db_token) {
+  const context = await resolveActiveMemoryContext(supabase, user.id)
+  if (!context?.turso_db_url || !context?.turso_db_token) {
     return NextResponse.json({ error: "Turso not configured" }, { status: 400 })
   }
 
   try {
     const turso = createTurso({
-      url: profile.turso_db_url,
-      authToken: profile.turso_db_token,
+      url: context.turso_db_url,
+      authToken: context.turso_db_token,
     })
 
     const [totalResult, typeResult, dailyResult] = await Promise.all([

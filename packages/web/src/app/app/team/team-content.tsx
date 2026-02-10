@@ -60,7 +60,10 @@ export function TeamContent({
   userId: string
 }) {
   const router = useRouter()
-  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(currentOrgId || organizations[0]?.id || null)
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(() => {
+    if (!currentOrgId) return null
+    return organizations.some((org) => org.id === currentOrgId) ? currentOrgId : null
+  })
   const [members, setMembers] = useState<Member[]>([])
   const [invites, setInvites] = useState<Invite[]>([])
   const [loading, setLoading] = useState(false)
@@ -72,6 +75,8 @@ export function TeamContent({
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
   const [emailSent, setEmailSent] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [orgSwitching, setOrgSwitching] = useState(false)
+  const [orgSwitchError, setOrgSwitchError] = useState<string | null>(null)
 
   const selectedOrg = organizations.find(o => o.id === selectedOrgId)
   const isOwner = selectedOrg?.role === "owner"
@@ -132,9 +137,10 @@ export function TeamContent({
         setNewOrgName("")
         // Select the newly created org so it's shown immediately
         if (data.organization?.id) {
-          setSelectedOrgId(data.organization.id)
+          await setActiveOrganization(data.organization.id)
+        } else {
+          router.refresh()
         }
-        router.refresh()
       } else {
         console.error("Failed to create organization:", data)
         setCreateError(data.error || "Failed to create organization. Please try again.")
@@ -213,6 +219,34 @@ export function TeamContent({
       }
     } catch (e) {
       console.error(e)
+    }
+  }
+
+  async function setActiveOrganization(nextOrgId: string | null) {
+    const previousOrgId = selectedOrgId
+    setSelectedOrgId(nextOrgId)
+    setOrgSwitchError(null)
+    setOrgSwitching(true)
+
+    try {
+      const res = await fetch("/api/user", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current_org_id: nextOrgId }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Failed to switch organization")
+      }
+
+      router.refresh()
+    } catch (e) {
+      console.error("Failed to switch organization:", e)
+      setSelectedOrgId(previousOrgId)
+      setOrgSwitchError(e instanceof Error ? e.message : "Failed to switch organization")
+    } finally {
+      setOrgSwitching(false)
     }
   }
 
@@ -336,18 +370,33 @@ export function TeamContent({
       ) : (
         <>
           {/* Org Selector */}
-          {organizations.length > 1 && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Organization:</span>
-              <select
-                value={selectedOrgId || ""}
-                onChange={(e) => setSelectedOrgId(e.target.value)}
-                className="px-3 py-1.5 bg-muted/30 border border-border text-sm focus:outline-none focus:border-primary"
-              >
-                {organizations.map(org => (
-                  <option key={org.id} value={org.id}>{org.name}</option>
-                ))}
-              </select>
+          {organizations.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Organization:</span>
+                <select
+                  value={selectedOrgId || "__personal__"}
+                  onChange={(e) => setActiveOrganization(e.target.value === "__personal__" ? null : e.target.value)}
+                  disabled={orgSwitching}
+                  className="px-3 py-1.5 bg-muted/30 border border-border text-sm focus:outline-none focus:border-primary disabled:opacity-60"
+                >
+                  <option value="__personal__">Personal workspace</option>
+                  {organizations.map(org => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+              </div>
+              {orgSwitchError && (
+                <p className="text-xs text-red-400">{orgSwitchError}</p>
+              )}
+            </div>
+          )}
+
+          {!selectedOrg && (
+            <div className="border border-border bg-card/20 p-4">
+              <p className="text-sm text-muted-foreground">
+                Personal workspace is active. Select an organization to manage members and shared memory.
+              </p>
             </div>
           )}
 

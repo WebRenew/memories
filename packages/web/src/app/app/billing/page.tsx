@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createTurso } from "@libsql/client"
 import { BillingContent } from "./billing-content"
+import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 
 export const metadata = {
   title: "Billing & Usage",
@@ -70,9 +71,11 @@ export default async function BillingPage() {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("plan, stripe_customer_id, turso_db_url, turso_db_token, created_at")
+    .select("plan, stripe_customer_id, created_at")
     .eq("id", user.id)
     .single()
+
+  const context = await resolveActiveMemoryContext(supabase, user.id)
 
   const plan = profile?.plan || "free"
   const hasStripeCustomer = !!profile?.stripe_customer_id
@@ -87,8 +90,8 @@ export default async function BillingPage() {
     lastSync: null,
   }
 
-  if (profile?.turso_db_url && profile?.turso_db_token) {
-    usage = await getUsageStats(profile.turso_db_url, profile.turso_db_token)
+  if (context?.turso_db_url && context?.turso_db_token) {
+    usage = await getUsageStats(context.turso_db_url, context.turso_db_token)
   }
 
   return (

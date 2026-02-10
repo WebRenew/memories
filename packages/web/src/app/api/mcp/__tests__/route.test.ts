@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 // Mock Supabase admin
-const mockAdminSelect = vi.fn()
+const { mockAdminSelect, mockResolveActiveMemoryContext } = vi.hoisted(() => ({
+  mockAdminSelect: vi.fn(),
+  mockResolveActiveMemoryContext: vi.fn(),
+}))
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(() => ({
     from: vi.fn().mockReturnValue({
@@ -12,6 +15,10 @@ vi.mock("@/lib/supabase/admin", () => ({
       }),
     }),
   })),
+}))
+
+vi.mock("@/lib/active-memory-context", () => ({
+  resolveActiveMemoryContext: mockResolveActiveMemoryContext,
 }))
 
 // Mock Turso
@@ -58,15 +65,27 @@ function setupAuth() {
     data: {
       id: "user-1",
       email: "test@example.com",
-      turso_db_url: "libsql://test.turso.io",
-      turso_db_token: "token",
     },
+  })
+  mockResolveActiveMemoryContext.mockResolvedValue({
+    ownerType: "user",
+    orgId: null,
+    turso_db_url: "libsql://test.turso.io",
+    turso_db_token: "token",
+    turso_db_name: "test",
   })
 }
 
 describe("/api/mcp", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockResolveActiveMemoryContext.mockResolvedValue({
+      ownerType: "user",
+      orgId: null,
+      turso_db_url: "libsql://test.turso.io",
+      turso_db_token: "token",
+      turso_db_name: "test",
+    })
   })
 
   // --- Auth & Transport ---
@@ -88,7 +107,14 @@ describe("/api/mcp", () => {
 
     it("should return 400 when database not configured", async () => {
       mockAdminSelect.mockReturnValue({
-        data: { id: "user-1", email: "test@example.com", turso_db_url: null, turso_db_token: null },
+        data: { id: "user-1", email: "test@example.com" },
+      })
+      mockResolveActiveMemoryContext.mockResolvedValue({
+        ownerType: "user",
+        orgId: null,
+        turso_db_url: null,
+        turso_db_token: null,
+        turso_db_name: null,
       })
       const response = await GET(makeGetRequest("mcp_testkey123"))
       expect(response.status).toBe(400)

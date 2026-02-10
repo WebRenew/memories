@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient as createTurso } from "@libsql/client"
 import { NextRequest, NextResponse } from "next/server"
 import { checkRateLimit, mcpRateLimit } from "@/lib/rate-limit"
+import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 
 // Store active SSE connections
 const connections = new Map<string, {
@@ -17,23 +18,24 @@ async function authenticateAndGetTurso(apiKey: string) {
   }
 
   const admin = createAdminClient()
-  const { data: user } = await admin
+  const { data: user, error } = await admin
     .from("users")
-    .select("id, email, turso_db_url, turso_db_token")
+    .select("id, email")
     .eq("mcp_api_key", apiKey)
     .single()
 
-  if (!user) {
+  if (error || !user) {
     return { error: "Invalid API key", status: 401 }
   }
 
-  if (!user.turso_db_url || !user.turso_db_token) {
+  const context = await resolveActiveMemoryContext(admin, user.id)
+  if (!context?.turso_db_url || !context?.turso_db_token) {
     return { error: "Database not configured. Visit memories.sh/app to set up.", status: 400 }
   }
 
   const turso = createTurso({
-    url: user.turso_db_url,
-    authToken: user.turso_db_token,
+    url: context.turso_db_url,
+    authToken: context.turso_db_token,
   })
 
   return { turso, user }

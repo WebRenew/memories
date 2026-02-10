@@ -4,10 +4,12 @@ const {
   mockAuthenticateRequest,
   mockAdminFrom,
   mockCheckRateLimit,
+  mockResolveActiveMemoryContext,
 } = vi.hoisted(() => ({
   mockAuthenticateRequest: vi.fn(),
   mockAdminFrom: vi.fn(),
   mockCheckRateLimit: vi.fn(),
+  mockResolveActiveMemoryContext: vi.fn(),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -25,12 +27,23 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
 }))
 
+vi.mock("@/lib/active-memory-context", () => ({
+  resolveActiveMemoryContext: mockResolveActiveMemoryContext,
+}))
+
 import { GET } from "../route"
 
 describe("/api/db/credentials", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockCheckRateLimit.mockResolvedValue(null)
+    mockResolveActiveMemoryContext.mockResolvedValue({
+      ownerType: "user",
+      orgId: null,
+      turso_db_url: "libsql://demo.turso.io",
+      turso_db_token: "token-123",
+      turso_db_name: "demo-db",
+    })
   })
 
   it("returns 401 without bearer auth", async () => {
@@ -41,11 +54,7 @@ describe("/api/db/credentials", () => {
 
   it("returns credentials for mcp api key auth", async () => {
     const mockSingle = vi.fn().mockResolvedValue({
-      data: {
-        turso_db_url: "libsql://demo.turso.io",
-        turso_db_token: "token-123",
-        turso_db_name: "demo-db",
-      },
+      data: { id: "user-mcp-1" },
       error: null,
     })
     const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
@@ -61,6 +70,7 @@ describe("/api/db/credentials", () => {
 
     expect(response.status).toBe(200)
     expect(mockEq).toHaveBeenCalledWith("mcp_api_key", "mcp_testkey")
+    expect(mockResolveActiveMemoryContext).toHaveBeenCalledWith(expect.anything(), "user-mcp-1")
     expect(body).toMatchObject({
       url: "libsql://demo.turso.io",
       token: "token-123",
@@ -78,11 +88,7 @@ describe("/api/db/credentials", () => {
     })
 
     const mockSingle = vi.fn().mockResolvedValue({
-      data: {
-        turso_db_url: "libsql://userdb.turso.io",
-        turso_db_token: "token-xyz",
-        turso_db_name: "userdb",
-      },
+      data: { id: "ignored-for-cli" },
       error: null,
     })
     const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
@@ -98,10 +104,10 @@ describe("/api/db/credentials", () => {
 
     expect(response.status).toBe(200)
     expect(mockAuthenticateRequest).toHaveBeenCalledTimes(1)
-    expect(mockEq).toHaveBeenCalledWith("id", "user-1")
-    expect(body.url).toBe("libsql://userdb.turso.io")
-    expect(body.token).toBe("token-xyz")
-    expect(body.dbName).toBe("userdb")
+    expect(mockResolveActiveMemoryContext).toHaveBeenCalledWith(expect.anything(), "user-1")
+    expect(body.url).toBe("libsql://demo.turso.io")
+    expect(body.token).toBe("token-123")
+    expect(body.dbName).toBe("demo-db")
   })
 
   it("returns 401 when cli auth fails", async () => {

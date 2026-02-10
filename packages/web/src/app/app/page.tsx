@@ -5,6 +5,7 @@ import { MemoriesSection } from "@/components/dashboard/MemoriesSection"
 import { ToolsPanel } from "@/components/dashboard/ToolsPanel"
 import { ApiKeySection } from "@/components/dashboard/ApiKeySection"
 import type { Memory } from "@/types/memory"
+import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 
 export default async function MemoriesPage() {
   const supabase = await createClient()
@@ -12,13 +13,8 @@ export default async function MemoriesPage() {
 
   if (!user) return null
 
-  const { data: profile } = await supabase
-    .from("users")
-    .select("turso_db_url, turso_db_token")
-    .eq("id", user.id)
-    .single()
-
-  const hasTurso = profile?.turso_db_url && profile?.turso_db_token
+  const context = await resolveActiveMemoryContext(supabase, user.id)
+  const hasTurso = context?.turso_db_url && context?.turso_db_token
 
   if (!hasTurso) {
     return <ProvisioningScreen />
@@ -28,7 +24,7 @@ export default async function MemoriesPage() {
   let connectError = false
 
   try {
-    const turso = createTurso({ url: profile.turso_db_url!, authToken: profile.turso_db_token! })
+    const turso = createTurso({ url: context.turso_db_url!, authToken: context.turso_db_token! })
     const result = await turso.execute(
       "SELECT id, content, tags, type, scope, project_id, paths, category, metadata, created_at, updated_at FROM memories WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 200"
     )
