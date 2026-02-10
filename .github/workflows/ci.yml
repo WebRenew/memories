@@ -28,8 +28,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Lint (web)
-        run: pnpm --filter @memories.sh/web lint
+      - name: Lint
+        run: pnpm lint
 
   typecheck:
     name: Typecheck
@@ -48,11 +48,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Typecheck (cli)
-        run: pnpm --filter @memories.sh/cli typecheck
-
-      - name: Typecheck (web)
-        run: pnpm --filter @memories.sh/web typecheck
+      - name: Typecheck
+        run: pnpm typecheck
 
   test:
     name: Test
@@ -72,7 +69,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Run tests
-        run: pnpm --filter @memories.sh/cli test
+        run: pnpm test
 
   build:
     name: Build
@@ -95,8 +92,5 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Build CLI
-        run: pnpm --filter @memories.sh/cli build
-
-      - name: Build Web
-        run: pnpm --filter @memories.sh/web build
+      - name: Build
+        run: pnpm build

@@ -220,6 +220,16 @@ memories/
 │   │   │   ├── lib/         # Core: db, memory, markers, agents-generator, tool-adapters
 │   │   │   └── mcp/         # MCP server implementation
 │   │   └── package.json
+│   ├── core/                # @memories.sh/core — typed client package
+│   │   ├── src/
+│   │   │   ├── client.ts
+│   │   │   └── system-prompt.ts
+│   │   └── package.json
+│   ├── ai-sdk/              # @memories.sh/ai-sdk — AI SDK middleware + tools
+│   │   ├── src/
+│   │   │   ├── middleware.ts
+│   │   │   └── tools.ts
+│   │   └── package.json
 │   └── web/                 # Next.js marketing site + dashboard
 │       ├── src/
 │       │   ├── app/         # App Router pages and API routes
@@ -234,6 +244,8 @@ memories/
 ### Tech Stack
 
 **CLI**: TypeScript, Commander.js, libSQL/SQLite, MCP SDK, Zod, yaml
+
+**SDK**: `@memories.sh/core` + `@memories.sh/ai-sdk` (TypeScript, fetch-based client, AI SDK middleware/tools)
 
 **Web**: Next.js 16, React 19, Tailwind CSS v4, shadcn/ui, Supabase, Turso, Stripe, Framer Motion, fumadocs
 

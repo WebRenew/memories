@@ -20,6 +20,12 @@
     "packages/cli/src/**/*.ts": [
       "bash -c 'cd packages/cli && npx tsc --noEmit'"
     ],
+    "packages/core/src/**/*.ts": [
+      "bash -c 'cd packages/core && npx tsc --noEmit'"
+    ],
+    "packages/ai-sdk/src/**/*.ts": [
+      "bash -c 'cd packages/ai-sdk && npx tsc --noEmit'"
+    ],
     "packages/web/src/**/*.{ts,tsx}": [
       "bash -c 'cd packages/web && npx eslint --max-warnings 0'"
     ]

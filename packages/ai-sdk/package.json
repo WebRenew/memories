@@ -1,0 +1,55 @@
+{
+  "name": "@memories.sh/ai-sdk",
+  "version": "0.1.0",
+  "description": "AI SDK middleware and tools for memories.sh",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WebRenew/memories.git",
+    "directory": "packages/ai-sdk"
+  },
+  "homepage": "https://memories.sh",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "keywords": [
+    "ai",
+    "sdk",
+    "middleware",
+    "memory",
+    "agents"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "tsup --watch"
+  },
+  "peerDependencies": {
+    "ai": "^5.0.0 || ^6.0.0"
+  },
+  "dependencies": {
+    "@memories.sh/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.1",
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
+  }
+}
