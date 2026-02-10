@@ -2,57 +2,97 @@ import { Ratelimit } from "@upstash/ratelimit"
 import { Redis } from "@upstash/redis"
 import { NextResponse } from "next/server"
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-})
+interface RateLimitResult {
+  success: boolean
+  limit: number
+  remaining: number
+  reset: number
+}
+
+export interface RateLimiter {
+  limit: (identifier: string) => Promise<RateLimitResult>
+}
+
+class InMemorySlidingWindowLimiter implements RateLimiter {
+  private readonly buckets = new Map<string, { count: number; reset: number }>()
+
+  constructor(
+    private readonly max: number,
+    private readonly windowMs: number
+  ) {}
+
+  async limit(identifier: string): Promise<RateLimitResult> {
+    const now = Date.now()
+    const bucket = this.buckets.get(identifier)
+
+    if (!bucket || bucket.reset <= now) {
+      const reset = now + this.windowMs
+      this.buckets.set(identifier, { count: 1, reset })
+      return {
+        success: true,
+        limit: this.max,
+        remaining: Math.max(0, this.max - 1),
+        reset,
+      }
+    }
+
+    bucket.count += 1
+    const success = bucket.count <= this.max
+    return {
+      success,
+      limit: this.max,
+      remaining: Math.max(0, this.max - bucket.count),
+      reset: bucket.reset,
+    }
+  }
+}
+
+function createRateLimiter(max: number, windowSeconds: number, prefix: string): RateLimiter {
+  const url = process.env.UPSTASH_REDIS_REST_URL
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN
+
+  if (url && token) {
+    const redis = new Redis({ url, token })
+    return new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(max, `${windowSeconds} s`),
+      prefix,
+    })
+  }
+
+  return new InMemorySlidingWindowLimiter(max, windowSeconds * 1000)
+}
 
 /**
  * Standard rate limiter for authenticated API routes.
  * 60 requests per 60 seconds per user.
  */
-export const apiRateLimit = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(60, "60 s"),
-  prefix: "rl:api",
-})
+export const apiRateLimit = createRateLimiter(60, 60, "rl:api")
 
 /**
  * Strict rate limiter for expensive operations (db provisioning, account deletion).
  * 5 requests per 60 seconds per user.
  */
-export const strictRateLimit = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(5, "60 s"),
-  prefix: "rl:strict",
-})
+export const strictRateLimit = createRateLimiter(5, 60, "rl:strict")
 
 /**
  * Rate limiter for public/unauthenticated endpoints (CLI auth polling).
  * 30 requests per 60 seconds per IP.
  */
-export const publicRateLimit = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(30, "60 s"),
-  prefix: "rl:public",
-})
+export const publicRateLimit = createRateLimiter(30, 60, "rl:public")
 
 /**
  * Rate limiter for MCP endpoint (higher limit, long-lived sessions).
  * 120 requests per 60 seconds per API key.
  */
-export const mcpRateLimit = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(120, "60 s"),
-  prefix: "rl:mcp",
-})
+export const mcpRateLimit = createRateLimiter(120, 60, "rl:mcp")
 
 /**
  * Check rate limit and return 429 response if exceeded.
  * Returns null if the request is allowed.
  */
 export async function checkRateLimit(
-  limiter: Ratelimit,
+  limiter: RateLimiter,
   identifier: string
 ): Promise<NextResponse | null> {
   const { success, limit, remaining, reset } = await limiter.limit(identifier)

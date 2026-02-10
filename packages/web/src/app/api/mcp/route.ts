@@ -1,16 +1,82 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient as createTurso } from "@libsql/client"
 import { NextRequest, NextResponse } from "next/server"
-import { checkRateLimit, mcpRateLimit } from "@/lib/rate-limit"
+import { checkRateLimit, getClientIp, mcpRateLimit } from "@/lib/rate-limit"
 import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 import { hashMcpApiKey, isValidMcpApiKey } from "@/lib/mcp-api-key"
 
-// Store active SSE connections
-const connections = new Map<string, {
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+const MCP_MAX_CONNECTIONS_PER_KEY = parsePositiveInt(process.env.MCP_MAX_CONNECTIONS_PER_KEY, 5)
+const MCP_MAX_CONNECTIONS_PER_IP = parsePositiveInt(process.env.MCP_MAX_CONNECTIONS_PER_IP, 20)
+const MCP_SESSION_IDLE_MS = parsePositiveInt(process.env.MCP_SESSION_IDLE_MS, 15 * 60 * 1000)
+const encoder = new TextEncoder()
+
+interface ActiveConnection {
   controller: ReadableStreamDefaultController<Uint8Array>
   turso: ReturnType<typeof createTurso>
   userId: string
-}>()
+  rateLimitKey: string
+  clientIp: string
+  lastActivityAt: number
+  idleTimeout: ReturnType<typeof setTimeout> | null
+}
+
+// Store active SSE connections
+const connections = new Map<string, ActiveConnection>()
+
+function cleanupConnection(sessionId: string, reason?: "idle_timeout") {
+  const conn = connections.get(sessionId)
+  if (!conn) return
+
+  if (conn.idleTimeout) {
+    clearTimeout(conn.idleTimeout)
+  }
+  connections.delete(sessionId)
+
+  try {
+    if (reason) {
+      conn.controller.enqueue(encoder.encode(formatSSE("session_closed", { reason })))
+    }
+    conn.controller.close()
+  } catch {
+    // Stream already closed.
+  }
+}
+
+function touchConnection(sessionId: string) {
+  const conn = connections.get(sessionId)
+  if (!conn) return
+
+  conn.lastActivityAt = Date.now()
+  if (conn.idleTimeout) {
+    clearTimeout(conn.idleTimeout)
+  }
+
+  conn.idleTimeout = setTimeout(() => {
+    cleanupConnection(sessionId, "idle_timeout")
+  }, MCP_SESSION_IDLE_MS)
+}
+
+function countConnectionsFor(predicate: (conn: ActiveConnection) => boolean): number {
+  let count = 0
+  for (const conn of connections.values()) {
+    if (predicate(conn)) count += 1
+  }
+  return count
+}
+
+function pruneExpiredConnections() {
+  const now = Date.now()
+  for (const [sessionId, conn] of connections.entries()) {
+    if (now - conn.lastActivityAt >= MCP_SESSION_IDLE_MS) {
+      cleanupConnection(sessionId, "idle_timeout")
+    }
+  }
+}
 
 // Authenticate via API key and return user's Turso client
 async function authenticateAndGetTurso(apiKey: string) {
@@ -504,7 +570,27 @@ export async function GET(request: NextRequest) {
     })
   }
 
+  pruneExpiredConnections()
+
   const rateLimitKey = hashMcpApiKey(apiKey)
+  const clientIp = getClientIp(request)
+
+  const keyConnectionCount = countConnectionsFor((conn) => conn.rateLimitKey === rateLimitKey)
+  if (keyConnectionCount >= MCP_MAX_CONNECTIONS_PER_KEY) {
+    return NextResponse.json(
+      { error: "Too many active MCP sessions for this API key" },
+      { status: 429, headers: { "Retry-After": "60" } }
+    )
+  }
+
+  const ipConnectionCount = countConnectionsFor((conn) => conn.clientIp === clientIp)
+  if (ipConnectionCount >= MCP_MAX_CONNECTIONS_PER_IP) {
+    return NextResponse.json(
+      { error: "Too many active MCP sessions from this IP" },
+      { status: 429, headers: { "Retry-After": "60" } }
+    )
+  }
+
   const rateLimited = await checkRateLimit(mcpRateLimit, rateLimitKey)
   if (rateLimited) return rateLimited
 
@@ -518,12 +604,20 @@ export async function GET(request: NextRequest) {
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      connections.set(sessionId, { controller, turso, userId: user.id })
-      const encoder = new TextEncoder()
+      connections.set(sessionId, {
+        controller,
+        turso,
+        userId: user.id,
+        rateLimitKey,
+        clientIp,
+        lastActivityAt: Date.now(),
+        idleTimeout: null,
+      })
+      touchConnection(sessionId)
       controller.enqueue(encoder.encode(formatSSE("endpoint", `/api/mcp?session=${sessionId}`)))
     },
     cancel() {
-      connections.delete(sessionId)
+      cleanupConnection(sessionId)
     },
   })
 
@@ -539,16 +633,24 @@ export async function GET(request: NextRequest) {
 
 // Handle MCP JSON-RPC messages via POST
 export async function POST(request: NextRequest) {
+  pruneExpiredConnections()
+
   const url = new URL(request.url)
   const sessionId = url.searchParams.get("session")
   
   let turso: ReturnType<typeof createTurso>
   let controller: ReadableStreamDefaultController<Uint8Array> | null = null
+  let activeSessionId: string | null = null
 
   if (sessionId && connections.has(sessionId)) {
     const conn = connections.get(sessionId)!
+    const rateLimited = await checkRateLimit(mcpRateLimit, conn.rateLimitKey)
+    if (rateLimited) return rateLimited
+
+    touchConnection(sessionId)
     turso = conn.turso
     controller = conn.controller
+    activeSessionId = sessionId
   } else {
     // Stateless mode
     const apiKey = getApiKey(request)
@@ -626,10 +728,11 @@ export async function POST(request: NextRequest) {
 
     if (controller) {
       try {
-        const encoder = new TextEncoder()
         controller.enqueue(encoder.encode(formatSSE("message", response)))
       } catch {
-        // Connection closed
+        if (activeSessionId) {
+          cleanupConnection(activeSessionId)
+        }
       }
     }
 

@@ -33,6 +33,7 @@ vi.mock("@libsql/client", () => ({
 vi.mock("@/lib/rate-limit", () => ({
   mcpRateLimit: { limit: vi.fn().mockResolvedValue({ success: true }) },
   checkRateLimit: vi.fn().mockResolvedValue(null),
+  getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }))
 
 import { GET, POST, OPTIONS } from "../route"

@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import { join } from "path";
+import { checkRateLimit, getClientIp, publicRateLimit } from "@/lib/rate-limit";
+
+const CACHE_CONTROL_DOCS = "public, s-maxage=300, stale-while-revalidate=86400";
+const CACHE_CONTROL_NOT_FOUND = "public, s-maxage=60, stale-while-revalidate=300";
 
 export async function GET(request: NextRequest) {
+  const rateLimited = await checkRateLimit(publicRateLimit, getClientIp(request));
+  if (rateLimited) {
+    return rateLimited;
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const path = searchParams.get("path");
 
@@ -21,10 +30,19 @@ export async function GET(request: NextRequest) {
     return new NextResponse(content, {
       headers: {
         "Content-Type": "text/markdown; charset=utf-8",
+        "Cache-Control": CACHE_CONTROL_DOCS,
       },
     });
   } catch (error) {
     console.error("Failed to read MDX file:", error);
-    return NextResponse.json({ error: "File not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "File not found" },
+      {
+        status: 404,
+        headers: {
+          "Cache-Control": CACHE_CONTROL_NOT_FOUND,
+        },
+      }
+    );
   }
 }
