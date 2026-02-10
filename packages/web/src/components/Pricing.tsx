@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { useState } from "react";
 import { ScrambleText } from "./animations/ScrambleText";
+import { useUser } from "@/hooks/use-user";
 
 const tiers = [
   {
@@ -62,6 +63,8 @@ const tiers = [
 ];
 
 export function Pricing({ user }: { user?: User | null }) {
+  const { user: sessionUser } = useUser();
+  const effectiveUser = sessionUser ?? user ?? null;
   const [isYearly, setIsYearly] = useState(false);
 
   return (
@@ -188,7 +191,7 @@ export function Pricing({ user }: { user?: User | null }) {
                   </div>
 
                   <Link 
-                    href={tier.name === "Enterprise" ? "mailto:hello@memories.sh" : user ? "/app/upgrade" : "/login"}
+                    href={tier.name === "Enterprise" ? "mailto:hello@memories.sh" : effectiveUser ? "/app/upgrade" : "/login"}
                     className={`block w-full py-4 text-xs font-bold uppercase tracking-[0.2em] transition-all duration-300 text-center rounded-md relative z-10 ${
                       tier.highlighted
                         ? "bg-primary text-primary-foreground hover:opacity-90 shadow-[0_0_20px_rgba(var(--primary),0.3)]"

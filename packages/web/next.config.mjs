@@ -4,15 +4,42 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+function parseHostname(url) {
+  if (!url) return null;
+  try {
+    return new globalThis.URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+const supabaseHostname = parseHostname(globalThis.process?.env?.NEXT_PUBLIC_SUPABASE_URL);
+const imageRemotePatterns = [
+  {
+    protocol: "https",
+    hostname: "avatars.githubusercontent.com",
+  },
+  {
+    protocol: "https",
+    hostname: "lh3.googleusercontent.com",
+  },
+  {
+    protocol: "https",
+    hostname: "*.googleusercontent.com",
+  },
+];
+
+if (supabaseHostname) {
+  imageRemotePatterns.push({
+    protocol: "https",
+    hostname: supabaseHostname,
+  });
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**',
-      },
-    ],
+    remotePatterns: imageRemotePatterns,
   },
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts'],

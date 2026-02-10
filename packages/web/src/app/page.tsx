@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server"
 import { TopNav } from "@/components/TopNav";
 import { Hero } from "@/components/Hero";
 import { HowItWorks } from "@/components/HowItWorks";
@@ -9,14 +8,11 @@ import { Pricing } from "@/components/Pricing";
 import { FAQ } from "@/components/FAQ";
 import { Footer } from "@/components/Footer";
 
-export default async function Home() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
+export default function Home() {
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/30">
       
-      <TopNav user={user} />
+      <TopNav />
       
       <main className="relative">
         <Hero />
@@ -24,7 +20,7 @@ export default async function Home() {
         <FeaturesGrid />
         <SDKSection />
         <Integrations />
-        <Pricing user={user} />
+        <Pricing />
         <FAQ />
       </main>
 

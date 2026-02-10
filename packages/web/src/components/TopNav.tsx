@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { User } from "@supabase/supabase-js";
 import { ScrambleTextOnHover } from "./animations/ScrambleText";
 import { Github } from "./icons/app/Github";
+import { useUser } from "@/hooks/use-user";
 
 const navItems = [
   { href: "#how-it-works", label: "How" },
@@ -17,6 +18,8 @@ const navItems = [
 ];
 
 export function TopNav({ user }: { user?: User | null }) {
+  const { user: sessionUser } = useUser();
+  const effectiveUser = sessionUser ?? user ?? null;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLinkClick = () => {
@@ -74,7 +77,7 @@ export function TopNav({ user }: { user?: User | null }) {
                 <Github className="w-5 h-5" />
               </a>
 
-              {user ? (
+              {effectiveUser ? (
                 <Link 
                   href="/app" 
                   className="group hidden sm:flex items-center px-4 py-2 bg-primary/90 text-primary-foreground shadow-[0_0_30px_rgba(99,102,241,0.25)] hover:opacity-90 transition-all duration-300 rounded-md"
@@ -173,12 +176,12 @@ export function TopNav({ user }: { user?: User | null }) {
                   className="mt-6 pt-6 border-t border-border"
                 >
                   <Link 
-                    href={user ? "/app" : "/login"}
+                    href={effectiveUser ? "/app" : "/login"}
                     onClick={handleLinkClick}
                     className="group flex items-center justify-center gap-3 w-full px-6 py-4 bg-foreground text-background hover:bg-primary hover:text-primary-foreground transition-all duration-300 rounded-md"
                   >
                     <span className="text-sm uppercase tracking-[0.15em] font-bold">
-                      {user ? "Dashboard" : "Sign In"}
+                      {effectiveUser ? "Dashboard" : "Sign In"}
                     </span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M5 12h14m-7-7 7 7-7 7" />
