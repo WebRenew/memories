@@ -148,11 +148,67 @@ interface MemoryRow {
   updated_at: string
 }
 
+interface StructuredMemory {
+  id: string | null
+  content: string
+  type: string
+  scope: string
+  projectId: string | null
+  tags: string[]
+  paths: string[]
+  category: string | null
+  metadata: Record<string, unknown> | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
 // Format memory for display
 function formatMemory(m: MemoryRow): string {
   const scope = m.scope === "project" && m.project_id ? `@${m.project_id.split("/").pop()}` : "global"
   const tags = m.tags ? ` [${m.tags}]` : ""
   return `[${m.type}] ${truncate(m.content)} (${scope})${tags}`
+}
+
+function parseList(value: string | null | undefined): string[] {
+  if (!value) return []
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function parseMetadata(value: string | null | undefined): Record<string, unknown> | null {
+  if (!value) return null
+  try {
+    const parsed = JSON.parse(value)
+    if (parsed && typeof parsed === "object") {
+      return parsed as Record<string, unknown>
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+function toStructuredMemory(row: Partial<MemoryRow>): StructuredMemory {
+  return {
+    id: row.id ?? null,
+    content: row.content ?? "",
+    type: row.type ?? "note",
+    scope: row.scope ?? "global",
+    projectId: row.project_id ?? null,
+    tags: parseList(row.tags),
+    paths: parseList(row.paths),
+    category: row.category ?? null,
+    metadata: parseMetadata(row.metadata),
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+  }
+}
+
+interface ToolExecutionResult {
+  content: Array<{ type: string; text: string }>
+  structuredContent?: Record<string, unknown>
 }
 
 // Full SELECT columns for memory queries
@@ -237,7 +293,7 @@ async function executeTool(
   toolName: string, 
   args: Record<string, unknown>, 
   turso: ReturnType<typeof createTurso>
-): Promise<{ content: Array<{ type: string; text: string }> }> {
+): Promise<ToolExecutionResult> {
   const projectId = args.project_id as string | undefined
 
   switch (toolName) {
@@ -270,16 +326,21 @@ async function executeTool(
       }
 
       // Get relevant memories if query provided
+      let relevantMemories: MemoryRow[] = []
       if (args.query) {
         const limit = (args.limit as number) || 5
-        const results = await searchWithFts(turso, args.query as string, projectId, limit, { excludeType: "rule" })
-        if (results.length > 0) {
-          output += `\n\n## Relevant Memories\n${results.map(m => `- ${formatMemory(m)}`).join("\n")}`
+        relevantMemories = await searchWithFts(turso, args.query as string, projectId, limit, { excludeType: "rule" })
+        if (relevantMemories.length > 0) {
+          output += `\n\n## Relevant Memories\n${relevantMemories.map(m => `- ${formatMemory(m)}`).join("\n")}`
         }
       }
 
       return {
         content: [{ type: "text", text: output || "No rules or memories found." }],
+        structuredContent: {
+          rules: (rulesResult.rows as unknown as MemoryRow[]).map(toStructuredMemory),
+          memories: relevantMemories.map(toStructuredMemory),
+        },
       }
     }
 
@@ -297,7 +358,12 @@ async function executeTool(
       const result = await turso.execute({ sql, args: sqlArgs })
 
       if (result.rows.length === 0) {
-        return { content: [{ type: "text", text: "No rules found." }] }
+        return {
+          content: [{ type: "text", text: "No rules found." }],
+          structuredContent: {
+            rules: [],
+          },
+        }
       }
 
       const globalRules = result.rows.filter(r => r.scope === "global")
@@ -311,7 +377,12 @@ async function executeTool(
         output += `## Global Rules\n${globalRules.map(r => `- ${r.content}`).join("\n")}`
       }
 
-      return { content: [{ type: "text", text: output }] }
+      return {
+        content: [{ type: "text", text: output }],
+        structuredContent: {
+          rules: (result.rows as unknown as MemoryRow[]).map(toStructuredMemory),
+        },
+      }
     }
 
     case "add_memory": {
@@ -332,8 +403,25 @@ async function executeTool(
       })
 
       const scopeLabel = projectId ? `project:${projectId.split("/").pop()}` : "global"
+      const created = toStructuredMemory({
+        id: memoryId,
+        content: args.content as string,
+        type,
+        scope,
+        project_id: projectId || null,
+        tags,
+        paths,
+        category,
+        metadata,
+        created_at: now,
+        updated_at: now,
+      })
       return {
         content: [{ type: "text", text: `Stored ${type} (${scopeLabel}): ${truncate(args.content as string)}` }],
+        structuredContent: {
+          memory: created,
+          id: memoryId,
+        },
       }
     }
 
@@ -378,6 +466,10 @@ async function executeTool(
 
       return {
         content: [{ type: "text", text: `Updated memory ${id}` }],
+        structuredContent: {
+          id,
+          updated: true,
+        },
       }
     }
 
@@ -393,6 +485,10 @@ async function executeTool(
 
       return {
         content: [{ type: "text", text: `Deleted memory ${id}` }],
+        structuredContent: {
+          id,
+          deleted: true,
+        },
       }
     }
 
@@ -404,12 +500,20 @@ async function executeTool(
       const results = await searchWithFts(turso, query, projectId, limit, { includeType })
 
       if (results.length === 0) {
-        return { content: [{ type: "text", text: "No memories found." }] }
+        return {
+          content: [{ type: "text", text: "No memories found." }],
+          structuredContent: {
+            memories: [],
+          },
+        }
       }
 
       const formatted = results.map(m => formatMemory(m)).join("\n")
       return {
         content: [{ type: "text", text: `Found ${results.length} memories:\n\n${formatted}` }],
+        structuredContent: {
+          memories: results.map(toStructuredMemory),
+        },
       }
     }
 
@@ -443,14 +547,24 @@ async function executeTool(
       const result = await turso.execute({ sql, args: sqlArgs })
 
       if (result.rows.length === 0) {
-        return { content: [{ type: "text", text: "No memories found." }] }
+        return {
+          content: [{ type: "text", text: "No memories found." }],
+          structuredContent: {
+            memories: [],
+          },
+        }
       }
       
+      const structuredMemories = (result.rows as unknown as MemoryRow[])
+        .map(toStructuredMemory)
       const formatted = (result.rows as unknown as MemoryRow[])
         .map(m => formatMemory(m))
         .join("\n")
       return {
         content: [{ type: "text", text: `${result.rows.length} memories:\n\n${formatted}` }],
+        structuredContent: {
+          memories: structuredMemories,
+        },
       }
     }
 

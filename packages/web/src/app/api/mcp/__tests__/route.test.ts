@@ -235,6 +235,8 @@ describe("/api/mcp", () => {
       const body = await response.json()
       expect(body.result.content[0].text).toContain("Global Rules")
       expect(body.result.content[0].text).toContain("Use TypeScript strict mode")
+      expect(body.result.structuredContent.rules).toHaveLength(1)
+      expect(body.result.structuredContent.memories).toHaveLength(0)
     })
 
     it("should split global and project rules", async () => {
@@ -570,6 +572,8 @@ describe("/api/mcp", () => {
       expect(body.result.content[0].text).toContain("Found 1 memories")
       expect(body.result.content[0].text).toContain("[decision]")
       expect(body.result.content[0].text).toContain("JWT for authentication")
+      expect(body.result.structuredContent.memories).toHaveLength(1)
+      expect(body.result.structuredContent.memories[0].content).toBe("JWT for authentication")
     })
 
     it("should return no results message", async () => {
@@ -648,6 +652,7 @@ describe("/api/mcp", () => {
       ))
       const body = await response.json()
       expect(body.result.content[0].text).toContain("2 memories")
+      expect(body.result.structuredContent.memories).toHaveLength(2)
     })
 
     it("should filter by type", async () => {

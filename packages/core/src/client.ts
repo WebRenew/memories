@@ -33,6 +33,23 @@ interface RpcResponsePayload {
 }
 
 const baseUrlSchema = z.string().url()
+const structuredMemorySchema = z.object({
+  id: z.string().nullable().optional(),
+  content: z.string(),
+  type: z.string(),
+  scope: z.string(),
+  projectId: z.string().nullable().optional(),
+  tags: z.array(z.string()).optional().default([]),
+})
+
+const contextStructuredSchema = z.object({
+  rules: z.array(structuredMemorySchema).optional().default([]),
+  memories: z.array(structuredMemorySchema).optional().default([]),
+})
+
+const memoriesStructuredSchema = z.object({
+  memories: z.array(structuredMemorySchema).optional().default([]),
+})
 
 export class MemoriesClientError extends Error {
   readonly status?: number
@@ -53,20 +70,54 @@ function readDefaultApiKey(): string | undefined {
   return process.env.MEMORIES_API_KEY
 }
 
-function extractTextFromToolResult(result: unknown): string {
+function normalizeMemoryType(type: string): MemoryRecord["type"] {
+  if (type === "rule" || type === "decision" || type === "fact" || type === "note" || type === "skill") {
+    return type
+  }
+  return "note"
+}
+
+function normalizeMemoryScope(scope: string): MemoryRecord["scope"] {
+  if (scope === "global" || scope === "project" || scope === "unknown") {
+    return scope
+  }
+  return "unknown"
+}
+
+function toMemoryRecord(memory: z.infer<typeof structuredMemorySchema>): MemoryRecord {
+  return {
+    id: memory.id ?? null,
+    content: memory.content,
+    type: normalizeMemoryType(memory.type),
+    scope: normalizeMemoryScope(memory.scope),
+    projectId: memory.projectId ?? null,
+    tags: memory.tags ?? [],
+  }
+}
+
+interface ParsedToolResult {
+  raw: string
+  structured: unknown
+}
+
+function parseToolResult(result: unknown): ParsedToolResult {
   const parsed = z
     .object({
       content: z.array(z.object({ type: z.string(), text: z.string().optional() })).optional(),
+      structuredContent: z.unknown().optional(),
     })
     .passthrough()
     .safeParse(result)
 
   if (!parsed.success) {
-    return ""
+    return { raw: "", structured: null }
   }
 
   const textChunk = parsed.data.content?.find((entry) => entry.type === "text" && entry.text)
-  return textChunk?.text ?? ""
+  return {
+    raw: textChunk?.text ?? "",
+    structured: parsed.data.structuredContent ?? null,
+  }
 }
 
 export class MemoriesClient {
@@ -101,13 +152,26 @@ export class MemoriesClient {
 
   readonly context = {
     get: async (query?: string, options: ContextGetOptions = {}): Promise<ContextResult> => {
-      const raw = await this.callTool("get_context", {
+      const toolResult = await this.callTool("get_context", {
         query,
         limit: options.limit,
         project_id: options.projectId,
       })
 
-      const parsed = parseContextResponse(raw)
+      const structured = contextStructuredSchema.safeParse(toolResult.structured)
+      if (structured.success) {
+        const parsedFromStructured: ContextResult = {
+          rules: structured.data.rules.map(toMemoryRecord),
+          memories: structured.data.memories.map(toMemoryRecord),
+          raw: toolResult.raw,
+        }
+        if (options.includeRules === false) {
+          return { ...parsedFromStructured, rules: [] }
+        }
+        return parsedFromStructured
+      }
+
+      const parsed = parseContextResponse(toolResult.raw)
       if (options.includeRules === false) {
         return { ...parsed, rules: [] }
       }
@@ -117,7 +181,7 @@ export class MemoriesClient {
 
   readonly memories = {
     add: async (input: MemoryAddInput): Promise<MutationResult> => {
-      const raw = await this.callTool("add_memory", {
+      const toolResult = await this.callTool("add_memory", {
         content: input.content,
         type: input.type,
         tags: input.tags,
@@ -127,31 +191,43 @@ export class MemoriesClient {
         project_id: input.projectId,
       })
 
-      return { ok: true, message: raw || "Memory stored", raw }
+      return { ok: true, message: toolResult.raw || "Memory stored", raw: toolResult.raw }
     },
 
     search: async (query: string, options: MemorySearchOptions = {}): Promise<MemoryRecord[]> => {
-      const raw = await this.callTool("search_memories", {
+      const toolResult = await this.callTool("search_memories", {
         query,
         type: options.type,
         limit: options.limit,
         project_id: options.projectId,
       })
-      return parseMemoryListResponse(raw)
+
+      const structured = memoriesStructuredSchema.safeParse(toolResult.structured)
+      if (structured.success) {
+        return structured.data.memories.map(toMemoryRecord)
+      }
+
+      return parseMemoryListResponse(toolResult.raw)
     },
 
     list: async (options: MemoryListOptions = {}): Promise<MemoryRecord[]> => {
-      const raw = await this.callTool("list_memories", {
+      const toolResult = await this.callTool("list_memories", {
         type: options.type,
         tags: options.tags,
         limit: options.limit,
         project_id: options.projectId,
       })
-      return parseMemoryListResponse(raw)
+
+      const structured = memoriesStructuredSchema.safeParse(toolResult.structured)
+      if (structured.success) {
+        return structured.data.memories.map(toMemoryRecord)
+      }
+
+      return parseMemoryListResponse(toolResult.raw)
     },
 
     edit: async (id: string, updates: MemoryEditInput): Promise<MutationResult> => {
-      const raw = await this.callTool("edit_memory", {
+      const toolResult = await this.callTool("edit_memory", {
         id,
         content: updates.content,
         type: updates.type,
@@ -160,12 +236,12 @@ export class MemoriesClient {
         category: updates.category,
         metadata: updates.metadata,
       })
-      return { ok: true, message: raw || `Updated memory ${id}`, raw }
+      return { ok: true, message: toolResult.raw || `Updated memory ${id}`, raw: toolResult.raw }
     },
 
     forget: async (id: string): Promise<MutationResult> => {
-      const raw = await this.callTool("forget_memory", { id })
-      return { ok: true, message: raw || `Deleted memory ${id}`, raw }
+      const toolResult = await this.callTool("forget_memory", { id })
+      return { ok: true, message: toolResult.raw || `Deleted memory ${id}`, raw: toolResult.raw }
     },
   }
 
@@ -217,11 +293,11 @@ export class MemoriesClient {
     return { ...args, user_id: this.userId }
   }
 
-  private async callTool(toolName: string, args: Record<string, unknown>): Promise<string> {
+  private async callTool(toolName: string, args: Record<string, unknown>): Promise<ParsedToolResult> {
     const result = await this.rpc("tools/call", {
       name: toolName,
       arguments: this.withUserScope(args),
     })
-    return extractTextFromToolResult(result)
+    return parseToolResult(result)
   }
 }
