@@ -35,9 +35,6 @@ memoriesMiddleware({
   // Also inject rules (type=rule) (default: true)
   includeRules: true,
 
-  // Auto-store learnings from responses (default: false)
-  autoStore: false,
-
   // Custom query extraction from params
   extractQuery: (params) => {
     // Return a string to search memories with
@@ -63,10 +60,6 @@ Maximum number of memories to inject into the system prompt. Default: `10`.
 
 Whether to include rules (memories with `type: "rule"`) in the injected context. Default: `true`.
 
-### `autoStore`
-
-When `true`, the middleware will extract and store learnings from each conversation via `onFinish`. Default: `false`.
-
 ### `extractQuery`
 
 Custom function to extract the search query from the call parameters. By default, the middleware uses the last user message.
@@ -90,7 +83,7 @@ const ctx = await preloadContext({ query: userMessage, limit: 15 })
 
 const model = wrapLanguageModel({
   model: openai("gpt-4o"),
-  middleware: memoriesMiddleware({ preloaded: ctx }),
+  middleware: memoriesMiddleware({ tenantId: "acme-prod", preloaded: ctx }),
 })
 ```
 
@@ -110,7 +103,7 @@ AI SDK middleware is composable. Stack `memoriesMiddleware()` with other middlew
 const model = wrapLanguageModel({
   model: openai("gpt-4o"),
   middleware: [
-    memoriesMiddleware(),
+    memoriesMiddleware({ tenantId: "acme-prod" }),
     loggingMiddleware,
     guardrailMiddleware,
   ],
@@ -119,15 +112,6 @@ const model = wrapLanguageModel({
 
 This is lighter than provider wrapping (Mem0's approach) and plays well with the rest of the AI SDK ecosystem.
 
-## With Auto-Store
+## Storing on Finish
 
-```typescript
-const model = wrapLanguageModel({
-  model: openai("gpt-4o"),
-  middleware: memoriesMiddleware({
-    autoStore: true,
-  }),
-})
-```
-
-When `autoStore` is enabled, the middleware watches responses and stores learnings back to your memory store automatically.
+To persist memories after responses, pair middleware with `createMemoriesOnFinish()` in your `onFinish` handler.

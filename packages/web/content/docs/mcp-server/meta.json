@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "tools-reference",
-    "resources-reference"
+    "resources-reference",
+    "tenant-routing"
   ]
 }

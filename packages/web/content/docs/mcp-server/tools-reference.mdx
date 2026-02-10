@@ -13,6 +13,7 @@ The primary tool for AI agents. Returns all active rules (with path and category
 |-----------|------|----------|-------------|
 | `query` | `string` | No | Search query to find relevant memories |
 | `project_id` | `string` | No | Project identifier (e.g., `github.com/user/repo`) to include project-specific rules |
+| `tenant_id` | `string` | No | Tenant identifier for tenant-scoped database routing |
 | `limit` | `number` | No | Max memories to return (default: 5) |
 
 ```json
@@ -38,6 +39,7 @@ Store a new memory with optional metadata, path scoping, and categorization.
 | `type` | `enum` | No | `rule`, `decision`, `fact`, `note`, `skill` (default: `note`) |
 | `tags` | `string[]` | No | Array of tags |
 | `project_id` | `string` | No | Project identifier to scope to a project (omit for global) |
+| `tenant_id` | `string` | No | Tenant identifier for tenant-scoped database routing |
 | `paths` | `string[]` | No | Glob patterns for path-scoped rules |
 | `category` | `string` | No | Grouping key (becomes rule filename or skill directory) |
 | `metadata` | `object` | No | Extended attributes (JSON object, primarily for skills) |
@@ -79,6 +81,7 @@ Full-text search across memories with BM25 ranking. Uses FTS5 when available, fa
 |-----------|------|----------|-------------|
 | `query` | `string` | Yes | Search query |
 | `project_id` | `string` | No | Project identifier to include project-specific memories |
+| `tenant_id` | `string` | No | Tenant identifier for tenant-scoped database routing |
 | `type` | `enum` | No | Filter by memory type: `rule`, `decision`, `fact`, `note`, `skill` |
 | `limit` | `number` | No | Max results (default: 10) |
 
@@ -100,6 +103,7 @@ Get all active rules, split by global and project scope.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `project_id` | `string` | No | Project identifier to include project-specific rules |
+| `tenant_id` | `string` | No | Tenant identifier for tenant-scoped database routing |
 
 ```json
 {
@@ -119,6 +123,7 @@ List recent memories with optional filters.
 | `type` | `enum` | No | Filter by type: `rule`, `decision`, `fact`, `note`, `skill` |
 | `tags` | `string` | No | Filter by tag (partial match) |
 | `project_id` | `string` | No | Project identifier to include project-specific memories |
+| `tenant_id` | `string` | No | Tenant identifier for tenant-scoped database routing |
 | `limit` | `number` | No | Max results (default: 20) |
 
 ## edit_memory
@@ -134,6 +139,7 @@ Update an existing memory's content, type, tags, path scope, or category.
 | `paths` | `string[]` | No | New glob patterns for path scoping |
 | `category` | `string` | No | New grouping key |
 | `metadata` | `object` | No | New extended attributes |
+| `tenant_id` | `string` | No | Tenant identifier for tenant-scoped database routing |
 
 ```json
 {
@@ -153,3 +159,4 @@ Soft-delete a memory by ID.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `id` | `string` | Yes | Memory ID to forget |
+| `tenant_id` | `string` | No | Tenant identifier for tenant-scoped database routing |

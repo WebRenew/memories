@@ -1,0 +1,94 @@
+---
+title: Tenant Routing
+description: Configure tenant-scoped Turso routing for hosted MCP.
+---
+
+For SaaS apps, you can route MCP tool calls to tenant-specific databases by passing `tenant_id` in tool arguments.
+
+## How Routing Works
+
+1. Use your MCP API key as usual (`Authorization: Bearer mcp_...`).
+2. Configure per-tenant database mappings with `/api/mcp/tenants`.
+3. Include `tenant_id` in tool arguments (`get_context`, `add_memory`, etc.).
+4. The server resolves `(api_key_hash, tenant_id)` to the mapped Turso database.
+
+If `tenant_id` is omitted, requests use the API key's default workspace database.
+
+## Manage Tenant Mappings
+
+### `GET /api/mcp/tenants`
+
+List all tenant mappings for your active MCP API key.
+
+### `POST /api/mcp/tenants`
+
+Create or update a tenant mapping.
+
+`mode: "provision"`:
+- Creates a new Turso database
+- Initializes schema
+- Stores mapping as `status: "ready"`
+
+`mode: "attach"`:
+- Validates existing Turso credentials (`SELECT 1`)
+- Stores mapping as `status: "ready"`
+
+Example (`provision`):
+
+```json
+{
+  "tenantId": "acme-prod",
+  "mode": "provision",
+  "metadata": {
+    "environment": "production"
+  }
+}
+```
+
+Example (`attach`):
+
+```json
+{
+  "tenantId": "acme-eu",
+  "mode": "attach",
+  "tursoDbUrl": "libsql://acme-eu.turso.io",
+  "tursoDbToken": "<token>",
+  "tursoDbName": "acme-eu"
+}
+```
+
+### `DELETE /api/mcp/tenants?tenantId=...`
+
+Soft-disables a mapping (`status: "disabled"`).
+
+## Using `tenant_id` in MCP Tools
+
+Example JSON-RPC call:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "1",
+  "method": "tools/call",
+  "params": {
+    "name": "get_context",
+    "arguments": {
+      "tenant_id": "acme-prod",
+      "project_id": "github.com/acme/platform",
+      "query": "auth patterns"
+    }
+  }
+}
+```
+
+## Key Rotation Behavior
+
+When you rotate your MCP API key, tenant mappings are copied from the old key hash to the new key hash automatically. This keeps `tenant_id` routing working without manual remapping.
+
+## Error Codes
+
+Tenant routing returns typed JSON-RPC errors:
+
+- `TENANT_ID_INVALID` (`-32602`): `tenant_id` is not a non-empty string
+- `TENANT_DATABASE_NOT_CONFIGURED` (`-32004`): no mapping exists for `(api_key_hash, tenant_id)`
+- `TENANT_DATABASE_NOT_READY` (`-32009`): mapping exists but status is not `ready`

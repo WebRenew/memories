@@ -38,7 +38,7 @@ const response = await anthropic.messages.create({
 ```typescript
 const client = new MemoriesClient({
   apiKey: "mcp_xxx",      // API key (default: MEMORIES_API_KEY env var)
-  tenantId: "acme-prod",  // Required for tenant/customer-level isolation
+  tenantId: "acme-prod",  // Recommended for tenant/customer-level isolation
   userId: "user_123",     // Optional: scope all operations to a specific end user
 })
 ```
@@ -130,29 +130,6 @@ const systemPrompt = client.buildSystemPrompt({ rules, memories })
 // - [fact] Project uses pnpm
 ```
 
-## Seed API
-
-Programmatically seed memories from existing context files or structured data:
-
-```typescript
-// Seed from existing project context files
-const { imported, skipped } = await client.seed({
-  sources: "auto", // scans cwd for .cursorrules, CLAUDE.md, AGENTS.md, etc.
-  dedup: true,
-})
-
-// Seed from structured data
-await client.seed({
-  memories: [
-    { content: "Use TypeScript with strict mode", type: "rule", tags: ["code-style"] },
-    { content: "Project uses pnpm", type: "fact", tags: ["tooling"] },
-  ],
-})
-
-// Seed from a markdown file
-await client.seed({ file: "./CONVENTIONS.md" })
-```
-
 ## Scoping
 
 Use all three scopes together:
@@ -160,6 +137,8 @@ Use all three scopes together:
 - `tenantId` for database isolation per customer/workspace
 - `userId` for per-user personalization inside that tenant
 - `projectId` for repo/project-specific rules and memories
+
+If `tenantId` is omitted, requests route to the API key's default workspace database.
 
 ```typescript
 const client = new MemoriesClient({
@@ -200,7 +179,7 @@ import { MemoriesClient } from "@memories.sh/core"
 export const runtime = "edge"
 
 export async function POST(req: Request) {
-  const client = new MemoriesClient()
+  const client = new MemoriesClient({ tenantId: "acme-prod" })
   const { rules } = await client.context.get()
   return Response.json({ rules: rules.map((r) => r.content) })
 }
