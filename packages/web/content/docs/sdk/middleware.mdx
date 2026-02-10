@@ -3,7 +3,7 @@ title: Middleware
 description: memoriesMiddleware() auto-injects rules and context into every LLM call.
 ---
 
-`memoriesMiddleware()` is the headline feature of the SDK. It wraps any [Vercel AI SDK](https://ai-sdk.dev/) model so that rules and relevant memories are automatically injected into the system prompt — no tool calls, no prompt engineering.
+`memoriesMiddleware()` is the headline feature of the SDK. It wraps any Vercel AI SDK model so that rules and relevant memories are automatically injected into the system prompt — no tool calls, no prompt engineering.
 
 ## Basic Usage
 
@@ -97,7 +97,7 @@ const model = wrapLanguageModel({
 
 ## Composability
 
-[AI SDK](https://ai-sdk.dev/) middleware is composable. Stack `memoriesMiddleware()` with other middleware:
+AI SDK middleware is composable. Stack `memoriesMiddleware()` with other middleware:
 
 ```typescript
 const model = wrapLanguageModel({
@@ -110,7 +110,7 @@ const model = wrapLanguageModel({
 })
 ```
 
-This is lighter than provider wrapping (Mem0's approach) and plays well with the rest of the [AI SDK](https://ai-sdk.dev/) ecosystem.
+This is lighter than provider wrapping (Mem0's approach) and plays well with the rest of the AI SDK ecosystem.
 
 ## With Auto-Store
 
