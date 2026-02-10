@@ -48,7 +48,7 @@ const sdkCodeLines = [
   { tokens: [{ text: "import", style: "keyword" }, { text: " { memoriesMiddleware } ", style: "default" }, { text: "from", style: "keyword" }, { text: ' "@memories.sh/ai-sdk"', style: "string" }] },
   { tokens: [] },
   { tokens: [{ text: "const", style: "keyword" }, { text: " model = ", style: "default" }, { text: "wrapLanguageModel", style: "fn" }, { text: "({", style: "default" }] },
-  { tokens: [{ text: "  model: ", style: "default" }, { text: "openai", style: "fn" }, { text: "(", style: "default" }, { text: '"gpt-4o"', style: "string" }, { text: "),", style: "default" }] },
+  { tokens: [{ text: "  model: ", style: "default" }, { text: "anthropic", style: "fn" }, { text: "(", style: "default" }, { text: '"claude-opus-4.6"', style: "string" }, { text: "),", style: "default" }] },
   { tokens: [{ text: "  middleware: ", style: "default" }, { text: "memoriesMiddleware", style: "fn" }, { text: "()", style: "default" }] },
   { tokens: [{ text: "})", style: "default" }] },
   { tokens: [] },
