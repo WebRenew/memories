@@ -6,6 +6,9 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish",
     "prepare": "husky"
   },
   "pnpm": {
@@ -31,6 +34,7 @@
     ]
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7"
   }
