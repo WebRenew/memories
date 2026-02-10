@@ -11,10 +11,10 @@ import {
   User, 
   Mail,
   Trash2,
-  Copy,
   Check,
-  X,
 } from "lucide-react"
+import { InviteModal } from "./invite-modal"
+import { MemoryMigrationCard } from "./memory-migration-card"
 
 interface Organization {
   id: string
@@ -50,6 +50,14 @@ interface Invite {
   }
 }
 
+function roleIcon(role: string) {
+  switch (role) {
+    case "owner": return <Crown className="h-3 w-3 text-amber-400" />
+    case "admin": return <Shield className="h-3 w-3 text-blue-400" />
+    default: return <User className="h-3 w-3 text-muted-foreground" />
+  }
+}
+
 export function TeamContent({ 
   organizations, 
   currentOrgId,
@@ -69,14 +77,8 @@ export function TeamContent({
   const [loading, setLoading] = useState(false)
   const [showCreateOrg, setShowCreateOrg] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [newOrgName, setNewOrgName] = useState("")
-  const [inviteEmail, setInviteEmail] = useState("")
-  const [inviteRole, setInviteRole] = useState<"member" | "admin">("member")
-  const [inviteUrl, setInviteUrl] = useState<string | null>(null)
-  const [emailSent, setEmailSent] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [orgSwitching, setOrgSwitching] = useState(false)
-  const [orgSwitchError, setOrgSwitchError] = useState<string | null>(null)
 
   const selectedOrg = organizations.find(o => o.id === selectedOrgId)
   const isOwner = selectedOrg?.role === "owner"
@@ -116,8 +118,6 @@ export function TeamContent({
     }
   }, [selectedOrgId])
 
-  const [createError, setCreateError] = useState<string | null>(null)
-
   async function createOrganization() {
     if (!newOrgName.trim()) return
     
@@ -135,12 +135,7 @@ export function TeamContent({
       if (res.ok) {
         setShowCreateOrg(false)
         setNewOrgName("")
-        // Select the newly created org so it's shown immediately
-        if (data.organization?.id) {
-          await setActiveOrganization(data.organization.id)
-        } else {
-          router.refresh()
-        }
+        router.refresh()
       } else {
         console.error("Failed to create organization:", data)
         setCreateError(data.error || "Failed to create organization. Please try again.")
@@ -153,33 +148,7 @@ export function TeamContent({
     }
   }
 
-  async function inviteMember() {
-    if (!inviteEmail.trim() || !selectedOrgId) return
-    
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/orgs/${selectedOrgId}/invites`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
-      })
-      
-      const data = await res.json()
-      
-      if (res.ok) {
-        setInviteUrl(data.inviteUrl)
-        setEmailSent(data.emailSent || false)
-        setInviteEmail("")
-        if (selectedOrgId) fetchOrgData(selectedOrgId)
-      } else {
-        alert(data.error || "Failed to send invite")
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function removeMember(memberId: string, memberUserId: string) {
+  async function removeMember(memberUserId: string) {
     if (!confirm("Are you sure you want to remove this member?")) return
     
     try {
@@ -206,7 +175,7 @@ export function TeamContent({
     }
   }
 
-  async function updateRole(memberId: string, memberUserId: string, newRole: string) {
+  async function updateRole(memberUserId: string, newRole: string) {
     try {
       const res = await fetch(`/api/orgs/${selectedOrgId}/members`, {
         method: "PATCH",
@@ -219,49 +188,6 @@ export function TeamContent({
       }
     } catch (e) {
       console.error(e)
-    }
-  }
-
-  async function setActiveOrganization(nextOrgId: string | null) {
-    const previousOrgId = selectedOrgId
-    setSelectedOrgId(nextOrgId)
-    setOrgSwitchError(null)
-    setOrgSwitching(true)
-
-    try {
-      const res = await fetch("/api/user", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ current_org_id: nextOrgId }),
-      })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || "Failed to switch organization")
-      }
-
-      router.refresh()
-    } catch (e) {
-      console.error("Failed to switch organization:", e)
-      setSelectedOrgId(previousOrgId)
-      setOrgSwitchError(e instanceof Error ? e.message : "Failed to switch organization")
-    } finally {
-      setOrgSwitching(false)
-    }
-  }
-
-  function copyInviteUrl() {
-    if (!inviteUrl) return
-    navigator.clipboard.writeText(inviteUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const roleIcon = (role: string) => {
-    switch (role) {
-      case "owner": return <Crown className="h-3 w-3 text-amber-400" />
-      case "admin": return <Shield className="h-3 w-3 text-blue-400" />
-      default: return <User className="h-3 w-3 text-muted-foreground" />
     }
   }
 
@@ -369,33 +295,28 @@ export function TeamContent({
         </div>
       ) : (
         <>
-          {/* Org Selector */}
-          {organizations.length > 0 && (
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Organization:</span>
-                <select
-                  value={selectedOrgId || "__personal__"}
-                  onChange={(e) => setActiveOrganization(e.target.value === "__personal__" ? null : e.target.value)}
-                  disabled={orgSwitching}
-                  className="px-3 py-1.5 bg-muted/30 border border-border text-sm focus:outline-none focus:border-primary disabled:opacity-60"
-                >
-                  <option value="__personal__">Personal workspace</option>
-                  {organizations.map(org => (
-                    <option key={org.id} value={org.id}>{org.name}</option>
-                  ))}
-                </select>
-              </div>
-              {orgSwitchError && (
-                <p className="text-xs text-red-400">{orgSwitchError}</p>
-              )}
-            </div>
-          )}
+          {/* Org Selector (view-only tabs — use header switcher to change workspace) */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {organizations.map((org) => (
+              <button
+                key={org.id}
+                onClick={() => setSelectedOrgId(org.id)}
+                className={`flex items-center gap-2 px-3 py-1.5 border text-sm transition-colors ${
+                  selectedOrgId === org.id
+                    ? "border-primary/40 bg-primary/10 text-foreground"
+                    : "border-border bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                }`}
+              >
+                {roleIcon(org.role)}
+                <span className="font-medium">{org.name}</span>
+              </button>
+            ))}
+          </div>
 
           {!selectedOrg && (
             <div className="border border-border bg-card/20 p-4">
               <p className="text-sm text-muted-foreground">
-                Personal workspace is active. Select an organization to manage members and shared memory.
+                Select an organization above to manage members and shared memory.
               </p>
             </div>
           )}
@@ -442,114 +363,18 @@ export function TeamContent({
                 </div>
               </div>
 
+              {/* Memory Migration — owners/admins only */}
+              {isAdmin && <MemoryMigrationCard orgId={selectedOrg.id} />}
+
               {/* Invite Modal */}
-              {showInvite && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                  <div className="bg-background border border-border p-6 w-full max-w-md">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-lg font-bold">Invite Team Member</h2>
-                      <button onClick={() => { setShowInvite(false); setInviteUrl(null) }}>
-                        <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-                      </button>
-                    </div>
-                    
-                    {inviteUrl ? (
-                      <div className="space-y-4">
-                        <div className="bg-green-500/10 border border-green-500/20 p-3 text-sm">
-                          <p className="text-green-400 font-medium mb-2">
-                            {emailSent ? "Invite Sent!" : "Invite Created!"}
-                          </p>
-                          <p className="text-muted-foreground text-xs">
-                            {emailSent 
-                              ? "We've sent an email with the invite link. You can also share this link directly:"
-                              : "Share this link with the person you want to invite:"}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={inviteUrl}
-                            readOnly
-                            className="flex-1 px-3 py-2 bg-muted/30 border border-border text-xs font-mono focus:outline-none"
-                          />
-                          <button
-                            onClick={copyInviteUrl}
-                            className={`p-2 transition-colors ${copied ? "bg-green-500/20 text-green-400" : "bg-muted/30 hover:bg-muted/50"}`}
-                          >
-                            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                          </button>
-                        </div>
-                        <button
-                          onClick={() => { setShowInvite(false); setInviteUrl(null); setEmailSent(false) }}
-                          className="w-full px-4 py-2 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-                        >
-                          Done
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="space-y-4 mb-4">
-                          <input
-                            type="email"
-                            value={inviteEmail}
-                            onChange={(e) => setInviteEmail(e.target.value)}
-                            placeholder="Email address"
-                            className="w-full px-3 py-2 bg-muted/30 border border-border text-sm focus:outline-none focus:border-primary"
-                            autoFocus
-                          />
-                          <div className="flex items-center gap-4">
-                            <span className="text-sm text-muted-foreground">Role:</span>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="radio"
-                                name="role"
-                                checked={inviteRole === "member"}
-                                onChange={() => setInviteRole("member")}
-                              />
-                              <span className="text-sm">Member</span>
-                            </label>
-                            {isOwner && (
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="radio"
-                                  name="role"
-                                  checked={inviteRole === "admin"}
-                                  onChange={() => setInviteRole("admin")}
-                                />
-                                <span className="text-sm">Admin</span>
-                              </label>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="bg-amber-500/10 border border-amber-500/20 p-3 mb-4">
-                          <p className="text-sm text-amber-400">
-                            <strong>$15/month</strong> or <strong>$150/year</strong> per member
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Billed to you when they accept. You can remove members anytime.
-                          </p>
-                        </div>
-
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => setShowInvite(false)}
-                            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={inviteMember}
-                            disabled={!inviteEmail.trim() || loading}
-                            className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-                          >
-                            {loading ? "Sending..." : "Send Invite"}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
+              {showInvite && selectedOrgId && (
+                <InviteModal
+                  orgId={selectedOrgId}
+                  isOwner={isOwner}
+                  loading={loading}
+                  onClose={() => setShowInvite(false)}
+                  onInviteSent={() => { if (selectedOrgId) fetchOrgData(selectedOrgId) }}
+                />
               )}
 
               {/* Members List */}
@@ -594,7 +419,7 @@ export function TeamContent({
                             {isOwner && (
                               <select
                                 value={member.role}
-                                onChange={(e) => updateRole(member.id, member.user.id, e.target.value)}
+                                onChange={(e) => updateRole(member.user.id, e.target.value)}
                                 className="px-2 py-1 bg-muted/30 border border-border text-xs focus:outline-none"
                               >
                                 <option value="member">Member</option>
@@ -602,7 +427,7 @@ export function TeamContent({
                               </select>
                             )}
                             <button
-                              onClick={() => removeMember(member.id, member.user.id)}
+                              onClick={() => removeMember(member.user.id)}
                               className="p-1.5 text-red-400 hover:bg-red-500/10 transition-colors"
                               title="Remove member"
                             >
