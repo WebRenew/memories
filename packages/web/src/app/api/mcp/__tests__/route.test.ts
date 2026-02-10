@@ -151,6 +151,9 @@ describe("/api/mcp", () => {
       })
       const response = await POST(request)
       expect(response.status).toBe(401)
+      const body = await response.json()
+      expect(body.error).toBe("Missing API key")
+      expect(body.errorDetail.code).toBe("MISSING_API_KEY")
     })
 
     it("should return 401 for invalid API key", async () => {
@@ -215,6 +218,8 @@ describe("/api/mcp", () => {
       const body = await response.json()
       expect(body.error.code).toBe(-32601)
       expect(body.error.message).toContain("nonexistent/method")
+      expect(body.error.data.code).toBe("METHOD_NOT_FOUND")
+      expect(body.error.data.type).toBe("method_error")
     })
   })
 
@@ -235,6 +240,8 @@ describe("/api/mcp", () => {
       const body = await response.json()
       expect(body.result.content[0].text).toContain("Global Rules")
       expect(body.result.content[0].text).toContain("Use TypeScript strict mode")
+      expect(body.result.structuredContent.ok).toBe(true)
+      expect(body.result.structuredContent.data.rules).toHaveLength(1)
       expect(body.result.structuredContent.rules).toHaveLength(1)
       expect(body.result.structuredContent.memories).toHaveLength(0)
     })
@@ -480,6 +487,8 @@ describe("/api/mcp", () => {
       ))
       const body = await response.json()
       expect(body.error).toBeDefined()
+      expect(body.error.code).toBe(-32602)
+      expect(body.error.data.code).toBe("MEMORY_ID_REQUIRED")
       expect(body.error.message).toContain("id is required")
     })
 
@@ -548,6 +557,8 @@ describe("/api/mcp", () => {
       ))
       const body = await response.json()
       expect(body.error).toBeDefined()
+      expect(body.error.code).toBe(-32602)
+      expect(body.error.data.code).toBe("MEMORY_ID_REQUIRED")
     })
   })
 
@@ -572,6 +583,8 @@ describe("/api/mcp", () => {
       expect(body.result.content[0].text).toContain("Found 1 memories")
       expect(body.result.content[0].text).toContain("[decision]")
       expect(body.result.content[0].text).toContain("JWT for authentication")
+      expect(body.result.structuredContent.ok).toBe(true)
+      expect(body.result.structuredContent.data.count).toBe(1)
       expect(body.result.structuredContent.memories).toHaveLength(1)
       expect(body.result.structuredContent.memories[0].content).toBe("JWT for authentication")
     })
@@ -652,6 +665,8 @@ describe("/api/mcp", () => {
       ))
       const body = await response.json()
       expect(body.result.content[0].text).toContain("2 memories")
+      expect(body.result.structuredContent.ok).toBe(true)
+      expect(body.result.structuredContent.data.count).toBe(2)
       expect(body.result.structuredContent.memories).toHaveLength(2)
     })
 
@@ -733,6 +748,8 @@ describe("/api/mcp", () => {
       ))
       const body = await response.json()
       expect(body.error).toBeDefined()
+      expect(body.error.code).toBe(-32601)
+      expect(body.error.data.code).toBe("TOOL_NOT_FOUND")
       expect(body.error.message).toContain("Unknown tool")
     })
   })

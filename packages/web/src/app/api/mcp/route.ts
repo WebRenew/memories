@@ -13,6 +13,7 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
 const MCP_MAX_CONNECTIONS_PER_KEY = parsePositiveInt(process.env.MCP_MAX_CONNECTIONS_PER_KEY, 5)
 const MCP_MAX_CONNECTIONS_PER_IP = parsePositiveInt(process.env.MCP_MAX_CONNECTIONS_PER_IP, 20)
 const MCP_SESSION_IDLE_MS = parsePositiveInt(process.env.MCP_SESSION_IDLE_MS, 15 * 60 * 1000)
+const MCP_RESPONSE_SCHEMA_VERSION = "2026-02-10"
 const encoder = new TextEncoder()
 
 interface ActiveConnection {
@@ -23,6 +24,21 @@ interface ActiveConnection {
   clientIp: string
   lastActivityAt: number
   idleTimeout: ReturnType<typeof setTimeout> | null
+}
+
+interface AuthenticatedUser {
+  id: string
+  email: string | null
+  mcp_api_key_expires_at: string | null
+}
+
+interface AuthSuccess {
+  turso: ReturnType<typeof createTurso>
+  user: AuthenticatedUser
+}
+
+interface AuthFailure {
+  error: ApiErrorDetail
 }
 
 // Store active SSE connections
@@ -79,9 +95,17 @@ function pruneExpiredConnections() {
 }
 
 // Authenticate via API key and return user's Turso client
-async function authenticateAndGetTurso(apiKey: string) {
+async function authenticateAndGetTurso(apiKey: string): Promise<AuthSuccess | AuthFailure> {
   if (!isValidMcpApiKey(apiKey)) {
-    return { error: "Invalid API key format", status: 401 }
+    return {
+      error: apiError({
+        type: "auth_error",
+        code: "INVALID_API_KEY_FORMAT",
+        message: "Invalid API key format",
+        status: 401,
+        retryable: false,
+      }),
+    }
   }
 
   const apiKeyHash = hashMcpApiKey(apiKey)
@@ -93,16 +117,40 @@ async function authenticateAndGetTurso(apiKey: string) {
     .single()
 
   if (error || !user) {
-    return { error: "Invalid API key", status: 401 }
+    return {
+      error: apiError({
+        type: "auth_error",
+        code: "INVALID_API_KEY",
+        message: "Invalid API key",
+        status: 401,
+        retryable: false,
+      }),
+    }
   }
 
   if (!user.mcp_api_key_expires_at || new Date(user.mcp_api_key_expires_at).getTime() <= Date.now()) {
-    return { error: "API key expired. Generate a new key from memories.sh/app.", status: 401 }
+    return {
+      error: apiError({
+        type: "auth_error",
+        code: "API_KEY_EXPIRED",
+        message: "API key expired. Generate a new key from memories.sh/app.",
+        status: 401,
+        retryable: false,
+      }),
+    }
   }
 
   const context = await resolveActiveMemoryContext(admin, user.id)
   if (!context?.turso_db_url || !context?.turso_db_token) {
-    return { error: "Database not configured. Visit memories.sh/app to set up.", status: 400 }
+    return {
+      error: apiError({
+        type: "not_found_error",
+        code: "DATABASE_NOT_CONFIGURED",
+        message: "Database not configured. Visit memories.sh/app to set up.",
+        status: 400,
+        retryable: false,
+      }),
+    }
   }
 
   const turso = createTurso({
@@ -110,7 +158,7 @@ async function authenticateAndGetTurso(apiKey: string) {
     authToken: context.turso_db_token,
   })
 
-  return { turso, user }
+  return { turso, user: user as AuthenticatedUser }
 }
 
 // Extract API key from request
@@ -162,6 +210,149 @@ interface StructuredMemory {
   updatedAt: string | null
 }
 
+type ToolName =
+  | "get_context"
+  | "get_rules"
+  | "add_memory"
+  | "edit_memory"
+  | "forget_memory"
+  | "search_memories"
+  | "list_memories"
+
+type ApiErrorType =
+  | "auth_error"
+  | "validation_error"
+  | "rate_limit_error"
+  | "not_found_error"
+  | "tool_error"
+  | "method_error"
+  | "internal_error"
+  | "unknown_error"
+
+interface ApiErrorDetail {
+  type: ApiErrorType
+  code: string
+  message: string
+  status: number
+  retryable: boolean
+  details?: Record<string, unknown>
+}
+
+interface ToolResponseEnvelope<T extends Record<string, unknown>> {
+  ok: boolean
+  data: T | null
+  error: ApiErrorDetail | null
+  meta: {
+    version: string
+    tool: ToolName
+    timestamp: string
+  }
+}
+
+type ToolStructuredContent<T extends Record<string, unknown>> = ToolResponseEnvelope<T> & T
+
+class ToolExecutionError extends Error {
+  readonly rpcCode: number
+  readonly detail: ApiErrorDetail
+
+  constructor(detail: ApiErrorDetail, options?: { rpcCode?: number }) {
+    super(detail.message)
+    this.name = "ToolExecutionError"
+    this.detail = detail
+    this.rpcCode = options?.rpcCode ?? -32603
+  }
+}
+
+function apiError(detail: ApiErrorDetail): ApiErrorDetail {
+  return detail
+}
+
+function endpointErrorResponse(
+  detail: ApiErrorDetail,
+  init?: { headers?: HeadersInit }
+): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      data: null,
+      error: detail.message,
+      errorDetail: detail,
+      meta: {
+        version: MCP_RESPONSE_SCHEMA_VERSION,
+        endpoint: "/api/mcp",
+        timestamp: new Date().toISOString(),
+      },
+    },
+    { status: detail.status, headers: init?.headers }
+  )
+}
+
+function jsonRpcErrorResponse(id: unknown, rpcCode: number, detail: ApiErrorDetail, status?: number): NextResponse {
+  return NextResponse.json(
+    {
+      jsonrpc: "2.0",
+      id: id ?? null,
+      error: {
+        code: rpcCode,
+        message: detail.message,
+        data: detail,
+      },
+    },
+    status ? { status } : undefined
+  )
+}
+
+function buildToolEnvelope<T extends Record<string, unknown>>(
+  tool: ToolName,
+  data: T
+): ToolStructuredContent<T> {
+  const envelope: ToolResponseEnvelope<T> = {
+    ok: true,
+    data,
+    error: null,
+    meta: {
+      version: MCP_RESPONSE_SCHEMA_VERSION,
+      tool,
+      timestamp: new Date().toISOString(),
+    },
+  }
+
+  return {
+    ...envelope,
+    ...data,
+  }
+}
+
+function toToolExecutionError(err: unknown, fallbackTool?: string): ToolExecutionError {
+  if (err instanceof ToolExecutionError) {
+    return err
+  }
+
+  if (err instanceof Error) {
+    return new ToolExecutionError(
+      apiError({
+        type: "internal_error",
+        code: "TOOL_EXECUTION_FAILED",
+        message: err.message,
+        status: 500,
+        retryable: true,
+        details: fallbackTool ? { tool: fallbackTool } : undefined,
+      })
+    )
+  }
+
+  return new ToolExecutionError(
+    apiError({
+      type: "unknown_error",
+      code: "UNKNOWN_TOOL_ERROR",
+      message: "Tool execution failed",
+      status: 500,
+      retryable: true,
+      details: fallbackTool ? { tool: fallbackTool } : undefined,
+    })
+  )
+}
+
 // Format memory for display
 function formatMemory(m: MemoryRow): string {
   const scope = m.scope === "project" && m.project_id ? `@${m.project_id.split("/").pop()}` : "global"
@@ -208,7 +399,7 @@ function toStructuredMemory(row: Partial<MemoryRow>): StructuredMemory {
 
 interface ToolExecutionResult {
   content: Array<{ type: string; text: string }>
-  structuredContent?: Record<string, unknown>
+  structuredContent?: ToolResponseEnvelope<Record<string, unknown>> | Record<string, unknown>
 }
 
 // Full SELECT columns for memory queries
@@ -337,10 +528,10 @@ async function executeTool(
 
       return {
         content: [{ type: "text", text: output || "No rules or memories found." }],
-        structuredContent: {
+        structuredContent: buildToolEnvelope("get_context", {
           rules: (rulesResult.rows as unknown as MemoryRow[]).map(toStructuredMemory),
           memories: relevantMemories.map(toStructuredMemory),
-        },
+        }),
       }
     }
 
@@ -360,9 +551,9 @@ async function executeTool(
       if (result.rows.length === 0) {
         return {
           content: [{ type: "text", text: "No rules found." }],
-          structuredContent: {
+          structuredContent: buildToolEnvelope("get_rules", {
             rules: [],
-          },
+          }),
         }
       }
 
@@ -379,13 +570,28 @@ async function executeTool(
 
       return {
         content: [{ type: "text", text: output }],
-        structuredContent: {
+        structuredContent: buildToolEnvelope("get_rules", {
           rules: (result.rows as unknown as MemoryRow[]).map(toStructuredMemory),
-        },
+        }),
       }
     }
 
     case "add_memory": {
+      const content = typeof args.content === "string" ? args.content.trim() : ""
+      if (!content) {
+        throw new ToolExecutionError(
+          apiError({
+            type: "validation_error",
+            code: "MEMORY_CONTENT_REQUIRED",
+            message: "Memory content is required",
+            status: 400,
+            retryable: false,
+            details: { field: "content" },
+          }),
+          { rpcCode: -32602 }
+        )
+      }
+
       const memoryId = crypto.randomUUID().replace(/-/g, "").slice(0, 12)
       const now = new Date().toISOString()
       const rawType = (args.type as string) || "note"
@@ -399,13 +605,14 @@ async function executeTool(
       await turso.execute({
         sql: `INSERT INTO memories (id, content, type, scope, project_id, tags, paths, category, metadata, created_at, updated_at) 
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [memoryId, args.content as string, type, scope, projectId || null, tags, paths, category, metadata, now, now],
+        args: [memoryId, content, type, scope, projectId || null, tags, paths, category, metadata, now, now],
       })
 
       const scopeLabel = projectId ? `project:${projectId.split("/").pop()}` : "global"
+      const message = `Stored ${type} (${scopeLabel}): ${truncate(content)}`
       const created = toStructuredMemory({
         id: memoryId,
-        content: args.content as string,
+        content,
         type,
         scope,
         project_id: projectId || null,
@@ -417,17 +624,30 @@ async function executeTool(
         updated_at: now,
       })
       return {
-        content: [{ type: "text", text: `Stored ${type} (${scopeLabel}): ${truncate(args.content as string)}` }],
-        structuredContent: {
+        content: [{ type: "text", text: message }],
+        structuredContent: buildToolEnvelope("add_memory", {
           memory: created,
           id: memoryId,
-        },
+          message,
+        }),
       }
     }
 
     case "edit_memory": {
       const id = args.id as string
-      if (!id) throw new Error("Memory id is required")
+      if (!id) {
+        throw new ToolExecutionError(
+          apiError({
+            type: "validation_error",
+            code: "MEMORY_ID_REQUIRED",
+            message: "Memory id is required",
+            status: 400,
+            retryable: false,
+            details: { field: "id" },
+          }),
+          { rpcCode: -32602 }
+        )
+      }
 
       const now = new Date().toISOString()
       const updates: string[] = ["updated_at = ?"]
@@ -464,18 +684,32 @@ async function executeTool(
         args: updateArgs,
       })
 
+      const message = `Updated memory ${id}`
       return {
-        content: [{ type: "text", text: `Updated memory ${id}` }],
-        structuredContent: {
+        content: [{ type: "text", text: message }],
+        structuredContent: buildToolEnvelope("edit_memory", {
           id,
           updated: true,
-        },
+          message,
+        }),
       }
     }
 
     case "forget_memory": {
       const id = args.id as string
-      if (!id) throw new Error("Memory id is required")
+      if (!id) {
+        throw new ToolExecutionError(
+          apiError({
+            type: "validation_error",
+            code: "MEMORY_ID_REQUIRED",
+            message: "Memory id is required",
+            status: 400,
+            retryable: false,
+            details: { field: "id" },
+          }),
+          { rpcCode: -32602 }
+        )
+      }
 
       const now = new Date().toISOString()
       await turso.execute({
@@ -483,18 +717,33 @@ async function executeTool(
         args: [now, id],
       })
 
+      const message = `Deleted memory ${id}`
       return {
-        content: [{ type: "text", text: `Deleted memory ${id}` }],
-        structuredContent: {
+        content: [{ type: "text", text: message }],
+        structuredContent: buildToolEnvelope("forget_memory", {
           id,
           deleted: true,
-        },
+          message,
+        }),
       }
     }
 
     case "search_memories": {
       const limit = (args.limit as number) || 10
-      const query = args.query as string
+      const query = typeof args.query === "string" ? args.query.trim() : ""
+      if (!query) {
+        throw new ToolExecutionError(
+          apiError({
+            type: "validation_error",
+            code: "QUERY_REQUIRED",
+            message: "Search query is required",
+            status: 400,
+            retryable: false,
+            details: { field: "query" },
+          }),
+          { rpcCode: -32602 }
+        )
+      }
       const includeType = args.type && VALID_TYPES.has(args.type as string) ? (args.type as string) : undefined
 
       const results = await searchWithFts(turso, query, projectId, limit, { includeType })
@@ -502,18 +751,20 @@ async function executeTool(
       if (results.length === 0) {
         return {
           content: [{ type: "text", text: "No memories found." }],
-          structuredContent: {
+          structuredContent: buildToolEnvelope("search_memories", {
             memories: [],
-          },
+            count: 0,
+          }),
         }
       }
 
       const formatted = results.map(m => formatMemory(m)).join("\n")
       return {
         content: [{ type: "text", text: `Found ${results.length} memories:\n\n${formatted}` }],
-        structuredContent: {
+        structuredContent: buildToolEnvelope("search_memories", {
           memories: results.map(toStructuredMemory),
-        },
+          count: results.length,
+        }),
       }
     }
 
@@ -549,9 +800,10 @@ async function executeTool(
       if (result.rows.length === 0) {
         return {
           content: [{ type: "text", text: "No memories found." }],
-          structuredContent: {
+          structuredContent: buildToolEnvelope("list_memories", {
             memories: [],
-          },
+            count: 0,
+          }),
         }
       }
       
@@ -562,14 +814,25 @@ async function executeTool(
         .join("\n")
       return {
         content: [{ type: "text", text: `${result.rows.length} memories:\n\n${formatted}` }],
-        structuredContent: {
+        structuredContent: buildToolEnvelope("list_memories", {
           memories: structuredMemories,
-        },
+          count: result.rows.length,
+        }),
       }
     }
 
     default:
-      throw new Error(`Unknown tool: ${toolName}`)
+      throw new ToolExecutionError(
+        apiError({
+          type: "tool_error",
+          code: "TOOL_NOT_FOUND",
+          message: `Unknown tool: ${toolName}`,
+          status: 404,
+          retryable: false,
+          details: { tool: toolName },
+        }),
+        { rpcCode: -32601 }
+      )
   }
 }
 
@@ -691,17 +954,29 @@ export async function GET(request: NextRequest) {
 
   const keyConnectionCount = countConnectionsFor((conn) => conn.rateLimitKey === rateLimitKey)
   if (keyConnectionCount >= MCP_MAX_CONNECTIONS_PER_KEY) {
-    return NextResponse.json(
-      { error: "Too many active MCP sessions for this API key" },
-      { status: 429, headers: { "Retry-After": "60" } }
+    return endpointErrorResponse(
+      apiError({
+        type: "rate_limit_error",
+        code: "TOO_MANY_KEY_SESSIONS",
+        message: "Too many active MCP sessions for this API key",
+        status: 429,
+        retryable: true,
+      }),
+      { headers: { "Retry-After": "60" } }
     )
   }
 
   const ipConnectionCount = countConnectionsFor((conn) => conn.clientIp === clientIp)
   if (ipConnectionCount >= MCP_MAX_CONNECTIONS_PER_IP) {
-    return NextResponse.json(
-      { error: "Too many active MCP sessions from this IP" },
-      { status: 429, headers: { "Retry-After": "60" } }
+    return endpointErrorResponse(
+      apiError({
+        type: "rate_limit_error",
+        code: "TOO_MANY_IP_SESSIONS",
+        message: "Too many active MCP sessions from this IP",
+        status: 429,
+        retryable: true,
+      }),
+      { headers: { "Retry-After": "60" } }
     )
   }
 
@@ -710,7 +985,7 @@ export async function GET(request: NextRequest) {
 
   const auth = await authenticateAndGetTurso(apiKey)
   if ("error" in auth) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
+    return endpointErrorResponse(auth.error)
   }
 
   const { turso, user } = auth
@@ -769,7 +1044,15 @@ export async function POST(request: NextRequest) {
     // Stateless mode
     const apiKey = getApiKey(request)
     if (!apiKey) {
-      return NextResponse.json({ error: "Missing API key" }, { status: 401 })
+      return endpointErrorResponse(
+        apiError({
+          type: "auth_error",
+          code: "MISSING_API_KEY",
+          message: "Missing API key",
+          status: 401,
+          retryable: false,
+        })
+      )
     }
 
     const rateLimitKey = hashMcpApiKey(apiKey)
@@ -778,7 +1061,7 @@ export async function POST(request: NextRequest) {
 
     const auth = await authenticateAndGetTurso(apiKey)
     if ("error" in auth) {
-      return NextResponse.json({ error: auth.error }, { status: auth.status })
+      return endpointErrorResponse(auth.error)
     }
     turso = auth.turso
   }
@@ -815,12 +1098,8 @@ export async function POST(request: NextRequest) {
         try {
           result = await executeTool(toolName, args, turso)
         } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : "Tool execution failed"
-          return NextResponse.json({
-            jsonrpc: "2.0",
-            id,
-            error: { code: -32601, message: errorMessage },
-          })
+          const toolError = toToolExecutionError(err, typeof toolName === "string" ? toolName : undefined)
+          return jsonRpcErrorResponse(id, toolError.rpcCode, toolError.detail)
         }
         break
       }
@@ -831,11 +1110,18 @@ export async function POST(request: NextRequest) {
       }
 
       default:
-        return NextResponse.json({
-          jsonrpc: "2.0",
+        return jsonRpcErrorResponse(
           id,
-          error: { code: -32601, message: `Method not found: ${method}` },
-        })
+          -32601,
+          apiError({
+            type: "method_error",
+            code: "METHOD_NOT_FOUND",
+            message: `Method not found: ${method}`,
+            status: 404,
+            retryable: false,
+            details: { method: String(method) },
+          })
+        )
     }
 
     const response = { jsonrpc: "2.0", id, result }
@@ -853,11 +1139,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(response)
   } catch (err) {
     console.error("MCP error:", err)
-    return NextResponse.json({
-      jsonrpc: "2.0",
-      id: null,
-      error: { code: -32603, message: "Internal error" },
-    }, { status: 500 })
+    return jsonRpcErrorResponse(
+      null,
+      -32603,
+      apiError({
+        type: "internal_error",
+        code: "INTERNAL_ERROR",
+        message: "Internal error",
+        status: 500,
+        retryable: true,
+      }),
+      500
+    )
   }
 }
 

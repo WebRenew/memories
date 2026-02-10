@@ -5,6 +5,8 @@ import type {
   BuildSystemPromptInput,
   ContextGetOptions,
   ContextResult,
+  MemoriesErrorData,
+  MemoriesResponseEnvelope,
   MemoryAddInput,
   MemoryEditInput,
   MemoryListOptions,
@@ -33,6 +35,28 @@ interface RpcResponsePayload {
 }
 
 const baseUrlSchema = z.string().url()
+const apiErrorSchema = z.object({
+  type: z.string(),
+  code: z.string(),
+  message: z.string(),
+  status: z.number().int().optional(),
+  retryable: z.boolean().optional(),
+  details: z.unknown().optional(),
+})
+
+const responseEnvelopeSchema = z.object({
+  ok: z.boolean(),
+  data: z.unknown().nullable(),
+  error: apiErrorSchema.nullable(),
+  meta: z.record(z.string(), z.unknown()).optional(),
+})
+
+const legacyHttpErrorSchema = z.object({
+  error: z.union([z.string(), apiErrorSchema]).optional(),
+  errorDetail: apiErrorSchema.optional(),
+  message: z.string().optional(),
+})
+
 const structuredMemorySchema = z.object({
   id: z.string().nullable().optional(),
   content: z.string(),
@@ -51,17 +75,95 @@ const memoriesStructuredSchema = z.object({
   memories: z.array(structuredMemorySchema).optional().default([]),
 })
 
+const mutationEnvelopeDataSchema = z.object({
+  message: z.string().optional(),
+})
+
+function errorTypeForStatus(status: number): MemoriesErrorData["type"] {
+  if (status === 400) return "validation_error"
+  if (status === 401 || status === 403) return "auth_error"
+  if (status === 404) return "not_found_error"
+  if (status === 429) return "rate_limit_error"
+  if (status >= 500) return "internal_error"
+  return "http_error"
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status >= 500
+}
+
+function toTypedHttpError(status: number, payload: unknown): MemoriesErrorData {
+  const parsed = legacyHttpErrorSchema.safeParse(payload)
+  if (!parsed.success) {
+    return {
+      type: errorTypeForStatus(status),
+      code: `HTTP_${status}`,
+      message: `HTTP ${status}`,
+      status,
+      retryable: isRetryableStatus(status),
+      details: payload,
+    }
+  }
+
+  if (parsed.data.errorDetail) {
+    return {
+      ...parsed.data.errorDetail,
+      status: parsed.data.errorDetail.status ?? status,
+      retryable: parsed.data.errorDetail.retryable ?? isRetryableStatus(status),
+    }
+  }
+
+  if (typeof parsed.data.error !== "string" && parsed.data.error) {
+    return {
+      ...parsed.data.error,
+      status: parsed.data.error.status ?? status,
+      retryable: parsed.data.error.retryable ?? isRetryableStatus(status),
+    }
+  }
+
+  const message = typeof parsed.data.error === "string"
+    ? parsed.data.error
+    : parsed.data.message ?? `HTTP ${status}`
+
+  return {
+    type: errorTypeForStatus(status),
+    code: `HTTP_${status}`,
+    message,
+    status,
+    retryable: isRetryableStatus(status),
+  }
+}
+
 export class MemoriesClientError extends Error {
   readonly status?: number
   readonly code?: number
   readonly data?: unknown
+  readonly type?: MemoriesErrorData["type"]
+  readonly errorCode?: string
+  readonly retryable?: boolean
+  readonly details?: unknown
 
-  constructor(message: string, options?: { status?: number; code?: number; data?: unknown }) {
+  constructor(
+    message: string,
+    options?: {
+      status?: number
+      code?: number
+      data?: unknown
+      type?: MemoriesErrorData["type"]
+      errorCode?: string
+      retryable?: boolean
+      details?: unknown
+    }
+  ) {
     super(message)
     this.name = "MemoriesClientError"
     this.status = options?.status
     this.code = options?.code
-    this.data = options?.data
+    this.type = options?.type
+    this.errorCode = options?.errorCode
+    this.retryable = options?.retryable
+    this.details = options?.details
+    this.data = options?.data ?? options?.details
   }
 }
 
@@ -98,6 +200,18 @@ function toMemoryRecord(memory: z.infer<typeof structuredMemorySchema>): MemoryR
 interface ParsedToolResult {
   raw: string
   structured: unknown
+  envelope: MemoriesResponseEnvelope<unknown> | null
+}
+
+function toClientError(error: MemoriesErrorData, options?: { status?: number; rpcCode?: number }) {
+  return new MemoriesClientError(error.message, {
+    status: error.status ?? options?.status,
+    code: options?.rpcCode,
+    type: error.type,
+    errorCode: error.code,
+    retryable: error.retryable,
+    details: error.details,
+  })
 }
 
 function parseToolResult(result: unknown): ParsedToolResult {
@@ -110,14 +224,38 @@ function parseToolResult(result: unknown): ParsedToolResult {
     .safeParse(result)
 
   if (!parsed.success) {
-    return { raw: "", structured: null }
+    return { raw: "", structured: null, envelope: null }
   }
 
   const textChunk = parsed.data.content?.find((entry) => entry.type === "text" && entry.text)
+  const envelope = responseEnvelopeSchema.safeParse(parsed.data.structuredContent)
+
+  if (envelope.success) {
+    const parsedEnvelope: MemoriesResponseEnvelope<unknown> = {
+      ok: envelope.data.ok,
+      data: envelope.data.data,
+      error: envelope.data.error,
+      meta: envelope.data.meta,
+    }
+    return {
+      raw: textChunk?.text ?? "",
+      structured: parsedEnvelope.data,
+      envelope: parsedEnvelope,
+    }
+  }
+
   return {
     raw: textChunk?.text ?? "",
     structured: parsed.data.structuredContent ?? null,
+    envelope: null,
   }
+}
+
+function messageFromEnvelope(envelope: MemoriesResponseEnvelope<unknown> | null): string | null {
+  if (!envelope?.data || typeof envelope.data !== "object") return null
+  const parsed = mutationEnvelopeDataSchema.safeParse(envelope.data)
+  if (!parsed.success || typeof parsed.data.message !== "string") return null
+  return parsed.data.message
 }
 
 export class MemoriesClient {
@@ -191,7 +329,13 @@ export class MemoriesClient {
         project_id: input.projectId,
       })
 
-      return { ok: true, message: toolResult.raw || "Memory stored", raw: toolResult.raw }
+      const message = (messageFromEnvelope(toolResult.envelope) ?? toolResult.raw) || "Memory stored"
+      return {
+        ok: true,
+        message,
+        raw: toolResult.raw,
+        envelope: toolResult.envelope ?? undefined,
+      }
     },
 
     search: async (query: string, options: MemorySearchOptions = {}): Promise<MemoryRecord[]> => {
@@ -236,12 +380,24 @@ export class MemoriesClient {
         category: updates.category,
         metadata: updates.metadata,
       })
-      return { ok: true, message: toolResult.raw || `Updated memory ${id}`, raw: toolResult.raw }
+      const message = (messageFromEnvelope(toolResult.envelope) ?? toolResult.raw) || `Updated memory ${id}`
+      return {
+        ok: true,
+        message,
+        raw: toolResult.raw,
+        envelope: toolResult.envelope ?? undefined,
+      }
     },
 
     forget: async (id: string): Promise<MutationResult> => {
       const toolResult = await this.callTool("forget_memory", { id })
-      return { ok: true, message: toolResult.raw || `Deleted memory ${id}`, raw: toolResult.raw }
+      const message = (messageFromEnvelope(toolResult.envelope) ?? toolResult.raw) || `Deleted memory ${id}`
+      return {
+        ok: true,
+        message,
+        raw: toolResult.raw,
+        envelope: toolResult.envelope ?? undefined,
+      }
     },
   }
 
@@ -257,31 +413,72 @@ export class MemoriesClient {
       params,
     }
 
-    const response = await this.fetcher(this.baseUrl, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${this.apiKey}`,
-        ...this.defaultHeaders,
-      },
-      body: JSON.stringify(payload),
-    })
+    let response: Response
+    try {
+      response = await this.fetcher(this.baseUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${this.apiKey}`,
+          ...this.defaultHeaders,
+        },
+        body: JSON.stringify(payload),
+      })
+    } catch (error) {
+      throw new MemoriesClientError("Network request failed", {
+        type: "network_error",
+        errorCode: "NETWORK_ERROR",
+        retryable: true,
+        details: error,
+      })
+    }
 
-    const json = (await response.json()) as RpcResponsePayload
+    let json: RpcResponsePayload | null = null
+    try {
+      json = (await response.json()) as RpcResponsePayload
+    } catch {
+      json = null
+    }
 
     if (!response.ok) {
-      const fallbackMessage =
-        typeof (json as { error?: { message?: unknown } })?.error?.message === "string"
-          ? ((json as { error?: { message?: string } }).error?.message ?? `HTTP ${response.status}`)
-          : `HTTP ${response.status}`
-      throw new MemoriesClientError(fallbackMessage, { status: response.status })
+      const typedError = toTypedHttpError(response.status, json)
+      throw toClientError(typedError, { status: response.status })
+    }
+
+    if (!json) {
+      throw new MemoriesClientError("Invalid RPC response: missing JSON body", {
+        status: response.status,
+        type: "rpc_error",
+        errorCode: "INVALID_RPC_RESPONSE",
+        retryable: false,
+      })
     }
 
     if (json.error) {
+      const typedRpcError = apiErrorSchema.safeParse(json.error.data)
+      if (typedRpcError.success) {
+        throw toClientError(typedRpcError.data, {
+          status: typedRpcError.data.status ?? response.status,
+          rpcCode: json.error.code,
+        })
+      }
+
       throw new MemoriesClientError(json.error.message, {
         status: response.status,
         code: json.error.code,
-        data: json.error.data,
+        type: "rpc_error",
+        errorCode: "RPC_ERROR",
+        retryable: false,
+        details: json.error.data,
+      })
+    }
+
+    if (!("result" in json)) {
+      throw new MemoriesClientError("Invalid RPC response: missing result", {
+        status: response.status,
+        type: "rpc_error",
+        errorCode: "INVALID_RPC_RESPONSE",
+        retryable: false,
       })
     }
 
@@ -298,6 +495,18 @@ export class MemoriesClient {
       name: toolName,
       arguments: this.withUserScope(args),
     })
-    return parseToolResult(result)
+    const parsed = parseToolResult(result)
+
+    if (parsed.envelope && !parsed.envelope.ok) {
+      const envelopeError = parsed.envelope.error ?? {
+        type: "tool_error",
+        code: "TOOL_ERROR",
+        message: `Tool execution failed: ${toolName}`,
+        retryable: false,
+      }
+      throw toClientError(envelopeError)
+    }
+
+    return parsed
   }
 }
