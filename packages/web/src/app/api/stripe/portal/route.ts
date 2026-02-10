@@ -28,20 +28,35 @@ export async function POST(request: Request) {
     )
   }
 
-  const { data: profile } = await admin
-    .from("users")
-    .select("stripe_customer_id")
-    .eq("id", auth.userId)
-    .single()
+  let customerId: string | null = null
+  if (workspace.ownerType === "organization") {
+    if (!workspace.orgId) {
+      return NextResponse.json({ error: "Failed to resolve organization workspace" }, { status: 500 })
+    }
 
-  if (!profile?.stripe_customer_id) {
+    const { data: org } = await admin
+      .from("organizations")
+      .select("stripe_customer_id")
+      .eq("id", workspace.orgId)
+      .single()
+    customerId = org?.stripe_customer_id ?? null
+  } else {
+    const { data: profile } = await admin
+      .from("users")
+      .select("stripe_customer_id")
+      .eq("id", auth.userId)
+      .single()
+    customerId = profile?.stripe_customer_id ?? null
+  }
+
+  if (!customerId) {
     return NextResponse.json({ error: "No billing account found" }, { status: 400 })
   }
 
   const { origin } = new URL(request.url)
 
   const session = await getStripe().billingPortal.sessions.create({
-    customer: profile.stripe_customer_id,
+    customer: customerId,
     return_url: `${origin}/app/billing`,
   })
 

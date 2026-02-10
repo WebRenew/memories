@@ -31,7 +31,7 @@ export async function addTeamSeat({
 
   // Need to create a new subscription
   if (!stripeCustomerId) {
-    throw new Error("No Stripe customer ID for org owner")
+    throw new Error("No Stripe customer ID for organization")
   }
 
   const subscription = await stripe.subscriptions.create({

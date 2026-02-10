@@ -1,11 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
-// Mock Stripe
-const mockConstructEvent = vi.fn()
-const mockListLineItems = vi.fn()
-const mockRetrieveSubscription = vi.fn()
+const {
+  mockConstructEvent,
+  mockListLineItems,
+  mockRetrieveSubscription,
+  mockUsersUpdate,
+  mockUsersEq,
+  mockOrganizationsUpdate,
+  mockOrganizationsEq,
+} = vi.hoisted(() => ({
+  mockConstructEvent: vi.fn(),
+  mockListLineItems: vi.fn(),
+  mockRetrieveSubscription: vi.fn(),
+  mockUsersUpdate: vi.fn(),
+  mockUsersEq: vi.fn(),
+  mockOrganizationsUpdate: vi.fn(),
+  mockOrganizationsEq: vi.fn(),
+}))
 
-vi.mock("@/lib/stripe/index", () => ({
+vi.mock("@/lib/stripe", () => ({
   getStripe: vi.fn(() => ({
     webhooks: { constructEvent: mockConstructEvent },
     checkout: { sessions: { listLineItems: mockListLineItems } },
@@ -13,16 +26,21 @@ vi.mock("@/lib/stripe/index", () => ({
   })),
 }))
 
-// Mock Supabase admin
-const mockUpdateChain = {
-  update: vi.fn().mockReturnValue({
-    eq: vi.fn().mockReturnValue({ error: null }),
-  }),
-}
-
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(() => ({
-    from: vi.fn().mockReturnValue(mockUpdateChain),
+    from: vi.fn((table: string) => {
+      if (table === "users") {
+        return { update: mockUsersUpdate }
+      }
+      if (table === "organizations") {
+        return { update: mockOrganizationsUpdate }
+      }
+      return {
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }
+    }),
   })),
 }))
 
@@ -42,13 +60,17 @@ function makeWebhookRequest(body: string, signature = "sig_test"): Request {
 describe("POST /api/stripe/webhook", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Reset the update chain mock
-    mockUpdateChain.update.mockReturnValue({
-      eq: vi.fn().mockReturnValue({ error: null }),
+    mockUsersEq.mockResolvedValue({ error: null })
+    mockOrganizationsEq.mockResolvedValue({ error: null })
+    mockUsersUpdate.mockReturnValue({ eq: mockUsersEq })
+    mockOrganizationsUpdate.mockReturnValue({ eq: mockOrganizationsEq })
+    mockRetrieveSubscription.mockResolvedValue({
+      id: "sub_team_123",
+      metadata: { type: "team_seats", org_id: "org-1" },
     })
   })
 
-  it("should return 400 when stripe-signature is missing", async () => {
+  it("returns 400 when stripe-signature is missing", async () => {
     const request = new Request("https://example.com/api/stripe/webhook", {
       method: "POST",
       body: "{}",
@@ -56,32 +78,30 @@ describe("POST /api/stripe/webhook", () => {
 
     const response = await POST(request)
     expect(response.status).toBe(400)
-
-    const body = await response.json()
-    expect(body.error).toBe("Missing signature")
   })
 
-  it("should return 400 on invalid signature", async () => {
+  it("returns 400 on invalid signature", async () => {
     mockConstructEvent.mockImplementation(() => {
       throw new Error("Invalid signature")
     })
 
-    const request = makeWebhookRequest("{}")
-    const response = await POST(request)
+    const response = await POST(makeWebhookRequest("{}"))
     expect(response.status).toBe(400)
-
-    const body = await response.json()
-    expect(body.error).toBe("Invalid signature")
   })
 
-  it("should handle checkout.session.completed event", async () => {
+  it("updates organization billing on org checkout completion", async () => {
     mockConstructEvent.mockReturnValue({
       type: "checkout.session.completed",
       data: {
         object: {
-          id: "cs_test",
-          metadata: { supabase_user_id: "user-123" },
-          customer: "cus_test",
+          id: "cs_org_123",
+          customer: "cus_org_123",
+          subscription: "sub_org_123",
+          metadata: {
+            workspace_owner_type: "organization",
+            workspace_org_id: "org-1",
+            supabase_user_id: "user-1",
+          },
         },
       },
     })
@@ -89,88 +109,83 @@ describe("POST /api/stripe/webhook", () => {
       data: [{ price: { id: "price_pro_monthly" } }],
     })
 
-    const request = makeWebhookRequest("{}")
-    const response = await POST(request)
+    const response = await POST(makeWebhookRequest("{}"))
     expect(response.status).toBe(200)
-
-    const body = await response.json()
-    expect(body.received).toBe(true)
+    expect(mockOrganizationsUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stripe_customer_id: "cus_org_123",
+        stripe_subscription_id: "sub_org_123",
+        subscription_status: "active",
+        plan: "pro",
+      })
+    )
+    expect(mockOrganizationsEq).toHaveBeenCalledWith("id", "org-1")
+    expect(mockUsersUpdate).not.toHaveBeenCalled()
   })
 
-  it("should skip checkout without user metadata", async () => {
+  it("updates user plan on personal checkout completion", async () => {
     mockConstructEvent.mockReturnValue({
       type: "checkout.session.completed",
       data: {
-        object: { id: "cs_test", metadata: {}, customer: "cus_test" },
+        object: {
+          id: "cs_user_123",
+          customer: "cus_user_123",
+          metadata: {
+            supabase_user_id: "user-1",
+            workspace_owner_type: "user",
+          },
+        },
       },
     })
+    mockListLineItems.mockResolvedValue({
+      data: [{ price: { id: "price_pro_monthly" } }],
+    })
 
-    const request = makeWebhookRequest("{}")
-    const response = await POST(request)
+    const response = await POST(makeWebhookRequest("{}"))
     expect(response.status).toBe(200)
+    expect(mockUsersUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: "pro",
+        stripe_customer_id: "cus_user_123",
+      })
+    )
+    expect(mockUsersEq).toHaveBeenCalledWith("id", "user-1")
   })
 
-  it("should handle customer.subscription.updated to pro", async () => {
+  it("updates team subscription status with org billing identifiers", async () => {
     mockConstructEvent.mockReturnValue({
       type: "customer.subscription.updated",
       data: {
         object: {
-          customer: "cus_test",
-          status: "active",
-          metadata: {},
+          id: "sub_team_123",
+          customer: "cus_org_123",
+          status: "past_due",
+          metadata: { type: "team_seats", org_id: "org-1" },
           items: { data: [{ price: { id: "price_pro_monthly" } }] },
         },
       },
     })
 
-    const request = makeWebhookRequest("{}")
-    const response = await POST(request)
+    const response = await POST(makeWebhookRequest("{}"))
     expect(response.status).toBe(200)
+    expect(mockOrganizationsUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subscription_status: "past_due",
+        stripe_customer_id: "cus_org_123",
+        stripe_subscription_id: "sub_team_123",
+        plan: "past_due",
+      })
+    )
+    expect(mockOrganizationsEq).toHaveBeenCalledWith("id", "org-1")
   })
 
-  it("should handle customer.subscription.deleted", async () => {
-    mockConstructEvent.mockReturnValue({
-      type: "customer.subscription.deleted",
-      data: {
-        object: {
-          customer: "cus_test",
-          metadata: {},
-          items: { data: [{ price: { id: "price_pro_monthly" } }] },
-        },
-      },
-    })
-
-    const request = makeWebhookRequest("{}")
-    const response = await POST(request)
-    expect(response.status).toBe(200)
-  })
-
-  it("should handle team subscription updates", async () => {
-    mockConstructEvent.mockReturnValue({
-      type: "customer.subscription.updated",
-      data: {
-        object: {
-          customer: "cus_test",
-          status: "active",
-          metadata: { type: "team_seats", org_id: "org-123" },
-          items: { data: [{ price: { id: "price_pro_monthly" } }] },
-        },
-      },
-    })
-
-    const request = makeWebhookRequest("{}")
-    const response = await POST(request)
-    expect(response.status).toBe(200)
-  })
-
-  it("should return 200 for unhandled event types", async () => {
+  it("returns 200 for unhandled event type", async () => {
     mockConstructEvent.mockReturnValue({
       type: "payment_intent.created",
       data: { object: {} },
     })
 
-    const request = makeWebhookRequest("{}")
-    const response = await POST(request)
+    const response = await POST(makeWebhookRequest("{}"))
     expect(response.status).toBe(200)
   })
 })

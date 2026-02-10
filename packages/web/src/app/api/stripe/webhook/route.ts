@@ -35,15 +35,24 @@ async function updateUserPlan(
 async function updateOrgSubscriptionStatus(
   supabase: ReturnType<typeof createAdminClient>,
   orgId: string,
-  status: "active" | "past_due" | "cancelled"
+  status: "active" | "past_due" | "cancelled",
+  options: { stripeCustomerId?: string; stripeSubscriptionId?: string | null } = {}
 ) {
-  const updates: Record<string, string | null> = { subscription_status: status }
-  
-  // If cancelled, clear the subscription ID
-  if (status === "cancelled") {
-    updates.stripe_subscription_id = null
+  const updates: Record<string, string | null> = {
+    subscription_status: status,
+    plan: status === "active" ? "pro" : status === "past_due" ? "past_due" : "free",
   }
 
+  if (options.stripeCustomerId) {
+    updates.stripe_customer_id = options.stripeCustomerId
+  }
+
+  if (status === "cancelled") {
+    updates.stripe_subscription_id = null
+  } else if (options.stripeSubscriptionId) {
+    updates.stripe_subscription_id = options.stripeSubscriptionId
+  }
+  
   const { error } = await supabase
     .from("organizations")
     .update(updates)
@@ -82,17 +91,38 @@ export async function POST(request: Request) {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object
-      const userId = session.metadata?.supabase_user_id
-      if (!userId) break
 
       // Verify the checkout contains one of our Pro price IDs
       const lineItems = await getStripe().checkout.sessions.listLineItems(session.id, { limit: 5 })
       if (!hasProPrice(lineItems.data)) break
 
-      ok = await updateUserPlan(supabase, { id: userId }, {
-        plan: "pro",
-        stripe_customer_id: session.customer as string,
-      })
+      const ownerType = session.metadata?.workspace_owner_type
+      const orgId = session.metadata?.workspace_org_id
+      const sessionSubscription = session.subscription
+      const subscriptionId =
+        typeof sessionSubscription === "string"
+          ? sessionSubscription
+          : sessionSubscription && typeof sessionSubscription === "object"
+            ? sessionSubscription.id
+            : null
+      const customerId = typeof session.customer === "string" ? session.customer : null
+
+      if (ownerType === "organization" && orgId) {
+        ok = await updateOrgSubscriptionStatus(supabase, orgId, "active", {
+          stripeCustomerId: customerId ?? undefined,
+          stripeSubscriptionId: subscriptionId,
+        })
+        break
+      }
+
+      const userId = session.metadata?.supabase_user_id
+      if (!userId) break
+
+      const userUpdates: Record<string, string> = { plan: "pro" }
+      if (customerId) {
+        userUpdates.stripe_customer_id = customerId
+      }
+      ok = await updateUserPlan(supabase, { id: userId }, userUpdates)
       break
     }
 
@@ -122,7 +152,10 @@ export async function POST(request: Request) {
           paused: "cancelled",
         }
         const status = statusMap[subscription.status] ?? "cancelled"
-        ok = await updateOrgSubscriptionStatus(supabase, orgId, status)
+        ok = await updateOrgSubscriptionStatus(supabase, orgId, status, {
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: subscription.id,
+        })
         break
       }
 
@@ -157,7 +190,9 @@ export async function POST(request: Request) {
           console.error("Team subscription missing org_id metadata:", subscription.id)
           break
         }
-        ok = await updateOrgSubscriptionStatus(supabase, orgId, "cancelled")
+        ok = await updateOrgSubscriptionStatus(supabase, orgId, "cancelled", {
+          stripeCustomerId: customerId,
+        })
         break
       }
 
@@ -183,7 +218,10 @@ export async function POST(request: Request) {
           if (isTeamSubscription(subscription.metadata)) {
             const orgId = subscription.metadata.org_id
             if (orgId && typeof orgId === "string") {
-              ok = await updateOrgSubscriptionStatus(supabase, orgId, "past_due")
+              ok = await updateOrgSubscriptionStatus(supabase, orgId, "past_due", {
+                stripeCustomerId: customerId,
+                stripeSubscriptionId: subscriptionId,
+              })
               handled = true
             } else {
               console.error("Team subscription missing org_id for invoice:", subscriptionId)
@@ -218,7 +256,9 @@ export async function POST(request: Request) {
           if (isTeamSubscription(subscription.metadata)) {
             const orgId = subscription.metadata.org_id
             if (orgId && typeof orgId === "string") {
-              ok = await updateOrgSubscriptionStatus(supabase, orgId, "cancelled")
+              ok = await updateOrgSubscriptionStatus(supabase, orgId, "cancelled", {
+                stripeCustomerId: customerId,
+              })
               handled = true
             } else {
               console.error("Team subscription missing org_id for invoice:", subscriptionId)

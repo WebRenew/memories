@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   // Find invite with org details
   const { data: invite, error: inviteError } = await supabase
     .from("org_invites")
-    .select("*, organization:organizations(id, name, slug, owner_id, stripe_subscription_id)")
+    .select("*, organization:organizations(id, name, slug, stripe_customer_id, stripe_subscription_id)")
     .eq("token", token)
     .is("accepted_at", null)
     .gt("expires_at", new Date().toISOString())
@@ -76,23 +76,16 @@ export async function POST(request: Request) {
     id: string
     name: string
     slug: string
-    owner_id: string
+    stripe_customer_id: string | null
     stripe_subscription_id: string | null
   }
-
-  // Get org owner's Stripe customer ID
-  const { data: owner } = await supabase
-    .from("users")
-    .select("stripe_customer_id")
-    .eq("id", org.owner_id)
-    .single()
 
   // Add seat to org's subscription (or create one)
   const subscriptionId = org.stripe_subscription_id
   try {
     const result = await addTeamSeat({
       orgId: org.id,
-      stripeCustomerId: owner?.stripe_customer_id || null,
+      stripeCustomerId: org.stripe_customer_id,
       stripeSubscriptionId: subscriptionId,
       billing: billing as "monthly" | "annual",
     })
