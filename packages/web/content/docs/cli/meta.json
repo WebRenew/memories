@@ -23,6 +23,7 @@
     "ingest",
     "---System---",
     "config",
+    "org",
     "serve",
     "sync",
     "stats",

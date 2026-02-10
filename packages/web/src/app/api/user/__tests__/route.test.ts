@@ -1,15 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { mockGetUser, mockFrom, mockCheckRateLimit } = vi.hoisted(() => ({
-  mockGetUser: vi.fn(),
-  mockFrom: vi.fn(),
+const {
+  mockAuthenticateRequest,
+  mockAdminFrom,
+  mockCheckRateLimit,
+} = vi.hoisted(() => ({
+  mockAuthenticateRequest: vi.fn(),
+  mockAdminFrom: vi.fn(),
   mockCheckRateLimit: vi.fn(),
 }))
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({
-    auth: { getUser: mockGetUser },
-    from: mockFrom,
+vi.mock("@/lib/auth", () => ({
+  authenticateRequest: mockAuthenticateRequest,
+}))
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(() => ({
+    from: mockAdminFrom,
   })),
 }))
 
@@ -18,9 +25,9 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
 }))
 
-import { PATCH } from "../route"
+import { GET, PATCH } from "../route"
 
-function makeRequest(body: unknown) {
+function makePatchRequest(body: unknown) {
   return new Request("https://example.com/api/user", {
     method: "PATCH",
     body: JSON.stringify(body),
@@ -28,102 +35,139 @@ function makeRequest(body: unknown) {
   })
 }
 
-describe("/api/user PATCH", () => {
+describe("/api/user", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockCheckRateLimit.mockResolvedValue(null)
   })
 
-  it("returns 401 when unauthenticated", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: null } })
-    const response = await PATCH(makeRequest({ name: "New Name" }))
-    expect(response.status).toBe(401)
-  })
+  describe("GET", () => {
+    it("returns 401 when unauthenticated", async () => {
+      mockAuthenticateRequest.mockResolvedValue(null)
+      const response = await GET(new Request("https://example.com/api/user"))
+      expect(response.status).toBe(401)
+    })
 
-  it("returns 403 when switching to an org the user is not a member of", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
-
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "org_members") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({ data: null, error: { message: "not found" } }),
-              }),
+    it("returns user profile", async () => {
+      mockAuthenticateRequest.mockResolvedValue({ userId: "user-1", email: "u@example.com" })
+      mockAdminFrom.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: {
+                id: "user-1",
+                email: "u@example.com",
+                name: "U",
+                plan: "free",
+                embedding_model: "all-MiniLM-L6-v2",
+                current_org_id: "org-1",
+              },
+              error: null,
             }),
           }),
-        }
-      }
+        }),
+      })
 
-      if (table === "users") {
-        return {
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ error: null }),
-          }),
-        }
-      }
-
-      return {}
+      const response = await GET(new Request("https://example.com/api/user"))
+      expect(response.status).toBe(200)
+      const body = await response.json()
+      expect(body.user.id).toBe("user-1")
+      expect(body.user.current_org_id).toBe("org-1")
     })
-
-    const response = await PATCH(makeRequest({ current_org_id: "org-1" }))
-    expect(response.status).toBe(403)
   })
 
-  it("updates current_org_id when membership is valid", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
-
-    const mockUpdate = vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error: null }),
+  describe("PATCH", () => {
+    it("returns 401 when unauthenticated", async () => {
+      mockAuthenticateRequest.mockResolvedValue(null)
+      const response = await PATCH(makePatchRequest({ name: "New Name" }))
+      expect(response.status).toBe(401)
     })
 
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "org_members") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
+    it("returns 403 when switching to an org the user is not a member of", async () => {
+      mockAuthenticateRequest.mockResolvedValue({ userId: "user-1", email: "u@example.com" })
+
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table === "org_members") {
+          return {
+            select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({ data: { id: "membership-1" }, error: null }),
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: null, error: { message: "not found" } }),
+                }),
               }),
             }),
-          }),
+          }
         }
-      }
 
-      if (table === "users") {
-        return {
-          update: mockUpdate,
+        if (table === "users") {
+          return {
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }
         }
-      }
 
-      return {}
+        return {}
+      })
+
+      const response = await PATCH(makePatchRequest({ current_org_id: "org-1" }))
+      expect(response.status).toBe(403)
     })
 
-    const response = await PATCH(makeRequest({ current_org_id: "org-1" }))
-    const body = await response.json()
+    it("updates current_org_id when membership is valid", async () => {
+      mockAuthenticateRequest.mockResolvedValue({ userId: "user-1", email: "u@example.com" })
 
-    expect(response.status).toBe(200)
-    expect(body.ok).toBe(true)
-    expect(mockUpdate).toHaveBeenCalledWith({ current_org_id: "org-1" })
-  })
+      const mockUpdate = vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      })
 
-  it("allows clearing current_org_id", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table === "org_members") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: { id: "membership-1" }, error: null }),
+                }),
+              }),
+            }),
+          }
+        }
 
-    const mockUpdate = vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error: null }),
+        if (table === "users") {
+          return {
+            update: mockUpdate,
+          }
+        }
+
+        return {}
+      })
+
+      const response = await PATCH(makePatchRequest({ current_org_id: "org-1" }))
+      const body = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(body.ok).toBe(true)
+      expect(mockUpdate).toHaveBeenCalledWith({ current_org_id: "org-1" })
     })
 
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "users") {
-        return { update: mockUpdate }
-      }
-      return {}
-    })
+    it("allows clearing current_org_id", async () => {
+      mockAuthenticateRequest.mockResolvedValue({ userId: "user-1", email: "u@example.com" })
 
-    const response = await PATCH(makeRequest({ current_org_id: null }))
-    expect(response.status).toBe(200)
-    expect(mockUpdate).toHaveBeenCalledWith({ current_org_id: null })
+      const mockUpdate = vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      })
+
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table === "users") {
+          return { update: mockUpdate }
+        }
+        return {}
+      })
+
+      const response = await PATCH(makePatchRequest({ current_org_id: null }))
+      expect(response.status).toBe(200)
+      expect(mockUpdate).toHaveBeenCalledWith({ current_org_id: null })
+    })
   })
 })

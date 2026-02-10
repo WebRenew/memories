@@ -1,0 +1,64 @@
+---
+title: memories org
+description: List, inspect, and switch your active workspace.
+---
+
+```bash
+memories org <subcommand> [options]
+```
+
+Manage your active workspace for cloud-backed operations. The selected workspace controls which shared memory database hosted endpoints use.
+
+## Subcommands
+
+### `memories org list`
+
+List all organizations you belong to and show which workspace is currently active.
+
+```bash
+memories org list
+```
+
+The output always includes `Personal workspace` plus each organization (with role).
+
+### `memories org current`
+
+Show the currently active workspace.
+
+```bash
+memories org current
+```
+
+### `memories org use <target>`
+
+Switch active workspace.
+
+```bash
+# Use personal workspace
+memories org use personal
+
+# Use organization by slug
+memories org use engineering
+
+# Use organization by id
+memories org use org_abc123
+```
+
+`<target>` accepts:
+- Organization `id`
+- Organization `slug`
+- Organization name (case-insensitive exact match)
+- `personal` or `none`
+
+## Prerequisites
+
+You must be authenticated:
+
+```bash
+memories login
+```
+
+## Related Commands
+
+- [`memories login`](/docs/cli/login)
+- [`memories sync`](/docs/cli/sync)

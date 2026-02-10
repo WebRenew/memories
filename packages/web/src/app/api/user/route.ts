@@ -1,22 +1,45 @@
-import { createClient } from "@/lib/supabase/server"
+import { authenticateRequest } from "@/lib/auth"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 import { parseBody, updateUserSchema } from "@/lib/validations"
 
-export async function PATCH(request: Request) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
+export async function GET(request: Request) {
+  const auth = await authenticateRequest(request)
+  if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  const rateLimited = await checkRateLimit(apiRateLimit, auth.userId)
+  if (rateLimited) return rateLimited
+
+  const admin = createAdminClient()
+  const { data: profile, error } = await admin
+    .from("users")
+    .select("id, email, name, plan, embedding_model, current_org_id")
+    .eq("id", auth.userId)
+    .single()
+
+  if (error || !profile) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 })
+  }
+
+  return NextResponse.json({ user: profile })
+}
+
+export async function PATCH(request: Request) {
+  const auth = await authenticateRequest(request)
+  if (!auth) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const rateLimited = await checkRateLimit(apiRateLimit, auth.userId)
   if (rateLimited) return rateLimited
 
   const parsed = parseBody(updateUserSchema, await request.json().catch(() => ({})))
   if (!parsed.success) return parsed.response
 
+  const admin = createAdminClient()
   const updates: Record<string, string | null> = {}
 
   if (parsed.data.name !== undefined) {
@@ -31,11 +54,11 @@ export async function PATCH(request: Request) {
     if (parsed.data.current_org_id === null) {
       updates.current_org_id = null
     } else {
-      const { data: membership } = await supabase
+      const { data: membership } = await admin
         .from("org_members")
         .select("id")
         .eq("org_id", parsed.data.current_org_id)
-        .eq("user_id", user.id)
+        .eq("user_id", auth.userId)
         .single()
 
       if (!membership) {
@@ -53,10 +76,10 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 })
   }
 
-  const { error } = await supabase
+  const { error } = await admin
     .from("users")
     .update(updates)
-    .eq("id", user.id)
+    .eq("id", auth.userId)
 
   if (error) {
     console.error("User update error:", error)

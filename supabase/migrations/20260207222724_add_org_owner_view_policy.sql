@@ -6,7 +6,19 @@
 --
 -- This policy allows the owner to SELECT their org before being added as a member.
 
-CREATE POLICY "Owners can view their own orgs"
-ON organizations
-FOR SELECT
-USING (owner_id = auth.uid());
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'organizations'
+      AND policyname = 'Owners can view their own orgs'
+  ) THEN
+    CREATE POLICY "Owners can view their own orgs"
+    ON organizations
+    FOR SELECT
+    USING (owner_id = auth.uid());
+  END IF;
+END
+$$;

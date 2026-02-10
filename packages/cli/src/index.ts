@@ -27,6 +27,7 @@ import { historyCommand, revertCommand } from "./commands/history.js";
 import { embedCommand } from "./commands/embed.js";
 import { loginCommand, logoutCommand } from "./commands/login.js";
 import { filesCommand } from "./commands/files.js";
+import { orgCommand } from "./commands/org.js";
 import { CLI_VERSION } from "./lib/version.js";
 
 const program = new Command()
@@ -70,6 +71,7 @@ program.addCommand(historyCommand);
 program.addCommand(revertCommand);
 program.addCommand(embedCommand);
 program.addCommand(filesCommand);
+program.addCommand(orgCommand);
 
 // Auth commands
 program.addCommand(loginCommand);

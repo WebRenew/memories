@@ -1,18 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-const mockGetUser = vi.fn()
-const mockFrom = vi.fn()
+const {
+  mockAuthenticateRequest,
+  mockAdminFrom,
+  mockCheckRateLimit,
+} = vi.hoisted(() => ({
+  mockAuthenticateRequest: vi.fn(),
+  mockAdminFrom: vi.fn(),
+  mockCheckRateLimit: vi.fn(),
+}))
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({
-    auth: { getUser: mockGetUser },
-    from: mockFrom,
+vi.mock("@/lib/auth", () => ({
+  authenticateRequest: mockAuthenticateRequest,
+}))
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(() => ({
+    from: mockAdminFrom,
   })),
 }))
 
 vi.mock("@/lib/rate-limit", () => ({
   apiRateLimit: { limit: vi.fn().mockResolvedValue({ success: true }) },
-  checkRateLimit: vi.fn().mockResolvedValue(null),
+  checkRateLimit: mockCheckRateLimit,
 }))
 
 import { GET, POST } from "../route"
@@ -20,18 +30,19 @@ import { GET, POST } from "../route"
 describe("/api/orgs", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockCheckRateLimit.mockResolvedValue(null)
   })
 
   describe("GET", () => {
     it("should return 401 when unauthenticated", async () => {
-      mockGetUser.mockResolvedValue({ data: { user: null } })
-      const response = await GET()
+      mockAuthenticateRequest.mockResolvedValue(null)
+      const response = await GET(new Request("https://example.com/api/orgs"))
       expect(response.status).toBe(401)
     })
 
     it("should return user organizations", async () => {
-      mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
-      mockFrom.mockReturnValue({
+      mockAuthenticateRequest.mockResolvedValue({ userId: "user-1", email: "u@example.com" })
+      mockAdminFrom.mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockResolvedValue({
             data: [
@@ -52,7 +63,7 @@ describe("/api/orgs", () => {
         }),
       })
 
-      const response = await GET()
+      const response = await GET(new Request("https://example.com/api/orgs"))
       expect(response.status).toBe(200)
 
       const body = await response.json()
@@ -62,21 +73,21 @@ describe("/api/orgs", () => {
     })
 
     it("should return empty array when no orgs", async () => {
-      mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
-      mockFrom.mockReturnValue({
+      mockAuthenticateRequest.mockResolvedValue({ userId: "user-1", email: "u@example.com" })
+      mockAdminFrom.mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockResolvedValue({ data: [], error: null }),
         }),
       })
 
-      const response = await GET()
+      const response = await GET(new Request("https://example.com/api/orgs"))
       const body = await response.json()
       expect(body.organizations).toEqual([])
     })
 
     it("should return 500 on DB error", async () => {
-      mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
-      mockFrom.mockReturnValue({
+      mockAuthenticateRequest.mockResolvedValue({ userId: "user-1", email: "u@example.com" })
+      mockAdminFrom.mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockResolvedValue({
             data: null,
@@ -85,14 +96,14 @@ describe("/api/orgs", () => {
         }),
       })
 
-      const response = await GET()
+      const response = await GET(new Request("https://example.com/api/orgs"))
       expect(response.status).toBe(500)
     })
   })
 
   describe("POST", () => {
     it("should return 401 when unauthenticated", async () => {
-      mockGetUser.mockResolvedValue({ data: { user: null } })
+      mockAuthenticateRequest.mockResolvedValue(null)
 
       const request = new Request("https://example.com/api/orgs", {
         method: "POST",
@@ -105,7 +116,7 @@ describe("/api/orgs", () => {
     })
 
     it("should return 400 for invalid name", async () => {
-      mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+      mockAuthenticateRequest.mockResolvedValue({ userId: "user-1", email: "u@example.com" })
 
       const request = new Request("https://example.com/api/orgs", {
         method: "POST",
@@ -118,17 +129,13 @@ describe("/api/orgs", () => {
     })
 
     it("should create organization with unique slug", async () => {
-      mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+      mockAuthenticateRequest.mockResolvedValue({ userId: "user-1", email: "u@example.com" })
 
-      // First call: slug check (no existing)
-      // Second call: insert org
-      // Third call: insert member
-      // Fourth call: update user current_org_id
-      let callCount = 0
-      mockFrom.mockImplementation((table: string) => {
+      let orgCallCount = 0
+      mockAdminFrom.mockImplementation((table: string) => {
         if (table === "organizations") {
-          callCount++
-          if (callCount === 1) {
+          orgCallCount += 1
+          if (orgCallCount === 1) {
             // Slug uniqueness check
             return {
               select: vi.fn().mockReturnValue({
@@ -138,13 +145,9 @@ describe("/api/orgs", () => {
               }),
             }
           }
-          // Insert org
+
+          // Create org
           return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({ data: null }),
-              }),
-            }),
             insert: vi.fn().mockReturnValue({
               select: vi.fn().mockReturnValue({
                 single: vi.fn().mockResolvedValue({
@@ -153,13 +156,18 @@ describe("/api/orgs", () => {
                 }),
               }),
             }),
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
           }
         }
+
         if (table === "org_members") {
           return {
             insert: vi.fn().mockResolvedValue({ error: null }),
           }
         }
+
         if (table === "users") {
           return {
             update: vi.fn().mockReturnValue({
@@ -169,6 +177,7 @@ describe("/api/orgs", () => {
             }),
           }
         }
+
         return {}
       })
 
@@ -183,6 +192,7 @@ describe("/api/orgs", () => {
 
       const body = await response.json()
       expect(body.organization.name).toBe("New Team")
+      expect(body.organization.slug).toBe("new-team")
     })
   })
 })

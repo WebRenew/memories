@@ -1,21 +1,21 @@
-import { createClient } from "@/lib/supabase/server"
+import { authenticateRequest } from "@/lib/auth"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 import { parseBody, createOrgSchema } from "@/lib/validations"
 
 // GET /api/orgs - List user's organizations
-export async function GET() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
+export async function GET(request: Request) {
+  const auth = await authenticateRequest(request)
+  if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  const rateLimited = await checkRateLimit(apiRateLimit, auth.userId)
   if (rateLimited) return rateLimited
 
-  const { data: orgs, error } = await supabase
+  const admin = createAdminClient()
+  const { data: orgs, error } = await admin
     .from("org_members")
     .select(`
       role,
@@ -28,7 +28,7 @@ export async function GET() {
         created_at
       )
     `)
-    .eq("user_id", user.id)
+    .eq("user_id", auth.userId)
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -44,19 +44,19 @@ export async function GET() {
 
 // POST /api/orgs - Create a new organization
 export async function POST(request: Request) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
+  const auth = await authenticateRequest(request)
+  if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const rateLimited = await checkRateLimit(apiRateLimit, user.id)
+  const rateLimited = await checkRateLimit(apiRateLimit, auth.userId)
   if (rateLimited) return rateLimited
 
   const parsed = parseBody(createOrgSchema, await request.json())
   if (!parsed.success) return parsed.response
   const { name } = parsed.data
+
+  const admin = createAdminClient()
 
   // Generate slug from name
   const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
 
   // Check for slug uniqueness
   while (true) {
-    const { data: existing } = await supabase
+    const { data: existing } = await admin
       .from("organizations")
       .select("id")
       .eq("slug", slug)
@@ -76,12 +76,12 @@ export async function POST(request: Request) {
   }
 
   // Create organization
-  const { data: org, error: orgError } = await supabase
+  const { data: org, error: orgError } = await admin
     .from("organizations")
     .insert({
       name,
       slug,
-      owner_id: user.id,
+      owner_id: auth.userId,
     })
     .select()
     .single()
@@ -89,25 +89,25 @@ export async function POST(request: Request) {
   if (orgError) {
     console.error("Failed to create organization:", {
       error: orgError,
-      userId: user.id,
+      userId: auth.userId,
       orgName: name.trim(),
     })
     return NextResponse.json({ error: orgError.message || "Failed to create organization" }, { status: 500 })
   }
 
   // Add creator as owner member
-  const { error: memberError } = await supabase
+  const { error: memberError } = await admin
     .from("org_members")
     .insert({
       org_id: org.id,
-      user_id: user.id,
+      user_id: auth.userId,
       role: "owner",
     })
 
   if (memberError) {
     console.error("Failed to add owner as member:", {
       error: memberError,
-      userId: user.id,
+      userId: auth.userId,
       orgId: org.id,
       message: memberError.message,
       code: memberError.code,
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
       hint: memberError.hint,
     })
     // Rollback org creation
-    const { error: deleteError } = await supabase.from("organizations").delete().eq("id", org.id)
+    const { error: deleteError } = await admin.from("organizations").delete().eq("id", org.id)
     if (deleteError) {
       console.error("Failed to rollback org creation:", deleteError)
     }
@@ -125,10 +125,10 @@ export async function POST(request: Request) {
   }
 
   // Set as user's current org if they don't have one
-  await supabase
+  await admin
     .from("users")
     .update({ current_org_id: org.id })
-    .eq("id", user.id)
+    .eq("id", auth.userId)
     .is("current_org_id", null)
 
   return NextResponse.json({ organization: org }, { status: 201 })
