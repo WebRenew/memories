@@ -7,7 +7,7 @@ Last updated: 2026-02-10
 Ship production-ready SDK packages that match what we market and document:
 
 - `@memories.sh/core`: typed client for context + memory operations
-- `@memories.sh/ai-sdk`: Vercel AI SDK middleware/tools integration
+- `@memories.sh/ai-sdk`: [Vercel AI SDK](https://ai-sdk.dev/) middleware/tools integration
 
 ## Current Gap (Why This Plan Exists)
 
@@ -116,7 +116,7 @@ Acceptance:
 
 ## WS3: `@memories.sh/ai-sdk` Package
 
-Goal: first-class integration for Vercel AI SDK.
+Goal: first-class integration for [Vercel AI SDK](https://ai-sdk.dev/).
 
 Proposed v1 API:
 

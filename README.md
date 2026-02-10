@@ -225,7 +225,7 @@ memories/
 │   │   │   ├── client.ts
 │   │   │   └── system-prompt.ts
 │   │   └── package.json
-│   ├── ai-sdk/              # @memories.sh/ai-sdk — AI SDK middleware + tools
+│   ├── ai-sdk/              # @memories.sh/ai-sdk — [AI SDK](https://ai-sdk.dev/) middleware + tools
 │   │   ├── src/
 │   │   │   ├── middleware.ts
 │   │   │   └── tools.ts
@@ -245,7 +245,7 @@ memories/
 
 **CLI**: TypeScript, Commander.js, libSQL/SQLite, MCP SDK, Zod, yaml
 
-**SDK**: `@memories.sh/core` + `@memories.sh/ai-sdk` (TypeScript, fetch-based client, AI SDK middleware/tools)
+**SDK**: `@memories.sh/core` + `@memories.sh/ai-sdk` (TypeScript, fetch-based client, [AI SDK](https://ai-sdk.dev/) middleware/tools)
 
 **Web**: Next.js 16, React 19, Tailwind CSS v4, shadcn/ui, Supabase, Turso, Stripe, Framer Motion, fumadocs
 
