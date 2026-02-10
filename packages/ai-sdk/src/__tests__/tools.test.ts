@@ -17,6 +17,10 @@ function createMockClient() {
 }
 
 describe("memoriesTools", () => {
+  it("requires tenantId when a client instance is not provided", () => {
+    expect(() => memoriesTools({ apiKey: "mcp_test" })).toThrow("tenantId is required")
+  })
+
   it("routes tool calls through the core client", async () => {
     const client = createMockClient()
     const tools = memoriesTools({ client: client as unknown as any, projectId: "github.com/acme/repo" })

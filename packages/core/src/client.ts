@@ -19,6 +19,7 @@ export interface MemoriesClientOptions {
   apiKey?: string
   baseUrl?: string
   userId?: string
+  tenantId?: string
   fetch?: typeof fetch
   headers?: Record<string, string>
 }
@@ -262,6 +263,7 @@ export class MemoriesClient {
   private readonly apiKey: string
   private readonly baseUrl: string
   private readonly userId: string | undefined
+  private readonly tenantId: string | undefined
   private readonly fetcher: typeof fetch
   private readonly defaultHeaders: Record<string, string>
 
@@ -281,9 +283,15 @@ export class MemoriesClient {
       throw new MemoriesClientError("No fetch implementation available.")
     }
 
+    const tenantId = options.tenantId?.trim()
+    if (options.tenantId !== undefined && !tenantId) {
+      throw new MemoriesClientError("Invalid tenantId. Expected a non-empty string when provided.")
+    }
+
     this.apiKey = apiKey
     this.baseUrl = parsedBaseUrl.data
     this.userId = options.userId
+    this.tenantId = tenantId
     this.fetcher = options.fetch ?? fetch
     this.defaultHeaders = options.headers ?? {}
   }
@@ -485,15 +493,21 @@ export class MemoriesClient {
     return json.result
   }
 
-  private withUserScope(args: Record<string, unknown>): Record<string, unknown> {
-    if (!this.userId) return args
-    return { ...args, user_id: this.userId }
+  private withDefaultScope(args: Record<string, unknown>): Record<string, unknown> {
+    let scoped: Record<string, unknown> = args
+    if (this.userId) {
+      scoped = { ...scoped, user_id: this.userId }
+    }
+    if (this.tenantId) {
+      scoped = { ...scoped, tenant_id: this.tenantId }
+    }
+    return scoped
   }
 
   private async callTool(toolName: string, args: Record<string, unknown>): Promise<ParsedToolResult> {
     const result = await this.rpc("tools/call", {
       name: toolName,
-      arguments: this.withUserScope(args),
+      arguments: this.withDefaultScope(args),
     })
     const parsed = parseToolResult(result)
 

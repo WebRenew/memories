@@ -3,7 +3,7 @@ title: Middleware
 description: memoriesMiddleware() auto-injects rules and context into every LLM call.
 ---
 
-`memoriesMiddleware()` is the headline feature of the SDK. It wraps any Vercel AI SDK model so that rules and relevant memories are automatically injected into the system prompt — no tool calls, no prompt engineering.
+`memoriesMiddleware()` is the headline feature of the SDK. It wraps any [AI SDK](https://ai-sdk.dev/) model so that rules and relevant memories are automatically injected into the system prompt — no tool calls, no prompt engineering.
 
 ## Basic Usage
 
@@ -14,7 +14,7 @@ import { memoriesMiddleware } from "@memories.sh/ai-sdk"
 
 const model = wrapLanguageModel({
   model: openai("gpt-4o"),
-  middleware: memoriesMiddleware(),
+  middleware: memoriesMiddleware({ tenantId: "acme-prod" }),
 })
 
 const { text } = await generateText({
@@ -47,6 +47,9 @@ memoriesMiddleware({
   // Scope all operations to a user
   userId: "user_123",
 
+  // Tenant/workspace scope (required unless you pass a preconfigured client)
+  tenantId: "acme-prod",
+
   // Skip the fetch and use preloaded context
   preloaded: preloadedContext,
 })
@@ -71,6 +74,10 @@ Custom function to extract the search query from the call parameters. By default
 ### `userId`
 
 Scope all memory operations to a specific user. Required for multi-tenant apps.
+
+### `tenantId`
+
+Route memory operations to a tenant-specific database. Required unless you pass a preconfigured `client`.
 
 ### `preloaded`
 

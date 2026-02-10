@@ -1,19 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 // Mock Supabase admin
-const { mockAdminSelect, mockResolveActiveMemoryContext } = vi.hoisted(() => ({
+const { mockAdminSelect, mockTenantSelect, mockResolveActiveMemoryContext } = vi.hoisted(() => ({
   mockAdminSelect: vi.fn(),
+  mockTenantSelect: vi.fn(),
   mockResolveActiveMemoryContext: vi.fn(),
 }))
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(() => ({
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          single: vi.fn().mockImplementation(() => mockAdminSelect()),
-        }),
+    from: vi.fn((table: string) => ({
+      select: vi.fn(() => {
+        const filters: Record<string, unknown> = {}
+        const query = {
+          eq: vi.fn((column: string, value: unknown) => {
+            filters[column] = value
+            return query
+          }),
+          single: vi.fn(() => {
+            if (table === "users") {
+              return mockAdminSelect({ table, filters })
+            }
+            if (table === "sdk_tenant_databases") {
+              return mockTenantSelect({ table, filters })
+            }
+            return { data: null, error: { message: `Unexpected table: ${table}` } }
+          }),
+        }
+        return query
       }),
-    }),
+    })),
   })),
 }))
 
@@ -83,6 +98,7 @@ function setupAuth() {
 describe("/api/mcp", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockTenantSelect.mockReturnValue({ data: null, error: { message: "not found" } })
     mockResolveActiveMemoryContext.mockResolvedValue({
       ownerType: "user",
       orgId: null,
@@ -731,6 +747,85 @@ describe("/api/mcp", () => {
       ))
       const body = await response.json()
       expect(body.result.content[0].text).toBe("No memories found.")
+    })
+  })
+
+  describe("tools/call: tenant routing", () => {
+    it("routes tool execution through tenant-specific Turso credentials when tenant_id is provided", async () => {
+      setupAuth()
+      mockTenantSelect.mockReturnValue({
+        data: {
+          turso_db_url: "libsql://tenant-a.turso.io",
+          turso_db_token: "tenant-token",
+          status: "ready",
+        },
+      })
+      mockExecute.mockResolvedValue({ rows: [] })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "get_rules",
+          arguments: { tenant_id: "tenant-a" },
+        })
+      ))
+      const body = await response.json()
+      expect(body.result.content[0].text).toBe("No rules found.")
+      expect(mockTenantSelect).toHaveBeenCalled()
+
+      const tenantLookup = mockTenantSelect.mock.calls[0]?.[0] as {
+        filters?: Record<string, string>
+      }
+      expect(tenantLookup.filters?.tenant_id).toBe("tenant-a")
+      expect(tenantLookup.filters?.api_key_hash).toMatch(/^[a-f0-9]{64}$/)
+    })
+
+    it("returns typed error when tenant_id is invalid", async () => {
+      setupAuth()
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "get_rules",
+          arguments: { tenant_id: 42 },
+        })
+      ))
+      const body = await response.json()
+      expect(body.error.code).toBe(-32602)
+      expect(body.error.data.code).toBe("TENANT_ID_INVALID")
+    })
+
+    it("returns typed error when tenant database is not configured", async () => {
+      setupAuth()
+      mockTenantSelect.mockReturnValue({ data: null, error: { message: "not found" } })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "get_rules",
+          arguments: { tenant_id: "tenant-missing" },
+        })
+      ))
+      const body = await response.json()
+      expect(body.error.code).toBe(-32004)
+      expect(body.error.data.code).toBe("TENANT_DATABASE_NOT_CONFIGURED")
+    })
+
+    it("returns typed error when tenant database is not ready", async () => {
+      setupAuth()
+      mockTenantSelect.mockReturnValue({
+        data: {
+          turso_db_url: "libsql://tenant-b.turso.io",
+          turso_db_token: "tenant-token",
+          status: "provisioning",
+        },
+      })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "get_rules",
+          arguments: { tenant_id: "tenant-b" },
+        })
+      ))
+      const body = await response.json()
+      expect(body.error.code).toBe(-32009)
+      expect(body.error.data.code).toBe("TENANT_DATABASE_NOT_READY")
     })
   })
 

@@ -18,6 +18,7 @@ import { MemoriesClient } from "@memories.sh/core"
 
 const client = new MemoriesClient({
   apiKey: "mcp_xxx", // or uses MEMORIES_API_KEY env var
+  tenantId: "acme-prod",
 })
 
 const { rules, memories } = await client.context.get("auth patterns")
@@ -36,8 +37,9 @@ const response = await anthropic.messages.create({
 
 ```typescript
 const client = new MemoriesClient({
-  apiKey: "mcp_xxx",    // API key (default: MEMORIES_API_KEY env var)
-  userId: "user_123",   // Optional: scope all operations to a user
+  apiKey: "mcp_xxx",      // API key (default: MEMORIES_API_KEY env var)
+  tenantId: "acme-prod",  // Required for tenant/customer-level isolation
+  userId: "user_123",     // Optional: scope all operations to a specific end user
 })
 ```
 
@@ -151,18 +153,39 @@ await client.seed({
 await client.seed({ file: "./CONVENTIONS.md" })
 ```
 
-## userId Scoping
+## Scoping
 
-For multi-tenant apps, scope all operations to a specific user:
+Use all three scopes together:
+
+- `tenantId` for database isolation per customer/workspace
+- `userId` for per-user personalization inside that tenant
+- `projectId` for repo/project-specific rules and memories
 
 ```typescript
 const client = new MemoriesClient({
   apiKey: "mcp_xxx",
+  tenantId: "acme-prod",
+  userId: "user_123",
+})
+
+await client.memories.add({
+  content: "User prefers concise updates in repository reviews",
+  type: "note",
+  projectId: "github.com/acme/platform",
+})
+```
+
+For single-user apps, `tenantId` can be your app environment or workspace id:
+
+```typescript
+const client = new MemoriesClient({
+  apiKey: "mcp_xxx",
+  tenantId: "my-app-prod",
   userId: "user_123",
 })
 
 // All operations are now scoped to user_123
-await client.memories.add({ content: "User prefers dark mode", type: "preference" })
+await client.memories.add({ content: "User prefers dark mode", type: "note" })
 const { memories } = await client.context.get("user preferences")
 // Only returns memories for user_123
 ```

@@ -20,6 +20,7 @@ interface ActiveConnection {
   controller: ReadableStreamDefaultController<Uint8Array>
   turso: ReturnType<typeof createTurso>
   userId: string
+  apiKeyHash: string
   rateLimitKey: string
   clientIp: string
   lastActivityAt: number
@@ -35,6 +36,7 @@ interface AuthenticatedUser {
 interface AuthSuccess {
   turso: ReturnType<typeof createTurso>
   user: AuthenticatedUser
+  apiKeyHash: string
 }
 
 interface AuthFailure {
@@ -158,7 +160,7 @@ async function authenticateAndGetTurso(apiKey: string): Promise<AuthSuccess | Au
     authToken: context.turso_db_token,
   })
 
-  return { turso, user: user as AuthenticatedUser }
+  return { turso, user: user as AuthenticatedUser, apiKeyHash }
 }
 
 // Extract API key from request
@@ -351,6 +353,88 @@ function toToolExecutionError(err: unknown, fallbackTool?: string): ToolExecutio
       details: fallbackTool ? { tool: fallbackTool } : undefined,
     })
   )
+}
+
+function parseTenantId(args: Record<string, unknown>): string | null {
+  if (args.tenant_id === undefined || args.tenant_id === null) {
+    return null
+  }
+
+  if (typeof args.tenant_id !== "string" || args.tenant_id.trim().length === 0) {
+    throw new ToolExecutionError(
+      apiError({
+        type: "validation_error",
+        code: "TENANT_ID_INVALID",
+        message: "tenant_id must be a non-empty string",
+        status: 400,
+        retryable: false,
+        details: { field: "tenant_id" },
+      }),
+      { rpcCode: -32602 }
+    )
+  }
+
+  return args.tenant_id.trim()
+}
+
+async function resolveTenantTurso(
+  apiKeyHash: string,
+  tenantId: string
+): Promise<ReturnType<typeof createTurso>> {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from("sdk_tenant_databases")
+    .select("turso_db_url, turso_db_token, status")
+    .eq("api_key_hash", apiKeyHash)
+    .eq("tenant_id", tenantId)
+    .single()
+
+  if (error || !data) {
+    throw new ToolExecutionError(
+      apiError({
+        type: "not_found_error",
+        code: "TENANT_DATABASE_NOT_CONFIGURED",
+        message: `No tenant database configured for tenant_id: ${tenantId}`,
+        status: 404,
+        retryable: false,
+        details: { tenant_id: tenantId },
+      }),
+      { rpcCode: -32004 }
+    )
+  }
+
+  if (data.status !== "ready") {
+    throw new ToolExecutionError(
+      apiError({
+        type: "tool_error",
+        code: "TENANT_DATABASE_NOT_READY",
+        message: `Tenant database is not ready (status: ${data.status})`,
+        status: 409,
+        retryable: true,
+        details: { tenant_id: tenantId, status: data.status },
+      }),
+      { rpcCode: -32009 }
+    )
+  }
+
+  if (!data.turso_db_url || !data.turso_db_token) {
+    throw new ToolExecutionError(
+      apiError({
+        type: "not_found_error",
+        code: "TENANT_DATABASE_CREDENTIALS_MISSING",
+        message: `Tenant database credentials are missing for tenant_id: ${tenantId}`,
+        status: 404,
+        retryable: false,
+        details: { tenant_id: tenantId },
+      }),
+      { rpcCode: -32004 }
+    )
+  }
+
+  return createTurso({
+    url: data.turso_db_url,
+    authToken: data.turso_db_token,
+  })
 }
 
 // Format memory for display
@@ -846,6 +930,7 @@ const TOOLS = [
       properties: {
         query: { type: "string", description: "What you're working on (for finding relevant memories)" },
         project_id: { type: "string", description: "Project identifier (e.g., github.com/user/repo) to include project-specific rules" },
+        tenant_id: { type: "string", description: "Tenant identifier to route requests to a tenant-specific memory database" },
         limit: { type: "number", description: "Max memories to return (default: 5)" },
       },
     },
@@ -857,6 +942,7 @@ const TOOLS = [
       type: "object",
       properties: {
         project_id: { type: "string", description: "Project identifier to include project-specific rules" },
+        tenant_id: { type: "string", description: "Tenant identifier to route requests to a tenant-specific memory database" },
       },
     },
   },
@@ -869,6 +955,7 @@ const TOOLS = [
         content: { type: "string", description: "The memory content" },
         type: { type: "string", enum: ["rule", "decision", "fact", "note", "skill"], description: "Memory type (default: note)" },
         project_id: { type: "string", description: "Project identifier to scope this memory to a specific project" },
+        tenant_id: { type: "string", description: "Tenant identifier to route requests to a tenant-specific memory database" },
         tags: { type: "array", items: { type: "string" }, description: "Optional tags for organization and filtering" },
         paths: { type: "array", items: { type: "string" }, description: "File glob patterns this memory applies to (e.g., ['src/**/*.ts'])" },
         category: { type: "string", description: "Category for grouping related memories" },
@@ -890,6 +977,7 @@ const TOOLS = [
         paths: { type: "array", items: { type: "string" }, description: "New file glob patterns (optional)" },
         category: { type: "string", description: "New category (optional)" },
         metadata: { type: "object", description: "New metadata (optional)" },
+        tenant_id: { type: "string", description: "Tenant identifier to route requests to a tenant-specific memory database" },
       },
       required: ["id"],
     },
@@ -901,6 +989,7 @@ const TOOLS = [
       type: "object",
       properties: {
         id: { type: "string", description: "Memory ID to delete" },
+        tenant_id: { type: "string", description: "Tenant identifier to route requests to a tenant-specific memory database" },
       },
       required: ["id"],
     },
@@ -913,6 +1002,7 @@ const TOOLS = [
       properties: {
         query: { type: "string", description: "Search query" },
         project_id: { type: "string", description: "Project identifier to include project-specific memories" },
+        tenant_id: { type: "string", description: "Tenant identifier to route requests to a tenant-specific memory database" },
         type: { type: "string", enum: ["rule", "decision", "fact", "note", "skill"], description: "Filter by memory type" },
         limit: { type: "number", description: "Max results (default: 10)" },
       },
@@ -928,6 +1018,7 @@ const TOOLS = [
         type: { type: "string", enum: ["rule", "decision", "fact", "note", "skill"], description: "Filter by type" },
         tags: { type: "string", description: "Filter by tag (partial match)" },
         project_id: { type: "string", description: "Project identifier to include project-specific memories" },
+        tenant_id: { type: "string", description: "Tenant identifier to route requests to a tenant-specific memory database" },
         limit: { type: "number", description: "Max results (default: 20)" },
       },
     },
@@ -988,7 +1079,7 @@ export async function GET(request: NextRequest) {
     return endpointErrorResponse(auth.error)
   }
 
-  const { turso, user } = auth
+  const { turso, user, apiKeyHash } = auth
   const sessionId = crypto.randomUUID()
 
   const stream = new ReadableStream<Uint8Array>({
@@ -997,6 +1088,7 @@ export async function GET(request: NextRequest) {
         controller,
         turso,
         userId: user.id,
+        apiKeyHash,
         rateLimitKey,
         clientIp,
         lastActivityAt: Date.now(),
@@ -1028,6 +1120,7 @@ export async function POST(request: NextRequest) {
   const sessionId = url.searchParams.get("session")
   
   let turso: ReturnType<typeof createTurso>
+  let apiKeyHash: string | null = null
   let controller: ReadableStreamDefaultController<Uint8Array> | null = null
   let activeSessionId: string | null = null
 
@@ -1038,6 +1131,7 @@ export async function POST(request: NextRequest) {
 
     touchConnection(sessionId)
     turso = conn.turso
+    apiKeyHash = conn.apiKeyHash
     controller = conn.controller
     activeSessionId = sessionId
   } else {
@@ -1064,6 +1158,7 @@ export async function POST(request: NextRequest) {
       return endpointErrorResponse(auth.error)
     }
     turso = auth.turso
+    apiKeyHash = auth.apiKeyHash
   }
 
   try {
@@ -1093,10 +1188,27 @@ export async function POST(request: NextRequest) {
 
       case "tools/call": {
         const toolName = params?.name
-        const args = params?.arguments || {}
+        const args = (params?.arguments && typeof params.arguments === "object")
+          ? (params.arguments as Record<string, unknown>)
+          : {}
 
         try {
-          result = await executeTool(toolName, args, turso)
+          const tenantId = parseTenantId(args)
+          if (tenantId && !apiKeyHash) {
+            throw new ToolExecutionError(
+              apiError({
+                type: "internal_error",
+                code: "TENANT_ROUTING_CONTEXT_MISSING",
+                message: "Tenant routing context is unavailable for this request",
+                status: 500,
+                retryable: true,
+              })
+            )
+          }
+          const toolTurso = tenantId
+            ? await resolveTenantTurso(apiKeyHash, tenantId)
+            : turso
+          result = await executeTool(toolName, args, toolTurso)
         } catch (err) {
           const toolError = toToolExecutionError(err, typeof toolName === "string" ? toolName : undefined)
           return jsonRpcErrorResponse(id, toolError.rpcCode, toolError.detail)

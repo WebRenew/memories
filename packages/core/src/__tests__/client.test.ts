@@ -6,6 +6,10 @@ describe("MemoriesClient", () => {
     expect(() => new MemoriesClient({ apiKey: "" })).toThrow(MemoriesClientError)
   })
 
+  it("throws when tenant id is an empty string", () => {
+    expect(() => new MemoriesClient({ apiKey: "mcp_test", tenantId: "   " })).toThrow(MemoriesClientError)
+  })
+
   it("calls MCP tools through JSON-RPC", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       new Response(
@@ -23,6 +27,7 @@ describe("MemoriesClient", () => {
     const client = new MemoriesClient({
       apiKey: "mcp_test",
       baseUrl: "https://example.com/api/mcp",
+      tenantId: "tenant-123",
       fetch: fetchMock as unknown as typeof fetch,
     })
 
@@ -35,6 +40,10 @@ describe("MemoriesClient", () => {
     expect(requestInit).toBeDefined()
     expect(requestInit?.method).toBe("POST")
     expect((requestInit?.headers as Record<string, string>).authorization).toBe("Bearer mcp_test")
+    const requestBody = JSON.parse((requestInit?.body as string) ?? "{}") as {
+      params?: { arguments?: Record<string, unknown> }
+    }
+    expect(requestBody.params?.arguments?.tenant_id).toBe("tenant-123")
   })
 
   it("parses structuredContent into typed context arrays", async () => {

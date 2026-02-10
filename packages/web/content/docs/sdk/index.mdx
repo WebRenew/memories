@@ -7,7 +7,7 @@ The memories.sh SDK gives AI applications persistent memory through two packages
 
 | Package | What it does |
 |---------|-------------|
-| `@memories.sh/ai-sdk` | Middleware + tools for the Vercel AI SDK |
+| `@memories.sh/ai-sdk` | Middleware + tools for the [AI SDK](https://ai-sdk.dev/) |
 | `@memories.sh/core` | Standalone client for any LLM framework |
 
 ## Three Tiers of Integration
@@ -17,6 +17,12 @@ The memories.sh SDK gives AI applications persistent memory through two packages
 | **Middleware** | Auto-inject context into every prompt | 2 lines | Default — "it just works" |
 | **Tools** | LLM decides when to read/write | 3-5 lines | Agent loops that manage their own memory |
 | **Client** | Dev manually fetches context | 10+ lines | Custom integrations, non-AI-SDK apps |
+
+## Scoping Model
+
+- `tenantId`: required for SaaS isolation (routes to a tenant-specific memory database)
+- `userId`: optional per-end-user scope inside a tenant
+- `projectId`: optional per-project/repository scope
 
 ## Quick Start
 
@@ -43,7 +49,7 @@ import { memoriesMiddleware } from "@memories.sh/ai-sdk"
 
 const model = wrapLanguageModel({
   model: openai("gpt-4o"),
-  middleware: memoriesMiddleware(),
+  middleware: memoriesMiddleware({ tenantId: "acme-prod" }),
 })
 
 const { text } = await generateText({
@@ -64,7 +70,7 @@ import { memoriesTools, memoriesSystemPrompt } from "@memories.sh/ai-sdk"
 const { text } = await generateText({
   model: openai("gpt-4o"),
   system: memoriesSystemPrompt(),
-  tools: memoriesTools(),
+  tools: memoriesTools({ tenantId: "acme-prod" }),
   stopWhen: stepCountIs(5),
   prompt: userMessage,
 })
@@ -77,7 +83,7 @@ Use with any LLM SDK:
 ```typescript
 import { MemoriesClient } from "@memories.sh/core"
 
-const client = new MemoriesClient({ apiKey: "mcp_xxx" })
+const client = new MemoriesClient({ apiKey: "mcp_xxx", tenantId: "acme-prod" })
 const { rules, memories } = await client.context.get("deployment process")
 
 const response = await anthropic.messages.create({

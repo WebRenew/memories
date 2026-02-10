@@ -6,10 +6,16 @@ export function resolveClient(options: MemoriesBaseOptions = {}): MemoriesClient
     return options.client
   }
 
+  const tenantId = typeof options.tenantId === "string" ? options.tenantId.trim() : ""
+  if (!tenantId) {
+    throw new Error("tenantId is required when no client instance is provided.")
+  }
+
   return new MemoriesClient({
     apiKey: options.apiKey,
     baseUrl: options.baseUrl,
     userId: options.userId,
+    tenantId,
     fetch: options.fetch,
     headers: options.headers,
   })
