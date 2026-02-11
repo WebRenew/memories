@@ -35,6 +35,17 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+function normalizeEnvelope(body: Record<string, unknown>) {
+  return {
+    ...body,
+    meta: {
+      ...(typeof body.meta === "object" && body.meta ? body.meta : {}),
+      requestId: "<request-id>",
+      timestamp: "<timestamp>",
+    },
+  }
+}
+
 describe("/api/sdk/v1/management/keys", () => {
   it("wraps successful key GET response in sdk envelope", async () => {
     mockKeyGet.mockResolvedValue(
@@ -108,5 +119,64 @@ describe("/api/sdk/v1/management/tenants", () => {
     expect(response.status).toBe(200)
     const body = await response.json()
     expect(body.ok).toBe(true)
+  })
+
+  it("matches management keys success envelope contract snapshot", async () => {
+    mockKeyGet.mockResolvedValue(
+      jsonResponse({
+        hasKey: true,
+        keyPreview: "mcp_abcd****1234",
+      })
+    )
+
+    const response = await keysGet()
+    const body = (await response.json()) as Record<string, unknown>
+
+    expect(normalizeEnvelope(body)).toMatchInlineSnapshot(`
+      {
+        "data": {
+          "hasKey": true,
+          "keyPreview": "mcp_abcd****1234",
+        },
+        "error": null,
+        "meta": {
+          "endpoint": "/api/sdk/v1/management/keys",
+          "requestId": "<request-id>",
+          "timestamp": "<timestamp>",
+          "version": "2026-02-11",
+        },
+        "ok": true,
+      }
+    `)
+  })
+
+  it("matches management tenants validation error envelope contract snapshot", async () => {
+    mockTenantsPost.mockResolvedValue(jsonResponse({ error: "tenantId is required" }, 400))
+
+    const response = await tenantsPost(new Request("https://example.com", { method: "POST", body: "{}" }))
+    const body = (await response.json()) as Record<string, unknown>
+
+    expect(normalizeEnvelope(body)).toMatchInlineSnapshot(`
+      {
+        "data": null,
+        "error": {
+          "code": "LEGACY_MCP_TENANTS_ERROR",
+          "details": {
+            "error": "tenantId is required",
+          },
+          "message": "tenantId is required",
+          "retryable": false,
+          "status": 400,
+          "type": "validation_error",
+        },
+        "meta": {
+          "endpoint": "/api/sdk/v1/management/tenants",
+          "requestId": "<request-id>",
+          "timestamp": "<timestamp>",
+          "version": "2026-02-11",
+        },
+        "ok": false,
+      }
+    `)
   })
 })

@@ -84,6 +84,17 @@ import { GET as healthGET } from "../../health/route"
 
 const VALID_API_KEY = `mcp_${"a".repeat(64)}`
 
+function normalizeEnvelope(body: Record<string, unknown>) {
+  return {
+    ...body,
+    meta: {
+      ...(typeof body.meta === "object" && body.meta ? body.meta : {}),
+      requestId: "<request-id>",
+      timestamp: "<timestamp>",
+    },
+  }
+}
+
 function makePost(path: string, body: unknown, apiKey?: string): NextRequest {
   const headers: Record<string, string> = {
     "content-type": "application/json",
@@ -302,5 +313,101 @@ describe("/api/sdk/v1/health", () => {
     expect(body.ok).toBe(true)
     expect(body.data.status).toBe("ok")
     expect(body.meta.endpoint).toBe("/api/sdk/v1/health")
+  })
+
+  it("matches sdk health envelope contract snapshot", async () => {
+    const response = await healthGET()
+    const body = (await response.json()) as Record<string, unknown>
+
+    expect(normalizeEnvelope(body)).toMatchInlineSnapshot(`
+      {
+        "data": {
+          "schemaVersion": "2026-02-11",
+          "service": "memories-sdk",
+          "status": "ok",
+        },
+        "error": null,
+        "meta": {
+          "endpoint": "/api/sdk/v1/health",
+          "requestId": "<request-id>",
+          "timestamp": "<timestamp>",
+          "version": "2026-02-11",
+        },
+        "ok": true,
+      }
+    `)
+  })
+})
+
+describe("/api/sdk/v1/memories envelope contracts", () => {
+  it("matches add success envelope snapshot", async () => {
+    const response = await addPOST(
+      makePost(
+        "/api/sdk/v1/memories/add",
+        {
+          content: "hello",
+          type: "note",
+          scope: { userId: "end-user-1" },
+        },
+        VALID_API_KEY
+      )
+    )
+
+    const body = (await response.json()) as Record<string, unknown>
+    expect(normalizeEnvelope(body)).toMatchInlineSnapshot(`
+      {
+        "data": {
+          "id": "mem_1",
+          "memory": {
+            "content": "hello",
+            "id": "mem_1",
+            "layer": "long_term",
+            "type": "note",
+          },
+          "message": "Stored note (global): hello",
+        },
+        "error": null,
+        "meta": {
+          "endpoint": "/api/sdk/v1/memories/add",
+          "requestId": "<request-id>",
+          "timestamp": "<timestamp>",
+          "version": "2026-02-11",
+        },
+        "ok": true,
+      }
+    `)
+  })
+
+  it("matches edit validation error envelope snapshot", async () => {
+    const response = await editPOST(
+      makePost(
+        "/api/sdk/v1/memories/edit",
+        {
+          id: "mem_1",
+        },
+        VALID_API_KEY
+      )
+    )
+
+    const body = (await response.json()) as Record<string, unknown>
+    expect(normalizeEnvelope(body)).toMatchInlineSnapshot(`
+      {
+        "data": null,
+        "error": {
+          "code": "INVALID_REQUEST",
+          "message": "Invalid request payload",
+          "retryable": false,
+          "status": 400,
+          "type": "validation_error",
+        },
+        "meta": {
+          "endpoint": "/api/sdk/v1/memories/edit",
+          "requestId": "<request-id>",
+          "timestamp": "<timestamp>",
+          "version": "2026-02-11",
+        },
+        "ok": false,
+      }
+    `)
   })
 })

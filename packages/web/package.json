@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:sdk-contracts": "vitest run src/app/api/sdk/v1/context/get/__tests__/route.test.ts src/app/api/sdk/v1/memories/__tests__/routes.test.ts src/app/api/sdk/v1/management/__tests__/routes.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "postinstall": "fumadocs-mdx"

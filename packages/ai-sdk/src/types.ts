@@ -2,6 +2,14 @@ import type {
   ContextGetInput,
   ContextMode,
   ContextResult,
+  ManagementKeyCreateInput,
+  ManagementKeyCreateResult,
+  ManagementKeyRevokeResult,
+  ManagementKeyStatus,
+  ManagementTenantDisableResult,
+  ManagementTenantListResult,
+  ManagementTenantUpsertInput,
+  ManagementTenantUpsertResult,
   MemoriesClient,
   MemoriesClientOptions,
   MemoryAddInput,
@@ -44,4 +52,17 @@ export interface MemoriesTools {
   listMemories: (input?: MemoryListOptions) => Promise<MemoryRecord[]>
   forgetMemory: (input: { id: string }) => Promise<MutationResult>
   editMemory: (input: { id: string; updates: MemoryEditInput }) => Promise<MutationResult>
+}
+
+export interface MemoriesManagement {
+  keys: {
+    get: () => Promise<ManagementKeyStatus>
+    create: (input: ManagementKeyCreateInput) => Promise<ManagementKeyCreateResult>
+    revoke: () => Promise<ManagementKeyRevokeResult>
+  }
+  tenants: {
+    list: () => Promise<ManagementTenantListResult>
+    upsert: (input: ManagementTenantUpsertInput) => Promise<ManagementTenantUpsertResult>
+    disable: (tenantId: string) => Promise<ManagementTenantDisableResult>
+  }
 }

@@ -60,6 +60,17 @@ import { OPTIONS, POST } from "../route"
 
 const VALID_API_KEY = `mcp_${"a".repeat(64)}`
 
+function normalizeEnvelope(body: Record<string, unknown>) {
+  return {
+    ...body,
+    meta: {
+      ...(typeof body.meta === "object" && body.meta ? body.meta : {}),
+      requestId: "<request-id>",
+      timestamp: "<timestamp>",
+    },
+  }
+}
+
 function makePostRequest(body: unknown, apiKey?: string): NextRequest {
   const headers: Record<string, string> = {
     "content-type": "application/json",
@@ -235,5 +246,98 @@ describe("/api/sdk/v1/context/get", () => {
     const response = await OPTIONS()
     expect(response.status).toBe(204)
     expect(response.headers.get("Access-Control-Allow-Methods")).toBe("POST, OPTIONS")
+  })
+
+  it("matches sdk context success envelope contract snapshot", async () => {
+    const response = await POST(
+      makePostRequest(
+        {
+          query: "auth",
+          scope: { userId: "end-user-1", projectId: "github.com/acme/platform" },
+        },
+        VALID_API_KEY
+      )
+    )
+
+    const body = (await response.json()) as Record<string, unknown>
+    expect(normalizeEnvelope(body)).toMatchInlineSnapshot(`
+      {
+        "data": {
+          "longTermMemories": [
+            {
+              "content": "Long-term context",
+              "id": "l1",
+              "layer": "long_term",
+              "type": "fact",
+            },
+          ],
+          "memories": [
+            {
+              "content": "Working context",
+              "id": "w1",
+              "layer": "working",
+              "type": "note",
+            },
+            {
+              "content": "Long-term context",
+              "id": "l1",
+              "layer": "long_term",
+              "type": "fact",
+            },
+          ],
+          "mode": "all",
+          "query": "auth",
+          "rules": [
+            {
+              "content": "Always test",
+              "id": "r1",
+              "layer": "rule",
+              "type": "rule",
+            },
+          ],
+          "workingMemories": [
+            {
+              "content": "Working context",
+              "id": "w1",
+              "layer": "working",
+              "type": "note",
+            },
+          ],
+        },
+        "error": null,
+        "meta": {
+          "endpoint": "/api/sdk/v1/context/get",
+          "requestId": "<request-id>",
+          "timestamp": "<timestamp>",
+          "version": "2026-02-11",
+        },
+        "ok": true,
+      }
+    `)
+  })
+
+  it("matches sdk context error envelope contract snapshot", async () => {
+    const response = await POST(makePostRequest({ query: "auth", limit: -1 }, VALID_API_KEY))
+    const body = (await response.json()) as Record<string, unknown>
+
+    expect(normalizeEnvelope(body)).toMatchInlineSnapshot(`
+      {
+        "data": null,
+        "error": {
+          "code": "INVALID_REQUEST",
+          "message": "Invalid request payload",
+          "retryable": false,
+          "status": 400,
+          "type": "validation_error",
+        },
+        "meta": {
+          "endpoint": "/api/sdk/v1/context/get",
+          "requestId": "<request-id>",
+          "timestamp": "<timestamp>",
+          "version": "2026-02-11",
+        },
+        "ok": false,
+      }
+    `)
   })
 })

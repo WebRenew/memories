@@ -71,9 +71,29 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+  sdk-contracts:
+    name: SDK Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run SDK contract snapshot tests
+        run: pnpm --filter @memories.sh/web test:sdk-contracts
+
   build:
     name: Build
-    needs: [lint, typecheck, test]
+    needs: [lint, typecheck, test, sdk-contracts]
     runs-on: ubuntu-latest
     env:
       NEXT_PUBLIC_SUPABASE_URL: placeholder
