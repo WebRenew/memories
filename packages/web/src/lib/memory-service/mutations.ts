@@ -1,6 +1,7 @@
 import {
   apiError,
   defaultLayerForType,
+  GRAPH_MAPPING_ENABLED,
   type MemoryRow,
   MCP_WORKING_MEMORY_MAX_ITEMS_PER_USER,
   toStructuredMemory,
@@ -9,6 +10,7 @@ import {
   VALID_TYPES,
 } from "./types"
 import { buildNotExpiredFilter, parseMemoryLayer, workingMemoryExpiresAt } from "./scope"
+import { removeMemoryGraphMapping, syncMemoryGraphMapping } from "./graph/upsert"
 
 async function compactWorkingMemoriesForUser(
   turso: TursoClient,
@@ -107,6 +109,23 @@ export async function addMemoryPayload(params: {
 
   if (layer === "working") {
     await compactWorkingMemoriesForUser(turso, userId, nowIso)
+  }
+
+  if (GRAPH_MAPPING_ENABLED) {
+    try {
+      await syncMemoryGraphMapping(turso, {
+        id: memoryId,
+        type,
+        layer,
+        expiresAt,
+        projectId: projectId || null,
+        userId,
+        tags: Array.isArray(args.tags) ? (args.tags as string[]) : [],
+        category,
+      })
+    } catch (err) {
+      console.error("Graph mapping sync failed on add_memory:", err)
+    }
   }
 
   const scopeLabel = projectId ? `project:${projectId.split("/").pop()}` : "global"
@@ -219,6 +238,61 @@ export async function editMemoryPayload(params: {
     await compactWorkingMemoriesForUser(turso, userId, nowIso)
   }
 
+  if (GRAPH_MAPPING_ENABLED) {
+    try {
+      const memoryResult = await turso.execute({
+        sql: `SELECT id, type, memory_layer, expires_at, project_id, user_id, tags, category
+              FROM memories
+              WHERE id = ? AND deleted_at IS NULL
+              LIMIT 1`,
+        args: [id],
+      })
+
+      const row = memoryResult.rows[0] as unknown as
+        | {
+            id: string
+            type: string
+            memory_layer: string | null
+            expires_at: string | null
+            project_id: string | null
+            user_id: string | null
+            tags: string | null
+            category: string | null
+          }
+        | undefined
+
+      if (row) {
+        const layer = row.memory_layer === "rule" || row.memory_layer === "working" || row.memory_layer === "long_term"
+          ? row.memory_layer
+          : row.type === "rule"
+            ? "rule"
+            : "long_term"
+
+        const tags = row.tags
+          ? row.tags
+              .split(",")
+              .map((tag) => tag.trim())
+              .filter(Boolean)
+          : []
+
+        await syncMemoryGraphMapping(turso, {
+          id: row.id,
+          type: row.type,
+          layer,
+          expiresAt: row.expires_at,
+          projectId: row.project_id,
+          userId: row.user_id,
+          tags,
+          category: row.category,
+        })
+      } else {
+        await removeMemoryGraphMapping(turso, id)
+      }
+    } catch (err) {
+      console.error("Graph mapping sync failed on edit_memory:", err)
+    }
+  }
+
   const message = `Updated memory ${id}`
   return {
     text: message,
@@ -259,6 +333,14 @@ export async function forgetMemoryPayload(params: {
     }`,
     args: userId ? [nowIso, id, userId] : [nowIso, id],
   })
+
+  if (GRAPH_MAPPING_ENABLED) {
+    try {
+      await removeMemoryGraphMapping(turso, id)
+    } catch (err) {
+      console.error("Graph mapping cleanup failed on forget_memory:", err)
+    }
+  }
 
   const message = `Deleted memory ${id}`
   return {
