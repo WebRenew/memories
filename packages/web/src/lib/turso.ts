@@ -92,6 +92,7 @@ export async function initSchema(url: string, token: string): Promise<void> {
       scope TEXT NOT NULL DEFAULT 'global',
       project_id TEXT,
       user_id TEXT,
+      memory_layer TEXT NOT NULL DEFAULT 'long_term',
       type TEXT NOT NULL DEFAULT 'note',
       paths TEXT,
       category TEXT,
@@ -111,6 +112,7 @@ export async function initSchema(url: string, token: string): Promise<void> {
     { name: "scope", ddl: "TEXT NOT NULL DEFAULT 'global'" },
     { name: "project_id", ddl: "TEXT" },
     { name: "user_id", ddl: "TEXT" },
+    { name: "memory_layer", ddl: "TEXT NOT NULL DEFAULT 'long_term'" },
     { name: "type", ddl: "TEXT NOT NULL DEFAULT 'note'" },
     { name: "paths", ddl: "TEXT" },
     { name: "category", ddl: "TEXT" },
@@ -186,4 +188,5 @@ export async function initSchema(url: string, token: string): Promise<void> {
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type)`)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_memories_scope_project ON memories(scope, project_id)`)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_memories_user_scope_project ON memories(user_id, scope, project_id)`)
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_memories_layer_scope_project ON memories(memory_layer, scope, project_id)`)
 }

@@ -12,6 +12,7 @@ export type {
   MemoryAddInput,
   MemoryEditInput,
   MemoryListOptions,
+  MemoryLayer,
   MemoryRecord,
   MemoryScope,
   MemorySearchOptions,

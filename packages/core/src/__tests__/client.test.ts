@@ -62,16 +62,29 @@ describe("MemoriesClient", () => {
                     id: "rule_1",
                     content: "Keep it simple",
                     type: "rule",
+                    layer: "rule",
                     scope: "global",
                     projectId: null,
                     tags: [],
                   },
                 ],
-                memories: [
+                workingMemories: [
                   {
-                    id: "mem_1",
+                    id: "mem_working_1",
+                    content: "Drafting migration script",
+                    type: "note",
+                    layer: "working",
+                    scope: "global",
+                    projectId: null,
+                    tags: [],
+                  },
+                ],
+                longTermMemories: [
+                  {
+                    id: "mem_long_1",
                     content: "API rate limit is 100/min",
                     type: "fact",
+                    layer: "long_term",
                     scope: "global",
                     projectId: null,
                     tags: [],
@@ -98,8 +111,11 @@ describe("MemoriesClient", () => {
 
     const context = await client.context.get("auth")
     expect(context.rules).toHaveLength(1)
-    expect(context.memories).toHaveLength(1)
-    expect(context.memories[0]?.type).toBe("fact")
+    expect(context.memories).toHaveLength(2)
+    expect(context.rules[0]?.layer).toBe("rule")
+    expect(context.memories[0]?.layer).toBe("working")
+    expect(context.memories[0]?.type).toBe("note")
+    expect(context.memories[1]?.type).toBe("fact")
     expect(context.rules[0]?.content).toBe("Keep it simple")
   })
 

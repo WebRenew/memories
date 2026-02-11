@@ -1,4 +1,4 @@
-import type { MemoryEditInput } from "@memories.sh/core"
+import type { MemoryAddInput, MemoryEditInput, MemoryListOptions, MemorySearchOptions, MemoryType } from "@memories.sh/core"
 import { resolveClient } from "./client"
 import type { MemoriesBaseOptions, MemoriesTools } from "./types"
 
@@ -14,15 +14,7 @@ export function getContext(options: MemoriesBaseOptions = {}) {
 
 export function storeMemory(options: MemoriesBaseOptions = {}) {
   const client = resolveClient(options)
-  return async (input: {
-    content: string
-    type?: "rule" | "decision" | "fact" | "note" | "skill"
-    tags?: string[]
-    paths?: string[]
-    category?: string
-    metadata?: Record<string, unknown>
-    projectId?: string
-  }) =>
+  return async (input: MemoryAddInput) =>
     client.memories.add({
       ...input,
       projectId: input.projectId ?? options.projectId,
@@ -33,12 +25,14 @@ export function searchMemories(options: MemoriesBaseOptions = {}) {
   const client = resolveClient(options)
   return async (input: {
     query: string
-    type?: "rule" | "decision" | "fact" | "note" | "skill"
+    type?: MemoryType
+    layer?: MemorySearchOptions["layer"]
     limit?: number
     projectId?: string
   }) =>
     client.memories.search(input.query, {
       type: input.type,
+      layer: input.layer,
       limit: input.limit,
       projectId: input.projectId ?? options.projectId,
     })
@@ -47,13 +41,15 @@ export function searchMemories(options: MemoriesBaseOptions = {}) {
 export function listMemories(options: MemoriesBaseOptions = {}) {
   const client = resolveClient(options)
   return async (input: {
-    type?: "rule" | "decision" | "fact" | "note" | "skill"
+    type?: MemoryType
+    layer?: MemoryListOptions["layer"]
     tags?: string
     limit?: number
     projectId?: string
   } = {}) =>
     client.memories.list({
       type: input.type,
+      layer: input.layer,
       tags: input.tags,
       limit: input.limit,
       projectId: input.projectId ?? options.projectId,

@@ -21,6 +21,7 @@ describe("parseContextResponse", () => {
     expect(parsed.rules[0]?.content).toBe("Use zod for validation")
     expect(parsed.memories).toHaveLength(2)
     expect(parsed.memories[0]?.type).toBe("decision")
+    expect(parsed.memories[0]?.layer).toBe("long_term")
     expect(parsed.memories[0]?.scope).toBe("project")
     expect(parsed.memories[0]?.tags).toEqual(["auth", "backend"])
   })
@@ -37,6 +38,7 @@ describe("parseMemoryListResponse", () => {
 
     const memories = parseMemoryListResponse(raw)
     expect(memories).toHaveLength(2)
+    expect(memories[0]?.layer).toBe("rule")
     expect(memories[1]?.scope).toBe("project")
     expect(memories[1]?.tags).toEqual(["style"])
   })

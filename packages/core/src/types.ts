@@ -1,4 +1,5 @@
 export type MemoryType = "rule" | "decision" | "fact" | "note" | "skill"
+export type MemoryLayer = "rule" | "working" | "long_term"
 
 export type MemoryScope = "global" | "project" | "unknown"
 
@@ -35,6 +36,7 @@ export interface MemoryRecord {
   id: string | null
   content: string
   type: MemoryType
+  layer: MemoryLayer
   scope: MemoryScope
   projectId: string | null
   tags: string[]
@@ -56,6 +58,7 @@ export interface ContextGetOptions {
 export interface MemoryAddInput {
   content: string
   type?: MemoryType
+  layer?: MemoryLayer
   tags?: string[]
   paths?: string[]
   category?: string
@@ -66,6 +69,7 @@ export interface MemoryAddInput {
 export interface MemoryEditInput {
   content?: string
   type?: MemoryType
+  layer?: MemoryLayer
   tags?: string[]
   paths?: string[]
   category?: string
@@ -74,12 +78,14 @@ export interface MemoryEditInput {
 
 export interface MemorySearchOptions {
   type?: MemoryType
+  layer?: MemoryLayer
   limit?: number
   projectId?: string
 }
 
 export interface MemoryListOptions {
   type?: MemoryType
+  layer?: MemoryLayer
   tags?: string
   limit?: number
   projectId?: string

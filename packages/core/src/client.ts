@@ -62,6 +62,7 @@ const structuredMemorySchema = z.object({
   id: z.string().nullable().optional(),
   content: z.string(),
   type: z.string(),
+  layer: z.string().optional(),
   scope: z.string(),
   projectId: z.string().nullable().optional(),
   tags: z.array(z.string()).optional().default([]),
@@ -70,6 +71,8 @@ const structuredMemorySchema = z.object({
 const contextStructuredSchema = z.object({
   rules: z.array(structuredMemorySchema).optional().default([]),
   memories: z.array(structuredMemorySchema).optional().default([]),
+  workingMemories: z.array(structuredMemorySchema).optional().default([]),
+  longTermMemories: z.array(structuredMemorySchema).optional().default([]),
 })
 
 const memoriesStructuredSchema = z.object({
@@ -180,6 +183,13 @@ function normalizeMemoryType(type: string): MemoryRecord["type"] {
   return "note"
 }
 
+function normalizeMemoryLayer(layer: string | undefined, type: MemoryRecord["type"]): MemoryRecord["layer"] {
+  if (layer === "rule" || layer === "working" || layer === "long_term") {
+    return layer
+  }
+  return type === "rule" ? "rule" : "long_term"
+}
+
 function normalizeMemoryScope(scope: string): MemoryRecord["scope"] {
   if (scope === "global" || scope === "project" || scope === "unknown") {
     return scope
@@ -188,14 +198,30 @@ function normalizeMemoryScope(scope: string): MemoryRecord["scope"] {
 }
 
 function toMemoryRecord(memory: z.infer<typeof structuredMemorySchema>): MemoryRecord {
+  const type = normalizeMemoryType(memory.type)
   return {
     id: memory.id ?? null,
     content: memory.content,
-    type: normalizeMemoryType(memory.type),
+    type,
+    layer: normalizeMemoryLayer(memory.layer, type),
     scope: normalizeMemoryScope(memory.scope),
     projectId: memory.projectId ?? null,
     tags: memory.tags ?? [],
   }
+}
+
+function dedupeMemories(records: z.infer<typeof structuredMemorySchema>[]): z.infer<typeof structuredMemorySchema>[] {
+  const seen = new Set<string>()
+  const deduped: z.infer<typeof structuredMemorySchema>[] = []
+
+  for (const memory of records) {
+    const key = memory.id ?? `${memory.type}:${memory.scope}:${memory.content}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(memory)
+  }
+
+  return deduped
 }
 
 interface ParsedToolResult {
@@ -306,9 +332,14 @@ export class MemoriesClient {
 
       const structured = contextStructuredSchema.safeParse(toolResult.structured)
       if (structured.success) {
+        const orderedMemories = dedupeMemories([
+          ...structured.data.workingMemories,
+          ...structured.data.longTermMemories,
+          ...structured.data.memories,
+        ])
         const parsedFromStructured: ContextResult = {
           rules: structured.data.rules.map(toMemoryRecord),
-          memories: structured.data.memories.map(toMemoryRecord),
+          memories: orderedMemories.map(toMemoryRecord),
           raw: toolResult.raw,
         }
         if (options.includeRules === false) {
@@ -330,6 +361,7 @@ export class MemoriesClient {
       const toolResult = await this.callTool("add_memory", {
         content: input.content,
         type: input.type,
+        layer: input.layer,
         tags: input.tags,
         paths: input.paths,
         category: input.category,
@@ -350,6 +382,7 @@ export class MemoriesClient {
       const toolResult = await this.callTool("search_memories", {
         query,
         type: options.type,
+        layer: options.layer,
         limit: options.limit,
         project_id: options.projectId,
       })
@@ -365,6 +398,7 @@ export class MemoriesClient {
     list: async (options: MemoryListOptions = {}): Promise<MemoryRecord[]> => {
       const toolResult = await this.callTool("list_memories", {
         type: options.type,
+        layer: options.layer,
         tags: options.tags,
         limit: options.limit,
         project_id: options.projectId,
@@ -383,6 +417,7 @@ export class MemoriesClient {
         id,
         content: updates.content,
         type: updates.type,
+        layer: updates.layer,
         tags: updates.tags,
         paths: updates.paths,
         category: updates.category,

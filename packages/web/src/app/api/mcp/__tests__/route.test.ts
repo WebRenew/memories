@@ -264,10 +264,16 @@ describe("/api/mcp", () => {
   describe("tools/call: get_context", () => {
     it("should return rules when no query", async () => {
       setupAuth()
-      mockExecute.mockResolvedValue({
-        rows: [
-          { id: "r1", content: "Use TypeScript strict mode", type: "rule", scope: "global", project_id: null },
-        ],
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("memory_layer = 'rule'") || sql.includes("type = 'rule'")) {
+          return {
+            rows: [
+              { id: "r1", content: "Use TypeScript strict mode", type: "rule", memory_layer: "rule", scope: "global", project_id: null },
+            ],
+          }
+        }
+        return { rows: [] }
       })
 
       const response = await POST(makePostRequest(
@@ -303,7 +309,7 @@ describe("/api/mcp", () => {
       setupAuth()
       mockExecute.mockImplementation(async (input: { sql: string } | string) => {
         const sql = typeof input === "string" ? input : input.sql
-        if (sql.includes("WHERE type = 'rule'")) {
+        if (sql.includes("memory_layer = 'rule'") || sql.includes("type = 'rule'")) {
           return {
             rows: [{ id: "r1", content: "Always use strict mode", type: "rule", scope: "global", project_id: null }],
           }
@@ -332,6 +338,36 @@ describe("/api/mcp", () => {
       ))
       const body = await response.json()
       expect(body.result.content[0].text).toBe("No rules or memories found.")
+    })
+
+    it("orders relevant memories as working first, then long-term", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("memory_layer = 'rule'") || sql.includes("type = 'rule'")) {
+          return { rows: [] }
+        }
+        if (sql.includes("memory_layer = 'working'")) {
+          return {
+            rows: [{ id: "w1", content: "Current task context", type: "note", memory_layer: "working", scope: "global", project_id: null, tags: null }],
+          }
+        }
+        if (sql.includes("memory_layer IS NULL OR m.memory_layer = 'long_term'")) {
+          return {
+            rows: [{ id: "l1", content: "Durable architecture decision", type: "decision", memory_layer: "long_term", scope: "global", project_id: null, tags: null }],
+          }
+        }
+        return { rows: [] }
+      })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", { name: "get_context", arguments: { query: "architecture" } })
+      ))
+      const body = await response.json()
+      const text = body.result.content[0].text as string
+      expect(text.indexOf("Current task context")).toBeLessThan(text.indexOf("Durable architecture decision"))
+      expect(body.result.structuredContent.workingMemories).toHaveLength(1)
+      expect(body.result.structuredContent.longTermMemories).toHaveLength(1)
     })
   })
 
@@ -477,6 +513,36 @@ describe("/api/mcp", () => {
 
       const insertCall = getExecuteCallBySqlFragment("INSERT INTO memories")
       expect(insertCall.args).toContain("user-42")
+    })
+
+    it("defaults non-rule memories to long_term layer", async () => {
+      setupAuth()
+      mockExecute.mockResolvedValue({})
+
+      await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "add_memory",
+          arguments: { content: "A durable note", type: "note" },
+        })
+      ))
+
+      const insertCall = getExecuteCallBySqlFragment("INSERT INTO memories")
+      expect(insertCall.args).toContain("long_term")
+    })
+
+    it("accepts explicit working layer", async () => {
+      setupAuth()
+      mockExecute.mockResolvedValue({})
+
+      await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "add_memory",
+          arguments: { content: "In-progress context", layer: "working" },
+        })
+      ))
+
+      const insertCall = getExecuteCallBySqlFragment("INSERT INTO memories")
+      expect(insertCall.args).toContain("working")
     })
   })
 
@@ -754,6 +820,19 @@ describe("/api/mcp", () => {
       expect(call.sql).toContain("m.user_id IS NULL OR m.user_id = ?")
       expect(call.args).toContain("user-42")
     })
+
+    it("returns typed error when layer is invalid", async () => {
+      setupAuth()
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "search_memories",
+          arguments: { query: "auth", layer: "invalid-layer" },
+        })
+      ))
+      const body = await response.json()
+      expect(body.error.code).toBe(-32602)
+      expect(body.error.data.code).toBe("MEMORY_LAYER_INVALID")
+    })
   })
 
   // --- Tool Execution: list_memories ---
@@ -873,6 +952,21 @@ describe("/api/mcp", () => {
       const call = getLastExecuteCall()
       expect(call.sql).toContain("user_id IS NULL OR user_id = ?")
       expect(call.args).toContain("user-42")
+    })
+
+    it("filters list by memory layer when provided", async () => {
+      setupAuth()
+      mockExecute.mockResolvedValue({ rows: [] })
+
+      await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "list_memories",
+          arguments: { layer: "working" },
+        })
+      ))
+
+      const sql = getLastExecuteCall().sql
+      expect(sql).toContain("memory_layer = 'working'")
     })
   })
 

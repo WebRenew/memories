@@ -13,6 +13,9 @@ function formatMemory(memory: MemoryRecord): string {
 export function buildSystemPrompt(input: BuildSystemPromptInput): string {
   const rules = input.rules ?? []
   const memories = input.memories ?? []
+  const workingMemories = memories.filter((memory) => memory.layer === "working")
+  const nonWorkingMemories = memories.filter((memory) => memory.layer !== "working")
+  const orderedMemories = [...workingMemories, ...nonWorkingMemories]
 
   const parts: string[] = []
 
@@ -21,12 +24,12 @@ export function buildSystemPrompt(input: BuildSystemPromptInput): string {
     parts.push(...rules.map(formatRule))
   }
 
-  if (memories.length > 0) {
+  if (orderedMemories.length > 0) {
     if (parts.length > 0) {
       parts.push("")
     }
     parts.push("## Relevant Context (from memory)")
-    parts.push(...memories.map(formatMemory))
+    parts.push(...orderedMemories.map(formatMemory))
   }
 
   return parts.join("\n").trim()

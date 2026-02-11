@@ -1,4 +1,4 @@
-import type { ContextResult, MemoryRecord, MemoryType } from "./types"
+import type { ContextResult, MemoryLayer, MemoryRecord, MemoryType } from "./types"
 
 const MEMORY_LINE_REGEX =
   /^\[(?<type>[^\]]+)\]\s+(?<content>.+?)\s+\((?<scope>[^)]+)\)(?:\s+\[(?<tags>.+)\])?$/
@@ -35,16 +35,25 @@ function parseMemoryLine(line: string): MemoryRecord | null {
   if (!match?.groups) return null
 
   const { type, content, scope, tags } = match.groups
+  const normalizedType = normalizeMemoryType(type)
   const normalizedScope = normalizeScope(scope)
   return {
     id: null,
     content: content.trim(),
-    type: normalizeMemoryType(type),
+    type: normalizedType,
+    layer: normalizedType === "rule" ? "rule" : "long_term",
     scope: normalizedScope.scope,
     projectId: normalizedScope.projectId,
     tags: tags ? tags.split(",").map((tag) => tag.trim()).filter(Boolean) : [],
     raw: withoutBullet,
   }
+}
+
+function parseMemorySection(lines: string[], layer: MemoryLayer): MemoryRecord[] {
+  return lines
+    .map(parseMemoryLine)
+    .filter((record): record is MemoryRecord => record !== null)
+    .map((record) => ({ ...record, layer }))
 }
 
 function parseSections(raw: string): Map<string, string[]> {
@@ -78,6 +87,8 @@ export function parseContextResponse(raw: string): ContextResult {
 
   const projectRules = sections.get("Project Rules") ?? []
   const globalRules = sections.get("Global Rules") ?? []
+  const workingMemories = sections.get("Working Memory") ?? []
+  const longTermMemories = sections.get("Long-term Memory") ?? []
   const relevantMemories = sections.get("Relevant Memories") ?? []
 
   const rules: MemoryRecord[] = []
@@ -96,6 +107,7 @@ export function parseContextResponse(raw: string): ContextResult {
         id: `rule_${ruleIndex}`,
         content,
         type: "rule",
+        layer: "rule",
         scope,
         projectId: null,
         tags: [],
@@ -104,9 +116,11 @@ export function parseContextResponse(raw: string): ContextResult {
     }
   }
 
-  const memories = relevantMemories
-    .map(parseMemoryLine)
-    .filter((record): record is MemoryRecord => record !== null)
+  const memories = [
+    ...parseMemorySection(workingMemories, "working"),
+    ...parseMemorySection(longTermMemories, "long_term"),
+    ...parseMemorySection(relevantMemories, "long_term"),
+  ]
 
   return {
     rules,

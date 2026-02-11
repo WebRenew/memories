@@ -188,6 +188,7 @@ interface MemoryRow {
   id: string
   content: string
   type: string
+  memory_layer: string | null
   scope: string
   project_id: string | null
   user_id: string | null
@@ -203,6 +204,7 @@ interface StructuredMemory {
   id: string | null
   content: string
   type: string
+  layer: string
   scope: string
   projectId: string | null
   tags: string[]
@@ -400,6 +402,46 @@ function parseUserId(args: Record<string, unknown>): string | null {
   return args.user_id.trim()
 }
 
+type MemoryLayer = "rule" | "working" | "long_term"
+
+function parseMemoryLayer(args: Record<string, unknown>, field = "layer"): MemoryLayer | null {
+  const value = args[field]
+  if (value === undefined || value === null) {
+    return null
+  }
+
+  if (typeof value !== "string") {
+    throw new ToolExecutionError(
+      apiError({
+        type: "validation_error",
+        code: "MEMORY_LAYER_INVALID",
+        message: `${field} must be one of: rule, working, long_term`,
+        status: 400,
+        retryable: false,
+        details: { field },
+      }),
+      { rpcCode: -32602 }
+    )
+  }
+
+  const normalized = value.trim()
+  if (!VALID_LAYERS.has(normalized)) {
+    throw new ToolExecutionError(
+      apiError({
+        type: "validation_error",
+        code: "MEMORY_LAYER_INVALID",
+        message: `${field} must be one of: rule, working, long_term`,
+        status: 400,
+        retryable: false,
+        details: { field, value },
+      }),
+      { rpcCode: -32602 }
+    )
+  }
+
+  return normalized as MemoryLayer
+}
+
 async function resolveTenantTurso(
   apiKeyHash: string,
   tenantId: string
@@ -467,6 +509,48 @@ function formatMemory(m: MemoryRow): string {
   return `[${m.type}] ${truncate(m.content)} (${scope})${tags}`
 }
 
+function resolveMemoryLayer(row: Partial<MemoryRow>): MemoryLayer {
+  if (row.memory_layer === "rule" || row.memory_layer === "working" || row.memory_layer === "long_term") {
+    return row.memory_layer
+  }
+  return row.type === "rule" ? "rule" : "long_term"
+}
+
+function defaultLayerForType(type: string): MemoryLayer {
+  return type === "rule" ? "rule" : "long_term"
+}
+
+function buildLayerFilterClause(
+  layer: MemoryLayer | null,
+  columnPrefix = ""
+): { clause: string } {
+  if (!layer) {
+    return { clause: "1 = 1" }
+  }
+
+  const layerColumn = `${columnPrefix}memory_layer`
+  const typeColumn = `${columnPrefix}type`
+  if (layer === "rule") {
+    return { clause: `(${layerColumn} = 'rule' OR ${typeColumn} = 'rule')` }
+  }
+  if (layer === "working") {
+    return { clause: `${layerColumn} = 'working'` }
+  }
+  return { clause: `(${layerColumn} IS NULL OR ${layerColumn} = 'long_term')` }
+}
+
+function dedupeMemories(rows: MemoryRow[]): MemoryRow[] {
+  const seen = new Set<string>()
+  const deduped: MemoryRow[] = []
+  for (const row of rows) {
+    const key = row.id || `${row.type}:${row.scope}:${row.content}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(row)
+  }
+  return deduped
+}
+
 function buildUserScopeFilter(
   userId: string | null,
   columnPrefix = ""
@@ -510,6 +594,7 @@ function toStructuredMemory(row: Partial<MemoryRow>): StructuredMemory {
     id: row.id ?? null,
     content: row.content ?? "",
     type: row.type ?? "note",
+    layer: resolveMemoryLayer(row),
     scope: row.scope ?? "global",
     projectId: row.project_id ?? null,
     tags: parseList(row.tags),
@@ -528,12 +613,13 @@ interface ToolExecutionResult {
 
 // Full SELECT columns for memory queries
 const MEMORY_COLUMNS =
-  "id, content, type, scope, project_id, user_id, tags, paths, category, metadata, created_at, updated_at"
+  "id, content, type, memory_layer, scope, project_id, user_id, tags, paths, category, metadata, created_at, updated_at"
 const MEMORY_COLUMNS_ALIASED =
-  "m.id, m.content, m.type, m.scope, m.project_id, m.user_id, m.tags, m.paths, m.category, m.metadata, m.created_at, m.updated_at"
+  "m.id, m.content, m.type, m.memory_layer, m.scope, m.project_id, m.user_id, m.tags, m.paths, m.category, m.metadata, m.created_at, m.updated_at"
 
 // Valid memory types for server-side validation
 const VALID_TYPES = new Set(["rule", "decision", "fact", "note", "skill"])
+const VALID_LAYERS = new Set(["rule", "working", "long_term"])
 
 const userIdSchemaEnsuredClients = new WeakSet<ReturnType<typeof createTurso>>()
 
@@ -551,8 +637,26 @@ async function ensureMemoryUserIdSchema(turso: ReturnType<typeof createTurso>): 
     }
   }
 
+  try {
+    await turso.execute("ALTER TABLE memories ADD COLUMN memory_layer TEXT NOT NULL DEFAULT 'long_term'")
+  } catch (err) {
+    const message = err instanceof Error ? err.message.toLowerCase() : ""
+    if (!message.includes("duplicate column name")) {
+      throw err
+    }
+  }
+
+  // Backfill existing rule memories so retrieval semantics are deterministic.
+  await turso.execute(
+    "UPDATE memories SET memory_layer = 'rule' WHERE (memory_layer IS NULL OR memory_layer = 'long_term') AND type = 'rule'"
+  )
+  await turso.execute("UPDATE memories SET memory_layer = 'long_term' WHERE memory_layer IS NULL")
+
   await turso.execute(
     "CREATE INDEX IF NOT EXISTS idx_memories_user_scope_project ON memories(user_id, scope, project_id)"
+  )
+  await turso.execute(
+    "CREATE INDEX IF NOT EXISTS idx_memories_layer_scope_project ON memories(memory_layer, scope, project_id)"
   )
   userIdSchemaEnsuredClients.add(turso)
 }
@@ -564,10 +668,11 @@ async function searchWithFts(
   projectId: string | undefined,
   userId: string | null,
   limit: number,
-  options?: { excludeType?: string; includeType?: string }
+  options?: { excludeType?: string; includeType?: string; includeLayer?: MemoryLayer }
 ): Promise<MemoryRow[]> {
-  const { excludeType, includeType } = options ?? {}
+  const { excludeType, includeType, includeLayer } = options ?? {}
   const userFilter = buildUserScopeFilter(userId, "m.")
+  const layerFilter = buildLayerFilterClause(includeLayer ?? null, "m.")
 
   // Try FTS5 first
   try {
@@ -594,7 +699,7 @@ async function searchWithFts(
             FROM memories_fts fts
             JOIN memories m ON m.rowid = fts.rowid
             WHERE memories_fts MATCH ? AND m.deleted_at IS NULL
-            ${typeFilter} ${projectFilter} AND ${userFilter.clause}
+            ${typeFilter} ${projectFilter} AND ${userFilter.clause} AND ${layerFilter.clause}
             ORDER BY bm25(memories_fts) LIMIT ?`,
       args: ftsArgs,
     })
@@ -621,6 +726,8 @@ async function searchWithFts(
   const fallbackUserFilter = buildUserScopeFilter(userId)
   sql += ` AND ${fallbackUserFilter.clause}`
   sqlArgs.push(...fallbackUserFilter.args)
+  const fallbackLayerFilter = buildLayerFilterClause(includeLayer ?? null)
+  sql += ` AND ${fallbackLayerFilter.clause}`
 
   sql += ` AND (scope = 'global'`
   if (projectId) {
@@ -631,6 +738,41 @@ async function searchWithFts(
   sqlArgs.push(limit)
 
   const result = await turso.execute({ sql, args: sqlArgs })
+  return result.rows as unknown as MemoryRow[]
+}
+
+async function listRecentMemoriesByLayer(
+  turso: ReturnType<typeof createTurso>,
+  projectId: string | undefined,
+  userId: string | null,
+  layer: MemoryLayer,
+  limit: number,
+  options?: { excludeType?: string }
+): Promise<MemoryRow[]> {
+  const userFilter = buildUserScopeFilter(userId)
+  const layerFilter = buildLayerFilterClause(layer)
+  let sql = `SELECT ${MEMORY_COLUMNS} FROM memories
+             WHERE deleted_at IS NULL
+             AND ${userFilter.clause}
+             AND ${layerFilter.clause}
+             AND (scope = 'global'`
+  const args: (string | number)[] = [...userFilter.args]
+
+  if (projectId) {
+    sql += ` OR (scope = 'project' AND project_id = ?)`
+    args.push(projectId)
+  }
+  sql += `)`
+
+  if (options?.excludeType && VALID_TYPES.has(options.excludeType)) {
+    sql += " AND type != ?"
+    args.push(options.excludeType)
+  }
+
+  sql += " ORDER BY updated_at DESC LIMIT ?"
+  args.push(limit)
+
+  const result = await turso.execute({ sql, args })
   return result.rows as unknown as MemoryRow[]
 }
 
@@ -645,9 +787,16 @@ async function executeTool(
 
   switch (toolName) {
     case "get_context": {
+      const contextQuery = typeof args.query === "string" ? args.query.trim() : ""
+      const contextLimit =
+        typeof args.limit === "number" && Number.isFinite(args.limit) && args.limit > 0
+          ? Math.floor(args.limit)
+          : 5
+      const workingLimit = Math.max(1, Math.min(contextLimit, 3))
+
       // Get rules: global + project-specific only
       let rulesSql = `SELECT ${MEMORY_COLUMNS} FROM memories 
-                      WHERE type = 'rule' AND deleted_at IS NULL 
+                      WHERE deleted_at IS NULL AND ${buildLayerFilterClause("rule").clause}
                       AND (scope = 'global'`
       const rulesArgs: (string | number)[] = []
       
@@ -674,22 +823,40 @@ async function executeTool(
         output += `## Global Rules\n${globalRules.map(r => `- ${r.content}`).join("\n")}`
       }
 
-      // Get relevant memories if query provided
-      let relevantMemories: MemoryRow[] = []
-      if (args.query) {
-        const limit = (args.limit as number) || 5
-        relevantMemories = await searchWithFts(turso, args.query as string, projectId, userId, limit, {
+      let workingMemories: MemoryRow[] = []
+      let longTermMemories: MemoryRow[] = []
+
+      if (contextQuery) {
+        workingMemories = await searchWithFts(turso, contextQuery, projectId, userId, workingLimit, {
+          includeLayer: "working",
+        })
+        const remaining = Math.max(1, contextLimit - workingMemories.length)
+        longTermMemories = await searchWithFts(turso, contextQuery, projectId, userId, remaining, {
+          includeLayer: "long_term",
           excludeType: "rule",
         })
-        if (relevantMemories.length > 0) {
-          output += `\n\n## Relevant Memories\n${relevantMemories.map(m => `- ${formatMemory(m)}`).join("\n")}`
+      } else {
+        workingMemories = await listRecentMemoriesByLayer(turso, projectId, userId, "working", workingLimit)
+        const remaining = Math.max(1, contextLimit - workingMemories.length)
+        longTermMemories = await listRecentMemoriesByLayer(turso, projectId, userId, "long_term", remaining, {
+          excludeType: "rule",
+        })
+      }
+
+      const relevantMemories = dedupeMemories([...workingMemories, ...longTermMemories])
+      if (relevantMemories.length > 0) {
+        if (output.length > 0) {
+          output += "\n\n"
         }
+        output += `## Relevant Memories\n${relevantMemories.map(m => `- ${formatMemory(m)}`).join("\n")}`
       }
 
       return {
         content: [{ type: "text", text: output || "No rules or memories found." }],
         structuredContent: buildToolEnvelope("get_context", {
           rules: (rulesResult.rows as unknown as MemoryRow[]).map(toStructuredMemory),
+          workingMemories: workingMemories.map(toStructuredMemory),
+          longTermMemories: longTermMemories.map(toStructuredMemory),
           memories: relevantMemories.map(toStructuredMemory),
         }),
       }
@@ -697,7 +864,7 @@ async function executeTool(
 
     case "get_rules": {
       let sql = `SELECT ${MEMORY_COLUMNS} FROM memories 
-                 WHERE type = 'rule' AND deleted_at IS NULL AND (scope = 'global'`
+                 WHERE deleted_at IS NULL AND ${buildLayerFilterClause("rule").clause} AND (scope = 'global'`
       const sqlArgs: (string | number)[] = []
 
       if (projectId) {
@@ -758,6 +925,8 @@ async function executeTool(
       const now = new Date().toISOString()
       const rawType = (args.type as string) || "note"
       const type = VALID_TYPES.has(rawType) ? rawType : "note"
+      const requestedLayer = parseMemoryLayer(args)
+      const layer = requestedLayer ?? defaultLayerForType(type)
       const tags = Array.isArray(args.tags) ? args.tags.join(",") : null
       const scope = projectId ? "project" : "global"
       const paths = Array.isArray(args.paths) ? args.paths.join(",") : null
@@ -765,9 +934,9 @@ async function executeTool(
       const metadata = args.metadata ? JSON.stringify(args.metadata) : null
 
       await turso.execute({
-        sql: `INSERT INTO memories (id, content, type, scope, project_id, user_id, tags, paths, category, metadata, created_at, updated_at) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [memoryId, content, type, scope, projectId || null, userId, tags, paths, category, metadata, now, now],
+        sql: `INSERT INTO memories (id, content, type, memory_layer, scope, project_id, user_id, tags, paths, category, metadata, created_at, updated_at) 
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [memoryId, content, type, layer, scope, projectId || null, userId, tags, paths, category, metadata, now, now],
       })
 
       const scopeLabel = projectId ? `project:${projectId.split("/").pop()}` : "global"
@@ -776,6 +945,7 @@ async function executeTool(
         id: memoryId,
         content,
         type,
+        memory_layer: layer,
         scope,
         project_id: projectId || null,
         user_id: userId,
@@ -815,6 +985,7 @@ async function executeTool(
       const now = new Date().toISOString()
       const updates: string[] = ["updated_at = ?"]
       const updateArgs: (string | null)[] = [now]
+      const requestedLayer = parseMemoryLayer(args)
 
       if (args.content !== undefined) {
         updates.push("content = ?")
@@ -823,6 +994,10 @@ async function executeTool(
       if (args.type !== undefined && VALID_TYPES.has(args.type as string)) {
         updates.push("type = ?")
         updateArgs.push(args.type as string)
+        if (args.layer === undefined && args.type === "rule") {
+          updates.push("memory_layer = ?")
+          updateArgs.push("rule")
+        }
       }
       if (args.tags !== undefined) {
         updates.push("tags = ?")
@@ -839,6 +1014,10 @@ async function executeTool(
       if (args.metadata !== undefined) {
         updates.push("metadata = ?")
         updateArgs.push(args.metadata ? JSON.stringify(args.metadata) : null)
+      }
+      if (requestedLayer !== null) {
+        updates.push("memory_layer = ?")
+        updateArgs.push(requestedLayer)
       }
 
       const whereArgs: (string | null)[] = [id]
@@ -915,8 +1094,12 @@ async function executeTool(
         )
       }
       const includeType = args.type && VALID_TYPES.has(args.type as string) ? (args.type as string) : undefined
+      const requestedLayer = parseMemoryLayer(args)
 
-      const results = await searchWithFts(turso, query, projectId, userId, limit, { includeType })
+      const results = await searchWithFts(turso, query, projectId, userId, limit, {
+        includeType,
+        includeLayer: requestedLayer ?? undefined,
+      })
 
       if (results.length === 0) {
         return {
@@ -940,12 +1123,15 @@ async function executeTool(
 
     case "list_memories": {
       const limit = (args.limit as number) || 20
+      const requestedLayer = parseMemoryLayer(args)
       let sql = `SELECT ${MEMORY_COLUMNS} FROM memories WHERE deleted_at IS NULL`
       const sqlArgs: (string | number)[] = []
 
       const userFilter = buildUserScopeFilter(userId)
       sql += ` AND ${userFilter.clause}`
       sqlArgs.push(...userFilter.args)
+      const layerFilter = buildLayerFilterClause(requestedLayer)
+      sql += ` AND ${layerFilter.clause}`
 
       // Scope filter: global + project
       sql += ` AND (scope = 'global'`
@@ -1014,7 +1200,7 @@ async function executeTool(
 const TOOLS = [
   {
     name: "get_context",
-    description: "Get rules and relevant memories for the current task. Returns global rules plus project-specific rules if project_id is provided.",
+    description: "Get memory context for the current task with deterministic layering: rules (always-on), then working memory, then long-term memory.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1040,12 +1226,13 @@ const TOOLS = [
   },
   {
     name: "add_memory",
-    description: "Store a new memory. Use type='rule' for always-active guidelines, 'decision' for architectural choices, 'fact' for knowledge, 'note' for general info, 'skill' for reusable capabilities.",
+    description: "Store a new memory. Use type='rule' for always-active guidelines. Layer controls injection priority: rule, working, or long_term.",
     inputSchema: {
       type: "object",
       properties: {
         content: { type: "string", description: "The memory content" },
         type: { type: "string", enum: ["rule", "decision", "fact", "note", "skill"], description: "Memory type (default: note)" },
+        layer: { type: "string", enum: ["rule", "working", "long_term"], description: "Memory layer (default: rule for type=rule, otherwise long_term)" },
         project_id: { type: "string", description: "Project identifier to scope this memory to a specific project" },
         user_id: { type: "string", description: "User identifier to store this memory as user-scoped data" },
         tenant_id: { type: "string", description: "Tenant identifier to route requests to a tenant-specific memory database" },
@@ -1059,13 +1246,14 @@ const TOOLS = [
   },
   {
     name: "edit_memory",
-    description: "Update an existing memory's content, type, tags, paths, category, or metadata.",
+    description: "Update an existing memory's content, type, layer, tags, paths, category, or metadata.",
     inputSchema: {
       type: "object",
       properties: {
         id: { type: "string", description: "Memory ID to edit" },
         content: { type: "string", description: "New content (optional)" },
         type: { type: "string", enum: ["rule", "decision", "fact", "note", "skill"], description: "New type (optional)" },
+        layer: { type: "string", enum: ["rule", "working", "long_term"], description: "New memory layer (optional)" },
         tags: { type: "array", items: { type: "string" }, description: "New tags (optional)" },
         paths: { type: "array", items: { type: "string" }, description: "New file glob patterns (optional)" },
         category: { type: "string", description: "New category (optional)" },
@@ -1100,6 +1288,7 @@ const TOOLS = [
         user_id: { type: "string", description: "User identifier for scoped recall (includes shared + user-specific memories)" },
         tenant_id: { type: "string", description: "Tenant identifier to route requests to a tenant-specific memory database" },
         type: { type: "string", enum: ["rule", "decision", "fact", "note", "skill"], description: "Filter by memory type" },
+        layer: { type: "string", enum: ["rule", "working", "long_term"], description: "Filter by memory layer" },
         limit: { type: "number", description: "Max results (default: 10)" },
       },
       required: ["query"],
@@ -1112,6 +1301,7 @@ const TOOLS = [
       type: "object",
       properties: {
         type: { type: "string", enum: ["rule", "decision", "fact", "note", "skill"], description: "Filter by type" },
+        layer: { type: "string", enum: ["rule", "working", "long_term"], description: "Filter by memory layer" },
         tags: { type: "string", description: "Filter by tag (partial match)" },
         project_id: { type: "string", description: "Project identifier to include project-specific memories" },
         user_id: { type: "string", description: "User identifier for scoped recall (includes shared + user-specific memories)" },
