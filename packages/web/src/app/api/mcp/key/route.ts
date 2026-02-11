@@ -13,6 +13,9 @@ import {
 const MAX_KEY_TTL_DAYS = 365
 const MAX_KEY_TTL_MS = MAX_KEY_TTL_DAYS * 24 * 60 * 60 * 1000
 const MIN_KEY_TTL_MS = 60 * 1000
+const LEGACY_ENDPOINT = "/api/mcp/key"
+const SUCCESSOR_ENDPOINT = "/api/sdk/v1/management/keys"
+const LEGACY_SUNSET = "Tue, 30 Jun 2026 00:00:00 GMT"
 
 interface TenantMappingRow {
   tenant_id: string
@@ -25,6 +28,22 @@ interface TenantMappingRow {
   created_at: string
   updated_at: string
   last_verified_at: string | null
+}
+
+function applyLegacyHeaders(response: NextResponse): NextResponse {
+  response.headers.set("Deprecation", "true")
+  response.headers.set("Sunset", LEGACY_SUNSET)
+  response.headers.set("Link", `<${SUCCESSOR_ENDPOINT}>; rel="successor-version"`)
+  return response
+}
+
+function legacyJson(body: unknown, init?: { status?: number }): NextResponse {
+  return applyLegacyHeaders(NextResponse.json(body, init))
+}
+
+function logDeprecatedAccess(method: "GET" | "POST" | "DELETE", userId?: string): void {
+  const userSegment = userId ? ` (user:${userId})` : ""
+  console.warn(`[DEPRECATED_ENDPOINT] ${LEGACY_ENDPOINT} ${method}${userSegment} -> use ${SUCCESSOR_ENDPOINT}`)
 }
 
 function parseRequestedExpiry(rawExpiry: unknown): { expiresAt: string } | { error: string } {
@@ -117,15 +136,17 @@ async function cleanupOldTenantMappingsForKeyRotation(
 
 // GET - Get current API key
 export async function GET() {
+  logDeprecatedAccess("GET")
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return legacyJson({ error: "Unauthorized" }, { status: 401 })
   }
+  logDeprecatedAccess("GET", user.id)
 
   const rateLimited = await checkRateLimit(apiRateLimit, user.id)
-  if (rateLimited) return rateLimited
+  if (rateLimited) return applyLegacyHeaders(rateLimited)
 
   const admin = createAdminClient()
   const { data: userData } = await admin
@@ -135,14 +156,14 @@ export async function GET() {
     .single()
 
   if (!userData?.mcp_api_key_hash) {
-    return NextResponse.json({ hasKey: false })
+    return legacyJson({ hasKey: false })
   }
 
   const keyPreview = formatMcpApiKeyPreview(userData.mcp_api_key_prefix, userData.mcp_api_key_last4)
   const expiresAt = userData.mcp_api_key_expires_at as string | null
   const isExpired = !expiresAt || new Date(expiresAt).getTime() <= Date.now()
 
-  return NextResponse.json({ 
+  return legacyJson({ 
     hasKey: true, 
     keyPreview,
     createdAt: userData.mcp_api_key_created_at,
@@ -153,15 +174,17 @@ export async function GET() {
 
 // POST - Generate new API key
 export async function POST(request: Request) {
+  logDeprecatedAccess("POST")
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return legacyJson({ error: "Unauthorized" }, { status: 401 })
   }
+  logDeprecatedAccess("POST", user.id)
 
   const rateLimited = await checkRateLimit(apiRateLimit, user.id)
-  if (rateLimited) return rateLimited
+  if (rateLimited) return applyLegacyHeaders(rateLimited)
 
   let body: { expiresAt?: unknown } = {}
   try {
@@ -172,7 +195,7 @@ export async function POST(request: Request) {
 
   const expiry = parseRequestedExpiry(body.expiresAt)
   if ("error" in expiry) {
-    return NextResponse.json({ error: expiry.error }, { status: 400 })
+    return legacyJson({ error: expiry.error }, { status: 400 })
   }
 
   const apiKey = generateMcpApiKey()
@@ -190,7 +213,7 @@ export async function POST(request: Request) {
 
   if (existingUserError) {
     console.error("Failed to load existing API key metadata:", existingUserError)
-    return NextResponse.json({ error: "Failed to load existing API key metadata" }, { status: 500 })
+    return legacyJson({ error: "Failed to load existing API key metadata" }, { status: 500 })
   }
 
   const previousApiKeyHash = existingUser?.mcp_api_key_hash as string | null
@@ -199,7 +222,7 @@ export async function POST(request: Request) {
     await cloneTenantMappingsForKeyRotation(admin, user.id, previousApiKeyHash ?? "", apiKeyHash)
   } catch (error) {
     console.error("Failed to remap tenant mappings for key rotation:", error)
-    return NextResponse.json({ error: "Failed to rotate key due to tenant mapping remap failure" }, { status: 500 })
+    return legacyJson({ error: "Failed to rotate key due to tenant mapping remap failure" }, { status: 500 })
   }
 
   const { error } = await admin
@@ -215,7 +238,7 @@ export async function POST(request: Request) {
     .eq("id", user.id)
 
   if (error) {
-    return NextResponse.json({ error: "Failed to generate key" }, { status: 500 })
+    return legacyJson({ error: "Failed to generate key" }, { status: 500 })
   }
 
   if (previousApiKeyHash) {
@@ -228,7 +251,7 @@ export async function POST(request: Request) {
   }
 
   // Return the full key (only time it's shown)
-  return NextResponse.json({ 
+  return legacyJson({ 
     apiKey,
     keyPreview: formatMcpApiKeyPreview(apiKeyPrefix, apiKeyLast4),
     createdAt,
@@ -239,15 +262,17 @@ export async function POST(request: Request) {
 
 // DELETE - Revoke API key
 export async function DELETE() {
+  logDeprecatedAccess("DELETE")
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return legacyJson({ error: "Unauthorized" }, { status: 401 })
   }
+  logDeprecatedAccess("DELETE", user.id)
 
   const rateLimited = await checkRateLimit(apiRateLimit, user.id)
-  if (rateLimited) return rateLimited
+  if (rateLimited) return applyLegacyHeaders(rateLimited)
 
   const admin = createAdminClient()
   const { error } = await admin
@@ -263,8 +288,8 @@ export async function DELETE() {
     .eq("id", user.id)
 
   if (error) {
-    return NextResponse.json({ error: "Failed to revoke key" }, { status: 500 })
+    return legacyJson({ error: "Failed to revoke key" }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true })
+  return legacyJson({ ok: true })
 }

@@ -31,6 +31,7 @@ import { DELETE, GET, POST } from "../route"
 
 describe("/api/mcp/key", () => {
   const validExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  const expectedLink = '</api/sdk/v1/management/keys>; rel="successor-version"'
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -55,6 +56,48 @@ describe("/api/mcp/key", () => {
       mockGetUser.mockResolvedValue({ data: { user: null } })
       const response = await DELETE()
       expect(response.status).toBe(401)
+    })
+  })
+
+  describe("deprecation headers", () => {
+    it("adds deprecation headers on GET unauthorized", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: null } })
+      const response = await GET()
+
+      expect(response.headers.get("Deprecation")).toBe("true")
+      expect(response.headers.get("Sunset")).toBe("Tue, 30 Jun 2026 00:00:00 GMT")
+      expect(response.headers.get("Link")).toBe(expectedLink)
+    })
+
+    it("adds deprecation headers on POST validation errors", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+      const request = new Request("http://localhost/api/mcp/key", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      })
+
+      const response = await POST(request)
+
+      expect(response.headers.get("Deprecation")).toBe("true")
+      expect(response.headers.get("Sunset")).toBe("Tue, 30 Jun 2026 00:00:00 GMT")
+      expect(response.headers.get("Link")).toBe(expectedLink)
+    })
+
+    it("adds deprecation headers on DELETE responses", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+      const mockEq = vi.fn().mockResolvedValue({ error: null })
+      const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table !== "users") return {}
+        return { update: mockUpdate }
+      })
+
+      const response = await DELETE()
+
+      expect(response.headers.get("Deprecation")).toBe("true")
+      expect(response.headers.get("Sunset")).toBe("Tue, 30 Jun 2026 00:00:00 GMT")
+      expect(response.headers.get("Link")).toBe(expectedLink)
     })
   })
 

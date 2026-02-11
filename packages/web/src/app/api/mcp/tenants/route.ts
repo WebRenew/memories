@@ -7,6 +7,9 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { createDatabase, createDatabaseToken, initSchema } from "@/lib/turso"
 
 const TURSO_ORG = process.env.TURSO_ORG_SLUG ?? "webrenew"
+const LEGACY_ENDPOINT = "/api/mcp/tenants"
+const SUCCESSOR_ENDPOINT = "/api/sdk/v1/management/tenants"
+const LEGACY_SUNSET = "Tue, 30 Jun 2026 00:00:00 GMT"
 
 const tenantIdSchema = z.string().trim().min(1, "tenantId is required").max(120, "tenantId is too long")
 
@@ -28,6 +31,22 @@ type TenantRow = {
   created_at: string
   updated_at: string
   last_verified_at: string | null
+}
+
+function applyLegacyHeaders(response: NextResponse): NextResponse {
+  response.headers.set("Deprecation", "true")
+  response.headers.set("Sunset", LEGACY_SUNSET)
+  response.headers.set("Link", `<${SUCCESSOR_ENDPOINT}>; rel="successor-version"`)
+  return response
+}
+
+function legacyJson(body: unknown, init?: { status?: number }): NextResponse {
+  return applyLegacyHeaders(NextResponse.json(body, init))
+}
+
+function logDeprecatedAccess(method: "GET" | "POST" | "DELETE", userId?: string): void {
+  const userSegment = userId ? ` (user:${userId})` : ""
+  console.warn(`[DEPRECATED_ENDPOINT] ${LEGACY_ENDPOINT} ${method}${userSegment} -> use ${SUCCESSOR_ENDPOINT}`)
 }
 
 function mapTenantRow(row: TenantRow) {
@@ -55,7 +74,7 @@ async function getActiveApiKeyHash(
 
   if (error || !data?.mcp_api_key_hash) {
     return {
-      error: NextResponse.json(
+      error: legacyJson(
         { error: "Generate an MCP API key before configuring tenant databases" },
         { status: 400 }
       ),
@@ -64,7 +83,7 @@ async function getActiveApiKeyHash(
 
   if (!data.mcp_api_key_expires_at || new Date(data.mcp_api_key_expires_at).getTime() <= Date.now()) {
     return {
-      error: NextResponse.json(
+      error: legacyJson(
         { error: "MCP API key is expired. Generate a new key before configuring tenant databases" },
         { status: 400 }
       ),
@@ -75,13 +94,15 @@ async function getActiveApiKeyHash(
 }
 
 export async function GET(request: Request) {
+  logDeprecatedAccess("GET")
   const auth = await authenticateRequest(request)
   if (!auth) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return legacyJson({ error: "Unauthorized" }, { status: 401 })
   }
+  logDeprecatedAccess("GET", auth.userId)
 
   const rateLimited = await checkRateLimit(apiRateLimit, auth.userId)
-  if (rateLimited) return rateLimited
+  if (rateLimited) return applyLegacyHeaders(rateLimited)
 
   const keyState = await getActiveApiKeyHash(auth.userId)
   if ("error" in keyState) {
@@ -97,29 +118,31 @@ export async function GET(request: Request) {
 
   if (error) {
     console.error("Failed to list tenant databases:", error)
-    return NextResponse.json({ error: "Failed to list tenant databases" }, { status: 500 })
+    return legacyJson({ error: "Failed to list tenant databases" }, { status: 500 })
   }
 
   const rows = (data ?? []) as TenantRow[]
-  return NextResponse.json({
+  return legacyJson({
     tenantDatabases: rows.map(mapTenantRow),
     count: rows.length,
   })
 }
 
 export async function POST(request: Request) {
+  logDeprecatedAccess("POST")
   const auth = await authenticateRequest(request)
   if (!auth) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return legacyJson({ error: "Unauthorized" }, { status: 401 })
   }
+  logDeprecatedAccess("POST", auth.userId)
 
   const rateLimited = await checkRateLimit(strictRateLimit, auth.userId)
-  if (rateLimited) return rateLimited
+  if (rateLimited) return applyLegacyHeaders(rateLimited)
 
   const parsed = tenantCreateSchema.safeParse(await request.json().catch(() => ({})))
   if (!parsed.success) {
     const message = parsed.error.issues[0]?.message ?? "Invalid input"
-    return NextResponse.json({ error: message }, { status: 400 })
+    return legacyJson({ error: message }, { status: 400 })
   }
 
   const keyState = await getActiveApiKeyHash(auth.userId)
@@ -139,11 +162,11 @@ export async function POST(request: Request) {
 
   if (existingError) {
     console.error("Failed to check existing tenant mapping:", existingError)
-    return NextResponse.json({ error: "Failed to configure tenant database" }, { status: 500 })
+    return legacyJson({ error: "Failed to configure tenant database" }, { status: 500 })
   }
 
   if (mode === "provision" && existing?.status === "ready" && existing.turso_db_url) {
-    return NextResponse.json({
+    return legacyJson({
       tenantDatabase: mapTenantRow(existing as TenantRow),
       provisioned: false,
       mode,
@@ -160,14 +183,14 @@ export async function POST(request: Request) {
       const attachToken = parsed.data.tursoDbToken
 
       if (!attachUrl?.startsWith("libsql://")) {
-        return NextResponse.json(
+        return legacyJson(
           { error: "tursoDbUrl must start with libsql:// when mode is attach" },
           { status: 400 }
         )
       }
 
       if (!attachToken || attachToken.length === 0) {
-        return NextResponse.json(
+        return legacyJson(
           { error: "tursoDbToken is required when mode is attach" },
           { status: 400 }
         )
@@ -199,7 +222,7 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error("Tenant database setup failed:", error)
-    return NextResponse.json({ error: "Failed to setup tenant database" }, { status: 500 })
+    return legacyJson({ error: "Failed to setup tenant database" }, { status: 500 })
   }
 
   const now = new Date().toISOString()
@@ -224,10 +247,10 @@ export async function POST(request: Request) {
 
   if (saveError || !saved) {
     console.error("Failed to save tenant database mapping:", saveError)
-    return NextResponse.json({ error: "Failed to save tenant database mapping" }, { status: 500 })
+    return legacyJson({ error: "Failed to save tenant database mapping" }, { status: 500 })
   }
 
-  return NextResponse.json({
+  return legacyJson({
     tenantDatabase: mapTenantRow(saved as TenantRow),
     provisioned: true,
     mode,
@@ -235,18 +258,20 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  logDeprecatedAccess("DELETE")
   const auth = await authenticateRequest(request)
   if (!auth) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return legacyJson({ error: "Unauthorized" }, { status: 401 })
   }
+  logDeprecatedAccess("DELETE", auth.userId)
 
   const rateLimited = await checkRateLimit(apiRateLimit, auth.userId)
-  if (rateLimited) return rateLimited
+  if (rateLimited) return applyLegacyHeaders(rateLimited)
 
   const url = new URL(request.url)
   const parsedTenantId = tenantIdSchema.safeParse(url.searchParams.get("tenantId"))
   if (!parsedTenantId.success) {
-    return NextResponse.json({ error: "tenantId is required" }, { status: 400 })
+    return legacyJson({ error: "tenantId is required" }, { status: 400 })
   }
 
   const keyState = await getActiveApiKeyHash(auth.userId)
@@ -266,14 +291,14 @@ export async function DELETE(request: Request) {
 
   if (error) {
     console.error("Failed to disable tenant database mapping:", error)
-    return NextResponse.json({ error: "Failed to disable tenant database mapping" }, { status: 500 })
+    return legacyJson({ error: "Failed to disable tenant database mapping" }, { status: 500 })
   }
 
   if (!data) {
-    return NextResponse.json({ error: "Tenant mapping not found" }, { status: 404 })
+    return legacyJson({ error: "Tenant mapping not found" }, { status: 404 })
   }
 
-  return NextResponse.json({
+  return legacyJson({
     ok: true,
     tenantId: data.tenant_id,
     status: data.status,

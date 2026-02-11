@@ -49,6 +49,8 @@ vi.mock("@libsql/client", () => ({
 import { DELETE, GET, POST } from "../route"
 
 describe("/api/mcp/tenants", () => {
+  const expectedLink = '</api/sdk/v1/management/tenants>; rel="successor-version"'
+
   beforeEach(() => {
     vi.clearAllMocks()
     mockCheckRateLimit.mockResolvedValue(null)
@@ -61,6 +63,40 @@ describe("/api/mcp/tenants", () => {
     mockCreateDatabaseToken.mockResolvedValue("token-tenant-a")
     mockInitSchema.mockResolvedValue(undefined)
     mockTursoExecute.mockResolvedValue({ rows: [{ 1: 1 }] })
+  })
+
+  it("adds deprecation headers on GET unauthorized", async () => {
+    mockAuthenticateRequest.mockResolvedValue(null)
+
+    const response = await GET(new Request("http://localhost/api/mcp/tenants"))
+
+    expect(response.headers.get("Deprecation")).toBe("true")
+    expect(response.headers.get("Sunset")).toBe("Tue, 30 Jun 2026 00:00:00 GMT")
+    expect(response.headers.get("Link")).toBe(expectedLink)
+  })
+
+  it("adds deprecation headers on POST validation errors", async () => {
+    const request = new Request("http://localhost/api/mcp/tenants", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+
+    const response = await POST(request)
+
+    expect(response.headers.get("Deprecation")).toBe("true")
+    expect(response.headers.get("Sunset")).toBe("Tue, 30 Jun 2026 00:00:00 GMT")
+    expect(response.headers.get("Link")).toBe(expectedLink)
+  })
+
+  it("adds deprecation headers on DELETE validation errors", async () => {
+    const response = await DELETE(new Request("http://localhost/api/mcp/tenants", {
+      method: "DELETE",
+    }))
+
+    expect(response.headers.get("Deprecation")).toBe("true")
+    expect(response.headers.get("Sunset")).toBe("Tue, 30 Jun 2026 00:00:00 GMT")
+    expect(response.headers.get("Link")).toBe(expectedLink)
   })
 
   it("returns 401 when unauthenticated", async () => {
