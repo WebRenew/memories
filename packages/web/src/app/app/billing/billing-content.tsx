@@ -26,6 +26,14 @@ interface UsageStats {
   lastSync: string | null
 }
 
+interface TenantRoutingStatus {
+  isActive: boolean
+  readyTenantCount: number
+  totalTenantCount: number
+  apiKeyConfigured: boolean
+  apiKeyExpired: boolean
+}
+
 interface BillingContentProps {
   plan: string
   hasStripeCustomer: boolean
@@ -34,6 +42,7 @@ interface BillingContentProps {
   ownerType: "user" | "organization"
   orgRole: "owner" | "admin" | "member" | null
   canManageBilling: boolean
+  tenantRouting: TenantRoutingStatus
 }
 
 // Reserved for future Free tier comparison UI
@@ -60,6 +69,7 @@ export function BillingContent({
   ownerType,
   orgRole,
   canManageBilling,
+  tenantRouting,
 }: BillingContentProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -263,7 +273,7 @@ export function BillingContent({
             />
             <UsageStat
               icon={<FolderOpen className="h-4 w-4" />}
-              label="Projects"
+              label="Git Repositories"
               value={usage.projectCount}
             />
           </div>
@@ -274,6 +284,61 @@ export function BillingContent({
               Last activity: {new Date(usage.lastSync).toLocaleString()}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* SDK Multi-tenant Routing */}
+      <div className="border border-border bg-card/20">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Database className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-semibold">SDK Multi-tenant Routing</h2>
+          </div>
+          <span
+            className={`px-3 py-1 text-xs font-bold uppercase tracking-wider border ${
+              tenantRouting.isActive
+                ? "bg-green-500/10 text-green-400 border-green-500/30"
+                : "bg-muted/50 text-muted-foreground border-border"
+            }`}
+          >
+            {tenantRouting.isActive ? "Active" : "Inactive"}
+          </span>
+        </div>
+
+        <div className="p-4 space-y-3 text-sm">
+          <p className="text-muted-foreground">
+            Routes SDK traffic by <code className="text-foreground">tenant_id</code> to isolated Turso databases.
+          </p>
+          <p className="text-xs text-amber-300/90">
+            Metered billing for SDK tenant routing is not enabled yet.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-3 bg-muted/20 border border-border">
+              <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Ready Tenant Mappings</p>
+              <p className="text-xl font-bold mt-1">{tenantRouting.readyTenantCount}</p>
+            </div>
+            <div className="p-3 bg-muted/20 border border-border">
+              <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">API Key Status</p>
+              <p className="text-sm font-medium mt-1">
+                {!tenantRouting.apiKeyConfigured
+                  ? "Not configured"
+                  : tenantRouting.apiKeyExpired
+                  ? "Expired"
+                  : "Active"}
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Total active mappings (excluding disabled): {tenantRouting.totalTenantCount}
+          </p>
+          <div>
+            <Link
+              href="/app/api-keys"
+              className="text-xs text-primary hover:text-primary/80 transition-colors"
+            >
+              Manage API key and tenant mappings
+            </Link>
+          </div>
         </div>
       </div>
 
