@@ -1,5 +1,26 @@
 # @memories.sh/ai-sdk
 
+## 0.3.0
+
+### Minor Changes
+
+- 16e68df: Add first-class SDK management APIs for keys and tenant mappings.
+
+  - `@memories.sh/core`
+    - Add typed `client.management.keys` methods: `get`, `create`, `revoke`
+    - Add typed `client.management.tenants` methods: `list`, `upsert`, `disable`
+    - Add exported management input/output types
+  - `@memories.sh/ai-sdk`
+    - Add `memoriesManagement()` helper plus `managementKeys()` and `managementTenants()`
+    - Expose typed management interfaces for AI SDK users
+
+  This release removes the need for direct raw HTTP calls for management operations when using the SDK packages.
+
+### Patch Changes
+
+- Updated dependencies [16e68df]
+  - @memories.sh/core@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes
