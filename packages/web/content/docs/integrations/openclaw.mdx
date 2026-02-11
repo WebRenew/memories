@@ -30,10 +30,12 @@ From your project (where your memories are scoped):
 ```bash
 cd your-project
 memories init
-memories generate claude -o ~/.openclaw/workspace/AGENTS.md
+memories generate claude -o ~/.openclaw/workspace/AGENTS.md --force
 memories generate agents
 mkdir -p ~/.openclaw/workspace/skills
-cp -R .agents/skills/. ~/.openclaw/workspace/skills/
+if [ -d .agents/skills ]; then
+  cp -R .agents/skills/. ~/.openclaw/workspace/skills/
+fi
 ```
 
 This writes:
@@ -46,15 +48,19 @@ Whenever memories change:
 
 ```bash
 cd your-project
-memories generate claude -o ~/.openclaw/workspace/AGENTS.md
+memories generate claude -o ~/.openclaw/workspace/AGENTS.md --force
 memories generate agents
-cp -R .agents/skills/. ~/.openclaw/workspace/skills/
+if [ -d .agents/skills ]; then
+  cp -R .agents/skills/. ~/.openclaw/workspace/skills/
+fi
 ```
 
 ## Important Notes
 
 - OpenClaw docs currently define context discovery around `AGENTS.md` and `SKILL.md` artifacts.
 - OpenClaw docs currently do not document a project-level MCP config path like `.openclaw/mcp.json` for this integration flow.
+- `openclaw onboard` seeds a default `~/.openclaw/workspace/AGENTS.md`; use `--force` so memories.sh can replace it.
+- `memories generate agents` only creates `.agents/skills` when skills exist in your memory store, so copying skills should be conditional.
 - If you changed your workspace path in `~/.openclaw/openclaw.json` (for example `agent.workspace` or `agents.defaults.workspace`), replace `~/.openclaw/workspace` with your configured path.
 
 ## OpenClaw References
