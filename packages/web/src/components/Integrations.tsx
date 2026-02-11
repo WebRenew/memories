@@ -33,6 +33,13 @@ export function Integrations() {
       docsUrl: "/docs/integrations/windsurf",
     },
     {
+      name: "BLACKBOX CLI",
+      logo: "/logos/blackbox.svg",
+      status: "Available",
+      desc: "Connects to memories.sh through MCP for live context and memory writes.",
+      docsUrl: "/docs/integrations/blackbox",
+    },
+    {
       name: "Gemini",
       logo: "/logos/gemini.svg",
       status: "Available",

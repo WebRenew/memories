@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "claude-code",
+    "blackbox",
     "cursor",
     "copilot",
     "windsurf",
