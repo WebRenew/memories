@@ -61,6 +61,37 @@ export function invalidRequestResponse(
   )
 }
 
+export function errorTypeForStatus(status: number): ApiErrorDetail["type"] {
+  if (status === 400) return "validation_error"
+  if (status === 401 || status === 403) return "auth_error"
+  if (status === 404) return "not_found_error"
+  if (status === 429) return "rate_limit_error"
+  if (status >= 500) return "internal_error"
+  return "unknown_error"
+}
+
+export function legacyErrorResponse(
+  endpoint: string,
+  requestId: string,
+  status: number,
+  message: string,
+  code = "LEGACY_ENDPOINT_ERROR",
+  details?: Record<string, unknown>
+): NextResponse {
+  return errorResponse(
+    endpoint,
+    requestId,
+    apiError({
+      type: errorTypeForStatus(status),
+      code,
+      message,
+      status,
+      retryable: status === 429 || status >= 500,
+      details,
+    })
+  )
+}
+
 export function getApiKey(request: NextRequest): string | null {
   const authHeader = request.headers.get("authorization")
   if (!authHeader?.startsWith("Bearer ")) {

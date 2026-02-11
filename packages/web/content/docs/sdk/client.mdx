@@ -43,10 +43,18 @@ const response = await anthropic.messages.create({
 ```typescript
 const client = new MemoriesClient({
   apiKey: "mcp_xxx",      // API key (default: MEMORIES_API_KEY env var)
+  baseUrl: "https://memories.sh", // optional (default)
+  transport: "auto",      // "auto" (default), "sdk_http", or "mcp"
   tenantId: "acme-prod",  // Recommended for tenant/customer-level isolation
   userId: "user_123",     // Optional: scope all operations to a specific end user
 })
 ```
+
+Transport behavior:
+
+- `auto` (default): uses `mcp` only when `baseUrl` ends with `/api/mcp`; otherwise uses `sdk_http`
+- `sdk_http`: uses `/api/sdk/v1/*` endpoints
+- `mcp`: uses JSON-RPC `/api/mcp`
 
 ### `client.context.get(input?)`
 

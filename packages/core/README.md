@@ -110,15 +110,35 @@ try {
 
 ## Base URL
 
-Default endpoint is `https://memories.sh/api/mcp`.
+Default base URL is `https://memories.sh`.
 
 Override with `baseUrl` if needed:
 
 ```ts
 new MemoriesClient({
   apiKey: process.env.MEMORIES_API_KEY,
-  baseUrl: "https://your-domain.com/api/mcp",
+  baseUrl: "https://your-domain.com",
   tenantId: "acme-prod",
+})
+```
+
+## Transport
+
+The client supports two transports:
+
+- `sdk_http` (recommended): calls `/api/sdk/v1/*` endpoints
+- `mcp`: calls JSON-RPC over `/api/mcp`
+
+Default behavior is `auto`:
+
+- if `baseUrl` ends with `/api/mcp`, the client uses `mcp`
+- otherwise, it uses `sdk_http`
+
+```ts
+new MemoriesClient({
+  apiKey: process.env.MEMORIES_API_KEY,
+  baseUrl: "https://your-domain.com",
+  transport: "sdk_http", // optional; defaults to auto
 })
 ```
 
