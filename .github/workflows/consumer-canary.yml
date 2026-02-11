@@ -1,0 +1,138 @@
+name: Consumer Canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      core_version:
+        description: "Version or dist-tag for @memories.sh/core"
+        required: false
+        default: "latest"
+      ai_sdk_version:
+        description: "Version or dist-tag for @memories.sh/ai-sdk"
+        required: false
+        default: "latest"
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+
+concurrency:
+  group: consumer-canary-${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    name: Install + Typecheck Published SDKs
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Resolve package versions
+        id: versions
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CORE_VERSION="${{ inputs.core_version }}"
+            AI_SDK_VERSION="${{ inputs.ai_sdk_version }}"
+          else
+            CORE_VERSION="latest"
+            AI_SDK_VERSION="latest"
+          fi
+
+          echo "core=$CORE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "ai_sdk=$AI_SDK_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Using @memories.sh/core@$CORE_VERSION"
+          echo "Using @memories.sh/ai-sdk@$AI_SDK_VERSION"
+
+      - name: Create fresh consumer project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p canary
+          cd canary
+          npm init -y
+          npm pkg set type=module
+          npm install --save-exact \
+            "@memories.sh/core@${{ steps.versions.outputs.core }}" \
+            "@memories.sh/ai-sdk@${{ steps.versions.outputs.ai_sdk }}" \
+            "ai@^5" \
+            "typescript@^5" \
+            "@types/node@^22"
+
+      - name: Write canary source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd canary
+          cat > tsconfig.json <<'JSON'
+          {
+            "compilerOptions": {
+              "target": "ES2022",
+              "module": "NodeNext",
+              "moduleResolution": "NodeNext",
+              "strict": true,
+              "skipLibCheck": true,
+              "types": ["node"]
+            }
+          }
+          JSON
+
+          cat > canary.ts <<'TS'
+          import { MemoriesClient } from "@memories.sh/core"
+          import { memoriesManagement } from "@memories.sh/ai-sdk"
+
+          const client = new MemoriesClient({
+            apiKey: "mcp_test",
+            baseUrl: "https://memories.sh",
+            transport: "sdk_http",
+          })
+
+          const coreKeys = client.management.keys.get
+          const coreTenants = client.management.tenants.list
+
+          const management = memoriesManagement({
+            apiKey: "mcp_test",
+            baseUrl: "https://memories.sh",
+          })
+
+          const aiKeys = management.keys.get
+          const aiTenants = management.tenants.list
+
+          type PromiseLikeResult = Promise<unknown>
+          const checks: PromiseLikeResult[] = [
+            coreKeys(),
+            coreTenants(),
+            aiKeys(),
+            aiTenants(),
+          ]
+
+          void checks
+          TS
+
+      - name: Typecheck canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd canary
+          npx tsc --noEmit canary.ts
+
+      - name: Verify runtime exports
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd canary
+          node --input-type=module -e "
+            const core = await import('@memories.sh/core');
+            const ai = await import('@memories.sh/ai-sdk');
+            if (!core.MemoriesClient) throw new Error('Missing MemoriesClient export');
+            if (!ai.memoriesManagement) throw new Error('Missing memoriesManagement export');
+            console.log('Consumer canary passed');
+          "
