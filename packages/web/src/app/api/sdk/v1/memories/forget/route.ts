@@ -1,4 +1,4 @@
-import { getContextPayload } from "@/lib/memory-service/queries"
+import { forgetMemoryPayload } from "@/lib/memory-service/mutations"
 import { apiError, ensureMemoryUserIdSchema, parseTenantId, parseUserId, ToolExecutionError } from "@/lib/memory-service/tools"
 import {
   authenticateApiKey,
@@ -12,27 +12,12 @@ import { scopeSchema } from "@/lib/sdk-api/schemas"
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 
-const ENDPOINT = "/api/sdk/v1/context/get"
-
-const contextModeSchema = z.enum(["all", "working", "long_term", "rules_only"])
+const ENDPOINT = "/api/sdk/v1/memories/forget"
 
 const requestSchema = z.object({
-  query: z.string().trim().max(500).optional(),
-  limit: z.number().int().positive().max(50).optional(),
-  includeRules: z.boolean().optional(),
-  mode: contextModeSchema.optional(),
+  id: z.string().trim().min(1).max(64),
   scope: scopeSchema,
 })
-
-function modeMemories(
-  mode: z.infer<typeof contextModeSchema>,
-  data: { memories: unknown[]; workingMemories: unknown[]; longTermMemories: unknown[] }
-): unknown[] {
-  if (mode === "rules_only") return []
-  if (mode === "working") return data.workingMemories
-  if (mode === "long_term") return data.longTermMemories
-  return data.memories
-}
 
 export async function POST(request: NextRequest) {
   const requestId = crypto.randomUUID()
@@ -67,7 +52,6 @@ export async function POST(request: NextRequest) {
   try {
     const tenantId = parseTenantId({ tenant_id: parsedRequest.scope?.tenantId })
     const userId = parseUserId({ user_id: parsedRequest.scope?.userId })
-    const projectId = parsedRequest.scope?.projectId
 
     const turso = await resolveTursoForScope({
       ownerUserId: authResult.userId,
@@ -83,28 +67,16 @@ export async function POST(request: NextRequest) {
 
     await ensureMemoryUserIdSchema(turso)
 
-    const mode = parsedRequest.mode ?? "all"
-    const includeRules = parsedRequest.includeRules ?? true
-    const payload = await getContextPayload({
+    const payload = await forgetMemoryPayload({
       turso,
-      projectId,
+      args: {
+        id: parsedRequest.id,
+      },
       userId,
       nowIso: new Date().toISOString(),
-      query: parsedRequest.query ?? "",
-      limit: parsedRequest.limit ?? 5,
     })
 
-    const rules = includeRules ? payload.data.rules : []
-    const memories = modeMemories(mode, payload.data)
-
-    return successResponse(ENDPOINT, requestId, {
-      mode,
-      query: parsedRequest.query ?? "",
-      rules,
-      memories,
-      workingMemories: payload.data.workingMemories,
-      longTermMemories: payload.data.longTermMemories,
-    })
+    return successResponse(ENDPOINT, requestId, payload.data)
   } catch (error) {
     const detail =
       error instanceof ToolExecutionError

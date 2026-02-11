@@ -1,4 +1,4 @@
-import { getContextPayload } from "@/lib/memory-service/queries"
+import { editMemoryPayload } from "@/lib/memory-service/mutations"
 import { apiError, ensureMemoryUserIdSchema, parseTenantId, parseUserId, ToolExecutionError } from "@/lib/memory-service/tools"
 import {
   authenticateApiKey,
@@ -8,31 +8,41 @@ import {
   resolveTursoForScope,
   successResponse,
 } from "@/lib/sdk-api/runtime"
-import { scopeSchema } from "@/lib/sdk-api/schemas"
+import { memoryLayerSchema, memoryTypeSchema, scopeSchema } from "@/lib/sdk-api/schemas"
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 
-const ENDPOINT = "/api/sdk/v1/context/get"
+const ENDPOINT = "/api/sdk/v1/memories/edit"
 
-const contextModeSchema = z.enum(["all", "working", "long_term", "rules_only"])
+const requestSchema = z
+  .object({
+    id: z.string().trim().min(1).max(64),
+    content: z.string().trim().min(1).max(8000).optional(),
+    type: memoryTypeSchema.optional(),
+    layer: memoryLayerSchema.optional(),
+    tags: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
+    paths: z.array(z.string().trim().min(1).max(300)).max(100).optional(),
+    category: z.string().trim().min(1).max(120).optional(),
+    metadata: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+    scope: scopeSchema,
+  })
+  .superRefine((value, ctx) => {
+    const hasUpdate =
+      value.content !== undefined ||
+      value.type !== undefined ||
+      value.layer !== undefined ||
+      value.tags !== undefined ||
+      value.paths !== undefined ||
+      value.category !== undefined ||
+      value.metadata !== undefined
 
-const requestSchema = z.object({
-  query: z.string().trim().max(500).optional(),
-  limit: z.number().int().positive().max(50).optional(),
-  includeRules: z.boolean().optional(),
-  mode: contextModeSchema.optional(),
-  scope: scopeSchema,
-})
-
-function modeMemories(
-  mode: z.infer<typeof contextModeSchema>,
-  data: { memories: unknown[]; workingMemories: unknown[]; longTermMemories: unknown[] }
-): unknown[] {
-  if (mode === "rules_only") return []
-  if (mode === "working") return data.workingMemories
-  if (mode === "long_term") return data.longTermMemories
-  return data.memories
-}
+    if (!hasUpdate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one editable field must be provided",
+      })
+    }
+  })
 
 export async function POST(request: NextRequest) {
   const requestId = crypto.randomUUID()
@@ -67,7 +77,6 @@ export async function POST(request: NextRequest) {
   try {
     const tenantId = parseTenantId({ tenant_id: parsedRequest.scope?.tenantId })
     const userId = parseUserId({ user_id: parsedRequest.scope?.userId })
-    const projectId = parsedRequest.scope?.projectId
 
     const turso = await resolveTursoForScope({
       ownerUserId: authResult.userId,
@@ -83,28 +92,23 @@ export async function POST(request: NextRequest) {
 
     await ensureMemoryUserIdSchema(turso)
 
-    const mode = parsedRequest.mode ?? "all"
-    const includeRules = parsedRequest.includeRules ?? true
-    const payload = await getContextPayload({
+    const payload = await editMemoryPayload({
       turso,
-      projectId,
+      args: {
+        id: parsedRequest.id,
+        content: parsedRequest.content,
+        type: parsedRequest.type,
+        layer: parsedRequest.layer,
+        tags: parsedRequest.tags,
+        paths: parsedRequest.paths,
+        category: parsedRequest.category,
+        metadata: parsedRequest.metadata,
+      },
       userId,
       nowIso: new Date().toISOString(),
-      query: parsedRequest.query ?? "",
-      limit: parsedRequest.limit ?? 5,
     })
 
-    const rules = includeRules ? payload.data.rules : []
-    const memories = modeMemories(mode, payload.data)
-
-    return successResponse(ENDPOINT, requestId, {
-      mode,
-      query: parsedRequest.query ?? "",
-      rules,
-      memories,
-      workingMemories: payload.data.workingMemories,
-      longTermMemories: payload.data.longTermMemories,
-    })
+    return successResponse(ENDPOINT, requestId, payload.data)
   } catch (error) {
     const detail =
       error instanceof ToolExecutionError
