@@ -1,0 +1,60 @@
+---
+title: Antigravity
+description: Integrate memories.sh with Antigravity IDE.
+---
+
+[Antigravity](https://antigravity.dev/) is Google's agent-first IDE powered by Gemini. It provides an integrated development environment with AI assistance built in.
+
+## Quick Setup
+
+```bash
+cd your-project
+memories init
+```
+
+This automatically:
+1. Sets up your local memory store
+2. Configures MCP for supported tools
+3. Generates instruction files with your existing memories
+
+## Manual Setup
+
+### Option 1: Generated File
+
+```bash
+memories generate agents
+```
+
+This creates the canonical `.agents/` directory that Antigravity reads for project context.
+
+### Option 2: MCP Server
+
+Antigravity has built-in MCP support. Add memories.sh through the IDE's MCP settings, or create `.antigravity/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "memories": {
+      "command": "npx",
+      "args": ["-y", "@memories.sh/cli", "serve"]
+    }
+  }
+}
+```
+
+### Recommended: Use Both
+
+1. **Generated file** — Provides instructions Antigravity always sees
+2. **MCP server** — Gives Antigravity live access to search, recall, and add memories
+
+## Syncing Antigravity Config
+
+To sync your Antigravity configuration across machines:
+
+```bash
+# On your main machine
+memories files ingest
+
+# On a new machine
+memories files apply --global --force
+```

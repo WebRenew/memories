@@ -1,0 +1,60 @@
+---
+title: Kilo
+description: Integrate memories.sh with Kilo coding assistant.
+---
+
+[Kilo](https://kilo.dev/) is a coding assistant that reads project context from the `.agents/` directory and supports MCP servers.
+
+## Quick Setup
+
+```bash
+cd your-project
+memories init
+```
+
+This automatically:
+1. Sets up your local memory store
+2. Configures MCP for supported tools
+3. Generates instruction files with your existing memories
+
+## Manual Setup
+
+### Option 1: Generated File
+
+```bash
+memories generate agents
+```
+
+This creates the canonical `.agents/` directory that Kilo reads for project context.
+
+### Option 2: MCP Server
+
+Add memories.sh to Kilo's MCP configuration. Create or edit `.kilo/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "memories": {
+      "command": "npx",
+      "args": ["-y", "@memories.sh/cli", "serve"]
+    }
+  }
+}
+```
+
+### Recommended: Use Both
+
+1. **Generated file** — Provides instructions Kilo always sees
+2. **MCP server** — Gives Kilo live access to search, recall, and add memories
+
+## Syncing Kilo Config
+
+To sync your Kilo configuration across machines:
+
+```bash
+# On your main machine
+memories files ingest
+
+# On a new machine
+memories files apply --global --force
+```

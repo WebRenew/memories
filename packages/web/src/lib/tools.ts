@@ -104,7 +104,7 @@ export const TOOLS: Tool[] = [
     slug: "codex",
     status: "Available",
     desc: "Generates AGENTS.md for the OpenAI Codex CLI agent.",
-    docsUrl: "/docs/integrations",
+    docsUrl: "/docs/integrations/codex",
   },
   {
     name: "Amp",
@@ -112,7 +112,7 @@ export const TOOLS: Tool[] = [
     slug: "amp",
     status: "Available",
     desc: "Generates .amp/rules/ for the Amp coding agent.",
-    docsUrl: "/docs/integrations",
+    docsUrl: "/docs/integrations/amp",
   },
   {
     name: "Kilo",
@@ -120,7 +120,7 @@ export const TOOLS: Tool[] = [
     slug: "kilo",
     status: "Available",
     desc: "Generates config for the Kilo coding assistant.",
-    docsUrl: "/docs/integrations",
+    docsUrl: "/docs/integrations/kilo",
   },
   {
     name: "Trae",
@@ -128,7 +128,7 @@ export const TOOLS: Tool[] = [
     slug: "trae",
     status: "Available",
     desc: "Generates rules for the Trae coding agent.",
-    docsUrl: "/docs/integrations",
+    docsUrl: "/docs/integrations/trae",
   },
   {
     name: "Goose",
@@ -136,7 +136,7 @@ export const TOOLS: Tool[] = [
     slug: "goose",
     status: "Available",
     desc: "Generates .goose/rules/ for the Goose agent by Block.",
-    docsUrl: "/docs/integrations",
+    docsUrl: "/docs/integrations/goose",
   },
   {
     name: "Openclaw",
@@ -144,7 +144,7 @@ export const TOOLS: Tool[] = [
     slug: "openclaw",
     status: "Available",
     desc: "Open-source personal AI assistant with persistent memory and skill plugins.",
-    docsUrl: "/docs/integrations",
+    docsUrl: "/docs/integrations/openclaw",
   },
   {
     name: "Antigravity",
@@ -152,7 +152,7 @@ export const TOOLS: Tool[] = [
     slug: "antigravity",
     status: "Available",
     desc: "Google's agent-first IDE powered by Gemini.",
-    docsUrl: "/docs/integrations",
+    docsUrl: "/docs/integrations/antigravity",
   },
   {
     name: "Kiro",
@@ -160,7 +160,7 @@ export const TOOLS: Tool[] = [
     slug: "kiro",
     status: "Available",
     desc: "AWS's agentic AI IDE with CLI and autonomous agents.",
-    docsUrl: "/docs/integrations",
+    docsUrl: "/docs/integrations/kiro",
   },
   {
     name: "Droid",

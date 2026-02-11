@@ -1,0 +1,60 @@
+---
+title: Kiro
+description: Integrate memories.sh with Kiro IDE.
+---
+
+[Kiro](https://kiro.dev/) is AWS's agentic AI IDE with CLI support and autonomous agents. It reads project instructions and supports MCP servers.
+
+## Quick Setup
+
+```bash
+cd your-project
+memories init
+```
+
+This automatically:
+1. Sets up your local memory store
+2. Configures MCP for supported tools
+3. Generates instruction files with your existing memories
+
+## Manual Setup
+
+### Option 1: Generated File
+
+```bash
+memories generate agents
+```
+
+This creates the canonical `.agents/` directory that Kiro reads for project context.
+
+### Option 2: MCP Server
+
+Add memories.sh to Kiro's MCP configuration. Create or edit `.kiro/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "memories": {
+      "command": "npx",
+      "args": ["-y", "@memories.sh/cli", "serve"]
+    }
+  }
+}
+```
+
+### Recommended: Use Both
+
+1. **Generated file** — Provides instructions Kiro always sees
+2. **MCP server** — Gives Kiro live access to search, recall, and add memories
+
+## Syncing Kiro Config
+
+To sync your Kiro configuration across machines:
+
+```bash
+# On your main machine
+memories files ingest
+
+# On a new machine
+memories files apply --global --force
+```

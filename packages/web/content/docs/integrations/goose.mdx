@@ -1,0 +1,60 @@
+---
+title: Goose
+description: Integrate memories.sh with Goose by Block.
+---
+
+[Goose](https://block.github.io/goose/) is Block's open-source AI agent. It reads rules from `.goose/rules/` and supports MCP servers for extended capabilities.
+
+## Quick Setup
+
+```bash
+cd your-project
+memories init
+```
+
+This automatically:
+1. Sets up your local memory store
+2. Configures MCP for supported tools
+3. Generates instruction files with your existing memories
+
+## Manual Setup
+
+### Option 1: Generated File
+
+```bash
+memories generate agents
+```
+
+This creates the canonical `.agents/` directory that Goose reads for project context.
+
+### Option 2: MCP Server
+
+Goose has built-in MCP support. Add memories.sh through Goose's configuration:
+
+```json
+{
+  "mcpServers": {
+    "memories": {
+      "command": "npx",
+      "args": ["-y", "@memories.sh/cli", "serve"]
+    }
+  }
+}
+```
+
+### Recommended: Use Both
+
+1. **Generated file** — Provides instructions Goose always sees
+2. **MCP server** — Gives Goose live access to search, recall, and add memories
+
+## Syncing Goose Config
+
+To sync your Goose configuration across machines:
+
+```bash
+# On your main machine
+memories files ingest
+
+# On a new machine
+memories files apply --global --force
+```

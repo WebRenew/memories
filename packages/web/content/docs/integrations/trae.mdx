@@ -1,0 +1,60 @@
+---
+title: Trae
+description: Integrate memories.sh with Trae by ByteDance.
+---
+
+[Trae](https://trae.ai/) is ByteDance's coding agent with built-in MCP support. It reads project rules and provides AI-assisted development workflows.
+
+## Quick Setup
+
+```bash
+cd your-project
+memories init
+```
+
+This automatically:
+1. Sets up your local memory store
+2. Configures MCP for supported tools
+3. Generates instruction files with your existing memories
+
+## Manual Setup
+
+### Option 1: Generated File
+
+```bash
+memories generate agents
+```
+
+This creates the canonical `.agents/` directory that Trae reads for project context.
+
+### Option 2: MCP Server
+
+Trae has built-in MCP support. Configure it through the IDE's MCP settings, or add to `.trae/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "memories": {
+      "command": "npx",
+      "args": ["-y", "@memories.sh/cli", "serve"]
+    }
+  }
+}
+```
+
+### Recommended: Use Both
+
+1. **Generated file** — Provides instructions Trae always sees
+2. **MCP server** — Gives Trae live access to search, recall, and add memories
+
+## Syncing Trae Config
+
+To sync your Trae configuration across machines:
+
+```bash
+# On your main machine
+memories files ingest
+
+# On a new machine
+memories files apply --global --force
+```

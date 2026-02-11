@@ -36,6 +36,10 @@ This automatically detects installed tools and configures MCP for each one.
 | [Cline](/docs/integrations/cline) | `.clinerules/memories.md` | Yes | No |
 | [Roo](/docs/integrations/roo) | `.roo/rules/memories.md` | Yes | No |
 | [Gemini](/docs/integrations/gemini) | `GEMINI.md` | No | No |
+| [Openclaw](/docs/integrations/openclaw) | `.agents/` | Yes | No |
+| [Antigravity](/docs/integrations/antigravity) | `.agents/` | Yes | No |
+| [Kiro](/docs/integrations/kiro) | `.agents/` | Yes | No |
+| [Trae](/docs/integrations/trae) | `.agents/` | Yes | No |
 
 ### Web-Based Tools
 
@@ -46,12 +50,15 @@ This automatically detects installed tools and configures MCP for each one.
 ### Universal Target
 
 The `agents` target generates the canonical `.agents/` directory:
-- Amp
-- Codex  
-- Goose
-- Kilo
-- Kiro
-- OpenCode
+
+| Tool | Docs |
+|------|------|
+| [Amp](/docs/integrations/amp) | Sourcegraph's coding agent |
+| [Codex](/docs/integrations/codex) | OpenAI's CLI agent |
+| [Goose](/docs/integrations/goose) | Block's open-source agent |
+| [Kilo](/docs/integrations/kilo) | Kilo coding assistant |
+| [Kiro](/docs/integrations/kiro) | AWS's agentic AI IDE |
+| [OpenCode](/docs/integrations/opencode) | Terminal AI assistant |
 
 ```bash
 memories generate agents
