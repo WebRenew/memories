@@ -126,4 +126,111 @@ describe("syncMemoryGraphMapping", () => {
     expect(remainingLinks).toBe(0)
     expect(remainingEdges).toBe(0)
   })
+
+  it("updates edge expiry when a memory transitions from working to long_term", async () => {
+    const memoryId = "mem-graph-ttl"
+    const expiresAt = new Date(Date.now() + 120_000).toISOString()
+
+    await syncMemoryGraphMapping(db, {
+      id: memoryId,
+      type: "note",
+      layer: "working",
+      expiresAt,
+      projectId: "github.com/webrenew/memories",
+      userId: "user-ttl",
+      tags: ["incident"],
+      category: "ops",
+    })
+
+    const workingEdgeCounts = await db.execute({
+      sql: `SELECT
+              COUNT(*) as total,
+              SUM(CASE WHEN expires_at IS NOT NULL THEN 1 ELSE 0 END) as with_expiry
+            FROM graph_edges
+            WHERE evidence_memory_id = ?`,
+      args: [memoryId],
+    })
+    const workingTotal = Number(workingEdgeCounts.rows[0]?.total ?? 0)
+    const workingWithExpiry = Number(workingEdgeCounts.rows[0]?.with_expiry ?? 0)
+
+    expect(workingTotal).toBeGreaterThan(0)
+    expect(workingWithExpiry).toBe(workingTotal)
+
+    await syncMemoryGraphMapping(db, {
+      id: memoryId,
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: "github.com/webrenew/memories",
+      userId: "user-ttl",
+      tags: ["incident"],
+      category: "ops",
+    })
+
+    const longTermEdgeCounts = await db.execute({
+      sql: `SELECT
+              COUNT(*) as total,
+              SUM(CASE WHEN expires_at IS NULL THEN 1 ELSE 0 END) as without_expiry
+            FROM graph_edges
+            WHERE evidence_memory_id = ?`,
+      args: [memoryId],
+    })
+    const longTermTotal = Number(longTermEdgeCounts.rows[0]?.total ?? 0)
+    const longTermWithoutExpiry = Number(longTermEdgeCounts.rows[0]?.without_expiry ?? 0)
+
+    expect(longTermTotal).toBeGreaterThan(0)
+    expect(longTermWithoutExpiry).toBe(longTermTotal)
+  })
+
+  it("keeps shared nodes when one of multiple linked memories is removed", async () => {
+    const sharedTag = "shared-tag"
+
+    await syncMemoryGraphMapping(db, {
+      id: "mem-shared-a",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: "github.com/webrenew/memories",
+      userId: "user-shared",
+      tags: [sharedTag],
+      category: "ops",
+    })
+
+    await syncMemoryGraphMapping(db, {
+      id: "mem-shared-b",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: "github.com/webrenew/memories",
+      userId: "user-shared",
+      tags: [sharedTag],
+      category: "ops",
+    })
+
+    const topicNodeBefore = await scalarCount(
+      db,
+      "SELECT COUNT(*) as count FROM graph_nodes WHERE node_type = 'topic' AND node_key = ?",
+      [sharedTag]
+    )
+    expect(topicNodeBefore).toBe(1)
+
+    await removeMemoryGraphMapping(db, "mem-shared-a")
+
+    const topicNodeAfter = await scalarCount(
+      db,
+      "SELECT COUNT(*) as count FROM graph_nodes WHERE node_type = 'topic' AND node_key = ?",
+      [sharedTag]
+    )
+    const remainingLinks = await scalarCount(
+      db,
+      `SELECT COUNT(*) as count
+       FROM memory_node_links l
+       JOIN graph_nodes n ON n.id = l.node_id
+       WHERE l.memory_id = 'mem-shared-b' AND n.node_type = 'topic' AND n.node_key = ?`,
+      [sharedTag]
+    )
+
+    expect(topicNodeAfter).toBe(1)
+    expect(remainingLinks).toBe(1)
+  })
 })
