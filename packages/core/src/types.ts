@@ -37,6 +37,7 @@ export interface MemoryRecord {
   content: string
   type: MemoryType
   layer: MemoryLayer
+  expiresAt?: string | null
   scope: MemoryScope
   projectId: string | null
   tags: string[]

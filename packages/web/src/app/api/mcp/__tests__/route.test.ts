@@ -399,6 +399,18 @@ describe("/api/mcp", () => {
       const body = await response.json()
       expect(body.result.content[0].text).toBe("No rules found.")
     })
+
+    it("filters expired rules from results", async () => {
+      setupAuth()
+      mockExecute.mockResolvedValue({ rows: [] })
+
+      await POST(makePostRequest(
+        jsonrpc("tools/call", { name: "get_rules", arguments: {} })
+      ))
+
+      const sql = getLastExecuteCall().sql
+      expect(sql).toContain("expires_at IS NULL OR expires_at > ?")
+    })
   })
 
   // --- Tool Execution: add_memory ---
@@ -544,6 +556,27 @@ describe("/api/mcp", () => {
       const insertCall = getExecuteCallBySqlFragment("INSERT INTO memories")
       expect(insertCall.args).toContain("working")
     })
+
+    it("applies TTL and compaction policy for working memories", async () => {
+      setupAuth()
+      mockExecute.mockResolvedValue({})
+
+      await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "add_memory",
+          arguments: { content: "Ephemeral task state", layer: "working" },
+        })
+      ))
+
+      const insertCall = getExecuteCallBySqlFragment("INSERT INTO memories")
+      expect(insertCall.args?.[4]).toEqual(expect.stringMatching(/Z$/))
+
+      const expiryCompactionCall = getExecuteCallBySqlFragment("expires_at IS NOT NULL")
+      expect(expiryCompactionCall.sql).toContain("memory_layer = 'working'")
+
+      const capCompactionCall = getExecuteCallBySqlFragment("LIMIT -1 OFFSET")
+      expect(capCompactionCall.sql).toContain("memory_layer = 'working'")
+    })
   })
 
   // --- Tool Execution: edit_memory ---
@@ -580,7 +613,7 @@ describe("/api/mcp", () => {
         })
       ))
 
-      const sql = getExecuteCallBySqlFragment("UPDATE memories SET").sql
+      const sql = getExecuteCallBySqlFragment("WHERE id = ? AND deleted_at IS NULL").sql
       expect(sql).toContain("type = ?")
     })
 
@@ -595,7 +628,7 @@ describe("/api/mcp", () => {
         })
       ))
 
-      const sql = getExecuteCallBySqlFragment("UPDATE memories SET").sql
+      const sql = getExecuteCallBySqlFragment("WHERE id = ? AND deleted_at IS NULL").sql
       expect(sql).not.toContain("type = ?")
     })
 
@@ -626,7 +659,7 @@ describe("/api/mcp", () => {
         })
       ))
 
-      const sql = getExecuteCallBySqlFragment("UPDATE memories SET").sql
+      const sql = getExecuteCallBySqlFragment("WHERE id = ? AND deleted_at IS NULL").sql
       expect(sql).toContain("deleted_at IS NULL")
     })
 
@@ -641,7 +674,7 @@ describe("/api/mcp", () => {
         })
       ))
 
-      const call = getExecuteCallBySqlFragment("UPDATE memories SET")
+      const call = getExecuteCallBySqlFragment("WHERE id = ? AND deleted_at IS NULL")
       expect(call.sql).toContain("AND user_id = ?")
       expect(call.args).toContain("user-42")
     })
@@ -818,6 +851,7 @@ describe("/api/mcp", () => {
 
       const call = getExecuteCallBySqlFragment("FROM memories_fts")
       expect(call.sql).toContain("m.user_id IS NULL OR m.user_id = ?")
+      expect(call.sql).toContain("m.expires_at IS NULL OR m.expires_at > ?")
       expect(call.args).toContain("user-42")
     })
 
@@ -936,6 +970,7 @@ describe("/api/mcp", () => {
 
       const sql = getLastExecuteCall().sql
       expect(sql).toContain("user_id IS NULL")
+      expect(sql).toContain("expires_at IS NULL OR expires_at > ?")
     })
 
     it("includes shared + user memories when user_id is provided", async () => {

@@ -13,6 +13,8 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
 const MCP_MAX_CONNECTIONS_PER_KEY = parsePositiveInt(process.env.MCP_MAX_CONNECTIONS_PER_KEY, 5)
 const MCP_MAX_CONNECTIONS_PER_IP = parsePositiveInt(process.env.MCP_MAX_CONNECTIONS_PER_IP, 20)
 const MCP_SESSION_IDLE_MS = parsePositiveInt(process.env.MCP_SESSION_IDLE_MS, 15 * 60 * 1000)
+const MCP_WORKING_MEMORY_TTL_HOURS = parsePositiveInt(process.env.MCP_WORKING_MEMORY_TTL_HOURS, 24)
+const MCP_WORKING_MEMORY_MAX_ITEMS_PER_USER = parsePositiveInt(process.env.MCP_WORKING_MEMORY_MAX_ITEMS_PER_USER, 200)
 const MCP_RESPONSE_SCHEMA_VERSION = "2026-02-10"
 const encoder = new TextEncoder()
 
@@ -189,6 +191,7 @@ interface MemoryRow {
   content: string
   type: string
   memory_layer: string | null
+  expires_at: string | null
   scope: string
   project_id: string | null
   user_id: string | null
@@ -205,6 +208,7 @@ interface StructuredMemory {
   content: string
   type: string
   layer: string
+  expiresAt: string | null
   scope: string
   projectId: string | null
   tags: string[]
@@ -509,6 +513,14 @@ function formatMemory(m: MemoryRow): string {
   return `[${m.type}] ${truncate(m.content)} (${scope})${tags}`
 }
 
+function addHours(iso: string, hours: number): string {
+  return new Date(new Date(iso).getTime() + hours * 60 * 60 * 1000).toISOString()
+}
+
+function workingMemoryExpiresAt(nowIso: string): string {
+  return addHours(nowIso, MCP_WORKING_MEMORY_TTL_HOURS)
+}
+
 function resolveMemoryLayer(row: Partial<MemoryRow>): MemoryLayer {
   if (row.memory_layer === "rule" || row.memory_layer === "working" || row.memory_layer === "long_term") {
     return row.memory_layer
@@ -537,6 +549,14 @@ function buildLayerFilterClause(
     return { clause: `${layerColumn} = 'working'` }
   }
   return { clause: `(${layerColumn} IS NULL OR ${layerColumn} = 'long_term')` }
+}
+
+function buildNotExpiredFilter(nowIso: string, columnPrefix = ""): { clause: string; args: string[] } {
+  const expiresAtColumn = `${columnPrefix}expires_at`
+  return {
+    clause: `(${expiresAtColumn} IS NULL OR ${expiresAtColumn} > ?)`,
+    args: [nowIso],
+  }
 }
 
 function dedupeMemories(rows: MemoryRow[]): MemoryRow[] {
@@ -595,6 +615,7 @@ function toStructuredMemory(row: Partial<MemoryRow>): StructuredMemory {
     content: row.content ?? "",
     type: row.type ?? "note",
     layer: resolveMemoryLayer(row),
+    expiresAt: row.expires_at ?? null,
     scope: row.scope ?? "global",
     projectId: row.project_id ?? null,
     tags: parseList(row.tags),
@@ -613,9 +634,9 @@ interface ToolExecutionResult {
 
 // Full SELECT columns for memory queries
 const MEMORY_COLUMNS =
-  "id, content, type, memory_layer, scope, project_id, user_id, tags, paths, category, metadata, created_at, updated_at"
+  "id, content, type, memory_layer, expires_at, scope, project_id, user_id, tags, paths, category, metadata, created_at, updated_at"
 const MEMORY_COLUMNS_ALIASED =
-  "m.id, m.content, m.type, m.memory_layer, m.scope, m.project_id, m.user_id, m.tags, m.paths, m.category, m.metadata, m.created_at, m.updated_at"
+  "m.id, m.content, m.type, m.memory_layer, m.expires_at, m.scope, m.project_id, m.user_id, m.tags, m.paths, m.category, m.metadata, m.created_at, m.updated_at"
 
 // Valid memory types for server-side validation
 const VALID_TYPES = new Set(["rule", "decision", "fact", "note", "skill"])
@@ -646,17 +667,34 @@ async function ensureMemoryUserIdSchema(turso: ReturnType<typeof createTurso>): 
     }
   }
 
+  try {
+    await turso.execute("ALTER TABLE memories ADD COLUMN expires_at TEXT")
+  } catch (err) {
+    const message = err instanceof Error ? err.message.toLowerCase() : ""
+    if (!message.includes("duplicate column name")) {
+      throw err
+    }
+  }
+
   // Backfill existing rule memories so retrieval semantics are deterministic.
   await turso.execute(
     "UPDATE memories SET memory_layer = 'rule' WHERE (memory_layer IS NULL OR memory_layer = 'long_term') AND type = 'rule'"
   )
   await turso.execute("UPDATE memories SET memory_layer = 'long_term' WHERE memory_layer IS NULL")
+  const defaultExpiresAt = workingMemoryExpiresAt(new Date().toISOString())
+  await turso.execute({
+    sql: "UPDATE memories SET expires_at = ? WHERE memory_layer = 'working' AND expires_at IS NULL",
+    args: [defaultExpiresAt],
+  })
 
   await turso.execute(
     "CREATE INDEX IF NOT EXISTS idx_memories_user_scope_project ON memories(user_id, scope, project_id)"
   )
   await turso.execute(
     "CREATE INDEX IF NOT EXISTS idx_memories_layer_scope_project ON memories(memory_layer, scope, project_id)"
+  )
+  await turso.execute(
+    "CREATE INDEX IF NOT EXISTS idx_memories_layer_expires ON memories(memory_layer, expires_at)"
   )
   userIdSchemaEnsuredClients.add(turso)
 }
@@ -667,12 +705,14 @@ async function searchWithFts(
   query: string,
   projectId: string | undefined,
   userId: string | null,
+  nowIso: string,
   limit: number,
   options?: { excludeType?: string; includeType?: string; includeLayer?: MemoryLayer }
 ): Promise<MemoryRow[]> {
   const { excludeType, includeType, includeLayer } = options ?? {}
   const userFilter = buildUserScopeFilter(userId, "m.")
   const layerFilter = buildLayerFilterClause(includeLayer ?? null, "m.")
+  const activeFilter = buildNotExpiredFilter(nowIso, "m.")
 
   // Try FTS5 first
   try {
@@ -692,6 +732,7 @@ async function searchWithFts(
       : `AND m.scope = 'global'`
     if (projectId) ftsArgs.push(projectId)
     ftsArgs.push(...userFilter.args)
+    ftsArgs.push(...activeFilter.args)
     ftsArgs.push(limit)
 
     const ftsResult = await turso.execute({
@@ -699,7 +740,7 @@ async function searchWithFts(
             FROM memories_fts fts
             JOIN memories m ON m.rowid = fts.rowid
             WHERE memories_fts MATCH ? AND m.deleted_at IS NULL
-            ${typeFilter} ${projectFilter} AND ${userFilter.clause} AND ${layerFilter.clause}
+            ${typeFilter} ${projectFilter} AND ${userFilter.clause} AND ${layerFilter.clause} AND ${activeFilter.clause}
             ORDER BY bm25(memories_fts) LIMIT ?`,
       args: ftsArgs,
     })
@@ -728,6 +769,9 @@ async function searchWithFts(
   sqlArgs.push(...fallbackUserFilter.args)
   const fallbackLayerFilter = buildLayerFilterClause(includeLayer ?? null)
   sql += ` AND ${fallbackLayerFilter.clause}`
+  const fallbackActiveFilter = buildNotExpiredFilter(nowIso)
+  sql += ` AND ${fallbackActiveFilter.clause}`
+  sqlArgs.push(...fallbackActiveFilter.args)
 
   sql += ` AND (scope = 'global'`
   if (projectId) {
@@ -746,17 +790,20 @@ async function listRecentMemoriesByLayer(
   projectId: string | undefined,
   userId: string | null,
   layer: MemoryLayer,
+  nowIso: string,
   limit: number,
   options?: { excludeType?: string }
 ): Promise<MemoryRow[]> {
   const userFilter = buildUserScopeFilter(userId)
   const layerFilter = buildLayerFilterClause(layer)
+  const activeFilter = buildNotExpiredFilter(nowIso)
   let sql = `SELECT ${MEMORY_COLUMNS} FROM memories
              WHERE deleted_at IS NULL
              AND ${userFilter.clause}
              AND ${layerFilter.clause}
+             AND ${activeFilter.clause}
              AND (scope = 'global'`
-  const args: (string | number)[] = [...userFilter.args]
+  const args: (string | number)[] = [...userFilter.args, ...activeFilter.args]
 
   if (projectId) {
     sql += ` OR (scope = 'project' AND project_id = ?)`
@@ -776,6 +823,44 @@ async function listRecentMemoriesByLayer(
   return result.rows as unknown as MemoryRow[]
 }
 
+async function compactWorkingMemoriesForUser(
+  turso: ReturnType<typeof createTurso>,
+  userId: string | null,
+  nowIso: string
+): Promise<void> {
+  await turso.execute({
+    sql: `UPDATE memories
+          SET deleted_at = ?, updated_at = ?
+          WHERE deleted_at IS NULL
+            AND memory_layer = 'working'
+            AND expires_at IS NOT NULL
+            AND expires_at <= ?`,
+    args: [nowIso, nowIso, nowIso],
+  })
+
+  const activeFilter = buildNotExpiredFilter(nowIso)
+  let sql = `UPDATE memories
+             SET deleted_at = ?, updated_at = ?
+             WHERE id IN (
+               SELECT id FROM memories
+               WHERE deleted_at IS NULL
+                 AND memory_layer = 'working'
+                 AND ${activeFilter.clause}`
+  const args: (string | number)[] = [nowIso, nowIso, ...activeFilter.args]
+
+  if (userId) {
+    sql += " AND user_id = ?"
+    args.push(userId)
+  } else {
+    sql += " AND user_id IS NULL"
+  }
+
+  sql += " ORDER BY updated_at DESC, created_at DESC LIMIT -1 OFFSET ?)"
+  args.push(MCP_WORKING_MEMORY_MAX_ITEMS_PER_USER)
+
+  await turso.execute({ sql, args })
+}
+
 // Handle tool execution
 async function executeTool(
   toolName: string, 
@@ -784,6 +869,7 @@ async function executeTool(
 ): Promise<ToolExecutionResult> {
   const projectId = args.project_id as string | undefined
   const userId = parseUserId(args)
+  const nowIso = new Date().toISOString()
 
   switch (toolName) {
     case "get_context": {
@@ -805,8 +891,10 @@ async function executeTool(
         rulesArgs.push(projectId)
       }
       const userFilter = buildUserScopeFilter(userId)
-      rulesSql += `) AND ${userFilter.clause} ORDER BY scope DESC, created_at DESC`
+      const activeFilter = buildNotExpiredFilter(nowIso)
+      rulesSql += `) AND ${userFilter.clause} AND ${activeFilter.clause} ORDER BY scope DESC, created_at DESC`
       rulesArgs.push(...userFilter.args)
+      rulesArgs.push(...activeFilter.args)
 
       const rulesResult = await turso.execute({ sql: rulesSql, args: rulesArgs })
       
@@ -827,18 +915,18 @@ async function executeTool(
       let longTermMemories: MemoryRow[] = []
 
       if (contextQuery) {
-        workingMemories = await searchWithFts(turso, contextQuery, projectId, userId, workingLimit, {
+        workingMemories = await searchWithFts(turso, contextQuery, projectId, userId, nowIso, workingLimit, {
           includeLayer: "working",
         })
         const remaining = Math.max(1, contextLimit - workingMemories.length)
-        longTermMemories = await searchWithFts(turso, contextQuery, projectId, userId, remaining, {
+        longTermMemories = await searchWithFts(turso, contextQuery, projectId, userId, nowIso, remaining, {
           includeLayer: "long_term",
           excludeType: "rule",
         })
       } else {
-        workingMemories = await listRecentMemoriesByLayer(turso, projectId, userId, "working", workingLimit)
+        workingMemories = await listRecentMemoriesByLayer(turso, projectId, userId, "working", nowIso, workingLimit)
         const remaining = Math.max(1, contextLimit - workingMemories.length)
-        longTermMemories = await listRecentMemoriesByLayer(turso, projectId, userId, "long_term", remaining, {
+        longTermMemories = await listRecentMemoriesByLayer(turso, projectId, userId, "long_term", nowIso, remaining, {
           excludeType: "rule",
         })
       }
@@ -872,8 +960,10 @@ async function executeTool(
         sqlArgs.push(projectId)
       }
       const userFilter = buildUserScopeFilter(userId)
-      sql += `) AND ${userFilter.clause} ORDER BY scope DESC, created_at DESC`
+      const activeFilter = buildNotExpiredFilter(nowIso)
+      sql += `) AND ${userFilter.clause} AND ${activeFilter.clause} ORDER BY scope DESC, created_at DESC`
       sqlArgs.push(...userFilter.args)
+      sqlArgs.push(...activeFilter.args)
 
       const result = await turso.execute({ sql, args: sqlArgs })
 
@@ -922,11 +1012,12 @@ async function executeTool(
       }
 
       const memoryId = crypto.randomUUID().replace(/-/g, "").slice(0, 12)
-      const now = new Date().toISOString()
+      const now = nowIso
       const rawType = (args.type as string) || "note"
       const type = VALID_TYPES.has(rawType) ? rawType : "note"
       const requestedLayer = parseMemoryLayer(args)
       const layer = requestedLayer ?? defaultLayerForType(type)
+      const expiresAt = layer === "working" ? workingMemoryExpiresAt(now) : null
       const tags = Array.isArray(args.tags) ? args.tags.join(",") : null
       const scope = projectId ? "project" : "global"
       const paths = Array.isArray(args.paths) ? args.paths.join(",") : null
@@ -934,10 +1025,14 @@ async function executeTool(
       const metadata = args.metadata ? JSON.stringify(args.metadata) : null
 
       await turso.execute({
-        sql: `INSERT INTO memories (id, content, type, memory_layer, scope, project_id, user_id, tags, paths, category, metadata, created_at, updated_at) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [memoryId, content, type, layer, scope, projectId || null, userId, tags, paths, category, metadata, now, now],
+        sql: `INSERT INTO memories (id, content, type, memory_layer, expires_at, scope, project_id, user_id, tags, paths, category, metadata, created_at, updated_at) 
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [memoryId, content, type, layer, expiresAt, scope, projectId || null, userId, tags, paths, category, metadata, now, now],
       })
+
+      if (layer === "working") {
+        await compactWorkingMemoriesForUser(turso, userId, now)
+      }
 
       const scopeLabel = projectId ? `project:${projectId.split("/").pop()}` : "global"
       const message = `Stored ${type} (${scopeLabel}): ${truncate(content)}`
@@ -946,6 +1041,7 @@ async function executeTool(
         content,
         type,
         memory_layer: layer,
+        expires_at: expiresAt,
         scope,
         project_id: projectId || null,
         user_id: userId,
@@ -982,7 +1078,7 @@ async function executeTool(
         )
       }
 
-      const now = new Date().toISOString()
+      const now = nowIso
       const updates: string[] = ["updated_at = ?"]
       const updateArgs: (string | null)[] = [now]
       const requestedLayer = parseMemoryLayer(args)
@@ -997,6 +1093,8 @@ async function executeTool(
         if (args.layer === undefined && args.type === "rule") {
           updates.push("memory_layer = ?")
           updateArgs.push("rule")
+          updates.push("expires_at = ?")
+          updateArgs.push(null)
         }
       }
       if (args.tags !== undefined) {
@@ -1018,6 +1116,8 @@ async function executeTool(
       if (requestedLayer !== null) {
         updates.push("memory_layer = ?")
         updateArgs.push(requestedLayer)
+        updates.push("expires_at = ?")
+        updateArgs.push(requestedLayer === "working" ? workingMemoryExpiresAt(now) : null)
       }
 
       const whereArgs: (string | null)[] = [id]
@@ -1030,6 +1130,10 @@ async function executeTool(
         }`,
         args: [...updateArgs, ...whereArgs],
       })
+
+      if (requestedLayer === "working") {
+        await compactWorkingMemoriesForUser(turso, userId, now)
+      }
 
       const message = `Updated memory ${id}`
       return {
@@ -1058,7 +1162,7 @@ async function executeTool(
         )
       }
 
-      const now = new Date().toISOString()
+      const now = nowIso
       await turso.execute({
         sql: `UPDATE memories SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL${
           userId ? " AND user_id = ?" : " AND user_id IS NULL"
@@ -1096,7 +1200,7 @@ async function executeTool(
       const includeType = args.type && VALID_TYPES.has(args.type as string) ? (args.type as string) : undefined
       const requestedLayer = parseMemoryLayer(args)
 
-      const results = await searchWithFts(turso, query, projectId, userId, limit, {
+      const results = await searchWithFts(turso, query, projectId, userId, nowIso, limit, {
         includeType,
         includeLayer: requestedLayer ?? undefined,
       })
@@ -1132,6 +1236,9 @@ async function executeTool(
       sqlArgs.push(...userFilter.args)
       const layerFilter = buildLayerFilterClause(requestedLayer)
       sql += ` AND ${layerFilter.clause}`
+      const activeFilter = buildNotExpiredFilter(nowIso)
+      sql += ` AND ${activeFilter.clause}`
+      sqlArgs.push(...activeFilter.args)
 
       // Scope filter: global + project
       sql += ` AND (scope = 'global'`
@@ -1226,7 +1333,7 @@ const TOOLS = [
   },
   {
     name: "add_memory",
-    description: "Store a new memory. Use type='rule' for always-active guidelines. Layer controls injection priority: rule, working, or long_term.",
+    description: "Store a new memory. Use type='rule' for always-active guidelines. Layer controls injection priority: rule, working, or long_term. Working memories auto-expire based on server TTL policy.",
     inputSchema: {
       type: "object",
       properties: {
