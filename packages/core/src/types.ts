@@ -108,6 +108,70 @@ export interface MutationResult {
   envelope?: MemoriesResponseEnvelope<unknown>
 }
 
+export interface ManagementKeyStatus {
+  hasKey: boolean
+  keyPreview?: string
+  createdAt?: string | null
+  expiresAt?: string | null
+  isExpired?: boolean
+}
+
+export interface ManagementKeyCreateInput {
+  expiresAt: string
+}
+
+export interface ManagementKeyCreateResult {
+  apiKey: string
+  keyPreview?: string
+  createdAt?: string
+  expiresAt?: string
+  message?: string
+}
+
+export interface ManagementKeyRevokeResult {
+  ok: boolean
+}
+
+export type ManagementTenantMode = "provision" | "attach"
+
+export interface ManagementTenantMapping {
+  tenantId: string
+  tursoDbUrl: string
+  tursoDbName?: string | null
+  status: string
+  metadata?: Record<string, unknown>
+  createdAt?: string
+  updatedAt?: string
+  lastVerifiedAt?: string | null
+}
+
+export interface ManagementTenantListResult {
+  tenantDatabases: ManagementTenantMapping[]
+  count: number
+}
+
+export interface ManagementTenantUpsertInput {
+  tenantId: string
+  mode?: ManagementTenantMode
+  tursoDbUrl?: string
+  tursoDbToken?: string
+  tursoDbName?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface ManagementTenantUpsertResult {
+  tenantDatabase: ManagementTenantMapping
+  provisioned: boolean
+  mode: string
+}
+
+export interface ManagementTenantDisableResult {
+  ok: boolean
+  tenantId: string
+  status: string
+  updatedAt: string
+}
+
 export interface BuildSystemPromptInput {
   rules?: MemoryRecord[]
   memories?: MemoryRecord[]

@@ -7,6 +7,14 @@ import type {
   ContextGetOptions,
   ContextMode,
   ContextResult,
+  ManagementKeyCreateInput,
+  ManagementKeyCreateResult,
+  ManagementKeyRevokeResult,
+  ManagementKeyStatus,
+  ManagementTenantDisableResult,
+  ManagementTenantListResult,
+  ManagementTenantUpsertInput,
+  ManagementTenantUpsertResult,
   MemoriesErrorData,
   MemoriesResponseEnvelope,
   MemoryAddInput,
@@ -85,6 +93,55 @@ const memoriesStructuredSchema = z.object({
 
 const mutationEnvelopeDataSchema = z.object({
   message: z.string().optional(),
+})
+
+const managementKeyStatusSchema = z.object({
+  hasKey: z.boolean(),
+  keyPreview: z.string().optional(),
+  createdAt: z.string().nullable().optional(),
+  expiresAt: z.string().nullable().optional(),
+  isExpired: z.boolean().optional(),
+})
+
+const managementKeyCreateSchema = z.object({
+  apiKey: z.string(),
+  keyPreview: z.string().optional(),
+  createdAt: z.string().optional(),
+  expiresAt: z.string().optional(),
+  message: z.string().optional(),
+})
+
+const managementKeyRevokeSchema = z.object({
+  ok: z.boolean(),
+})
+
+const managementTenantSchema = z.object({
+  tenantId: z.string(),
+  tursoDbUrl: z.string(),
+  tursoDbName: z.string().nullable().optional(),
+  status: z.string(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  lastVerifiedAt: z.string().nullable().optional(),
+})
+
+const managementTenantListSchema = z.object({
+  tenantDatabases: z.array(managementTenantSchema),
+  count: z.number().int(),
+})
+
+const managementTenantUpsertSchema = z.object({
+  tenantDatabase: managementTenantSchema,
+  provisioned: z.boolean(),
+  mode: z.string(),
+})
+
+const managementTenantDisableSchema = z.object({
+  ok: z.boolean(),
+  tenantId: z.string(),
+  status: z.string(),
+  updatedAt: z.string(),
 })
 
 function errorTypeForStatus(status: number): MemoriesErrorData["type"] {
@@ -367,6 +424,24 @@ function messageFromEnvelope(envelope: MemoriesResponseEnvelope<unknown> | null)
   return parsed.data.message
 }
 
+function parseStructuredData<T>(
+  schema: z.ZodType<T>,
+  endpoint: string,
+  structured: unknown
+): T {
+  const parsed = schema.safeParse(structured)
+  if (parsed.success) {
+    return parsed.data
+  }
+
+  throw new MemoriesClientError(`Invalid SDK response data for ${endpoint}`, {
+    type: "http_error",
+    errorCode: "INVALID_RESPONSE_DATA",
+    retryable: false,
+    details: structured,
+  })
+}
+
 function stripTrailingSlash(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value
 }
@@ -628,6 +703,86 @@ export class MemoriesClient {
     },
   }
 
+  readonly management = {
+    keys: {
+      get: async (): Promise<ManagementKeyStatus> => {
+        const endpoint = "/api/sdk/v1/management/keys"
+        const result = await this.callSdkRequest(endpoint, { method: "GET" })
+        return parseStructuredData(managementKeyStatusSchema, endpoint, result.structured)
+      },
+
+      create: async (input: ManagementKeyCreateInput): Promise<ManagementKeyCreateResult> => {
+        const endpoint = "/api/sdk/v1/management/keys"
+        const expiresAt = input?.expiresAt?.trim()
+        if (!expiresAt) {
+          throw new MemoriesClientError("expiresAt is required", {
+            type: "validation_error",
+            errorCode: "INVALID_MANAGEMENT_INPUT",
+            retryable: false,
+            details: { field: "expiresAt" },
+          })
+        }
+
+        const result = await this.callSdkRequest(endpoint, {
+          method: "POST",
+          body: { expiresAt },
+        })
+
+        return parseStructuredData(managementKeyCreateSchema, endpoint, result.structured)
+      },
+
+      revoke: async (): Promise<ManagementKeyRevokeResult> => {
+        const endpoint = "/api/sdk/v1/management/keys"
+        const result = await this.callSdkRequest(endpoint, { method: "DELETE" })
+        return parseStructuredData(managementKeyRevokeSchema, endpoint, result.structured)
+      },
+    },
+
+    tenants: {
+      list: async (): Promise<ManagementTenantListResult> => {
+        const endpoint = "/api/sdk/v1/management/tenants"
+        const result = await this.callSdkRequest(endpoint, { method: "GET" })
+        return parseStructuredData(managementTenantListSchema, endpoint, result.structured)
+      },
+
+      upsert: async (input: ManagementTenantUpsertInput): Promise<ManagementTenantUpsertResult> => {
+        const endpoint = "/api/sdk/v1/management/tenants"
+        const result = await this.callSdkRequest(endpoint, {
+          method: "POST",
+          body: {
+            tenantId: input.tenantId,
+            mode: input.mode,
+            tursoDbUrl: input.tursoDbUrl,
+            tursoDbToken: input.tursoDbToken,
+            tursoDbName: input.tursoDbName,
+            metadata: input.metadata,
+          },
+        })
+        return parseStructuredData(managementTenantUpsertSchema, endpoint, result.structured)
+      },
+
+      disable: async (tenantId: string): Promise<ManagementTenantDisableResult> => {
+        const endpoint = "/api/sdk/v1/management/tenants"
+        const normalizedTenantId = tenantId?.trim()
+        if (!normalizedTenantId) {
+          throw new MemoriesClientError("tenantId is required", {
+            type: "validation_error",
+            errorCode: "INVALID_MANAGEMENT_INPUT",
+            retryable: false,
+            details: { field: "tenantId" },
+          })
+        }
+
+        const result = await this.callSdkRequest(endpoint, {
+          method: "DELETE",
+          query: { tenantId: normalizedTenantId },
+        })
+
+        return parseStructuredData(managementTenantDisableSchema, endpoint, result.structured)
+      },
+    },
+  }
+
   buildSystemPrompt(input: BuildSystemPromptInput): string {
     return buildSystemPrompt(input)
   }
@@ -742,17 +897,41 @@ export class MemoriesClient {
     return scoped
   }
 
-  private async callSdkEndpoint(path: string, body: Record<string, unknown>): Promise<ParsedToolResult> {
+  private async callSdkRequest(
+    path: string,
+    options: {
+      method?: "GET" | "POST" | "DELETE"
+      body?: Record<string, unknown>
+      query?: Record<string, string | number | boolean | null | undefined>
+    } = {}
+  ): Promise<ParsedToolResult> {
+    const method = options.method ?? "POST"
+    const url = new URL(`${this.sdkBaseUrl}${path}`)
+
+    if (options.query) {
+      for (const [key, value] of Object.entries(options.query)) {
+        if (value === undefined || value === null) continue
+        url.searchParams.set(key, String(value))
+      }
+    }
+
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${this.apiKey}`,
+      ...this.defaultHeaders,
+    }
+
+    let body: string | undefined
+    if (options.body !== undefined) {
+      headers["content-type"] = "application/json"
+      body = JSON.stringify(options.body)
+    }
+
     let response: Response
     try {
-      response = await this.fetcher(`${this.sdkBaseUrl}${path}`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${this.apiKey}`,
-          ...this.defaultHeaders,
-        },
-        body: JSON.stringify(body),
+      response = await this.fetcher(url.toString(), {
+        method,
+        headers,
+        body,
       })
     } catch (error) {
       throw new MemoriesClientError("Network request failed", {
@@ -812,6 +991,10 @@ export class MemoriesClient {
       structured: envelope.data,
       envelope,
     }
+  }
+
+  private async callSdkEndpoint(path: string, body: Record<string, unknown>): Promise<ParsedToolResult> {
+    return this.callSdkRequest(path, { method: "POST", body })
   }
 
   private withDefaultScope(args: Record<string, unknown>): Record<string, unknown> {

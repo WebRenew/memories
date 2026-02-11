@@ -418,4 +418,166 @@ describe("MemoriesClient", () => {
       retryable: false,
     })
   })
+
+  it("supports typed management key and tenant operations over sdk_http", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "https://example.com/api/sdk/v1/management/keys" && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              hasKey: true,
+              keyPreview: "mcp_abcd****1234",
+              createdAt: "2026-02-11T00:00:00.000Z",
+              expiresAt: "2026-03-11T00:00:00.000Z",
+              isExpired: false,
+            },
+            error: null,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      }
+
+      if (url === "https://example.com/api/sdk/v1/management/keys" && method === "POST") {
+        const body = JSON.parse((init?.body as string) ?? "{}") as { expiresAt?: string }
+        expect(body.expiresAt).toBe("2026-12-31T00:00:00.000Z")
+
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              apiKey: "mcp_new_key",
+              keyPreview: "mcp_new****key",
+              message: "Save this key - it won't be shown again",
+            },
+            error: null,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      }
+
+      if (url === "https://example.com/api/sdk/v1/management/keys" && method === "DELETE") {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: { ok: true },
+            error: null,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      }
+
+      if (url === "https://example.com/api/sdk/v1/management/tenants" && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              tenantDatabases: [
+                {
+                  tenantId: "tenant-a",
+                  tursoDbUrl: "libsql://tenant-a.turso.io",
+                  tursoDbName: "tenant-a",
+                  status: "ready",
+                  metadata: { environment: "prod" },
+                },
+              ],
+              count: 1,
+            },
+            error: null,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      }
+
+      if (url === "https://example.com/api/sdk/v1/management/tenants" && method === "POST") {
+        const body = JSON.parse((init?.body as string) ?? "{}") as { tenantId?: string; mode?: string }
+        expect(body.tenantId).toBe("tenant-b")
+        expect(body.mode).toBe("provision")
+
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              tenantDatabase: {
+                tenantId: "tenant-b",
+                tursoDbUrl: "libsql://tenant-b.turso.io",
+                tursoDbName: "tenant-b",
+                status: "ready",
+                metadata: {},
+              },
+              provisioned: true,
+              mode: "provision",
+            },
+            error: null,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      }
+
+      if (url === "https://example.com/api/sdk/v1/management/tenants?tenantId=tenant-b" && method === "DELETE") {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              ok: true,
+              tenantId: "tenant-b",
+              status: "disabled",
+              updatedAt: "2026-02-11T00:00:00.000Z",
+            },
+            error: null,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      }
+
+      return new Response("not found", { status: 404 })
+    })
+
+    const client = new MemoriesClient({
+      apiKey: "mcp_test",
+      baseUrl: "https://example.com",
+      fetch: fetchMock as unknown as typeof fetch,
+    })
+
+    const keyStatus = await client.management.keys.get()
+    const createdKey = await client.management.keys.create({ expiresAt: "2026-12-31T00:00:00.000Z" })
+    const revokedKey = await client.management.keys.revoke()
+    const tenantList = await client.management.tenants.list()
+    const tenantUpsert = await client.management.tenants.upsert({ tenantId: "tenant-b", mode: "provision" })
+    const tenantDisabled = await client.management.tenants.disable("tenant-b")
+
+    expect(keyStatus.hasKey).toBe(true)
+    expect(createdKey.apiKey).toBe("mcp_new_key")
+    expect(revokedKey.ok).toBe(true)
+    expect(tenantList.count).toBe(1)
+    expect(tenantUpsert.tenantDatabase.tenantId).toBe("tenant-b")
+    expect(tenantDisabled.status).toBe("disabled")
+    expect(fetchMock).toHaveBeenCalledTimes(6)
+  })
+
+  it("validates management inputs before making a request", async () => {
+    const fetchMock = vi.fn()
+    const client = new MemoriesClient({
+      apiKey: "mcp_test",
+      baseUrl: "https://example.com",
+      fetch: fetchMock as unknown as typeof fetch,
+    })
+
+    await expect(client.management.keys.create({ expiresAt: "   " })).rejects.toMatchObject({
+      name: "MemoriesClientError",
+      type: "validation_error",
+      errorCode: "INVALID_MANAGEMENT_INPUT",
+    })
+
+    await expect(client.management.tenants.disable("   ")).rejects.toMatchObject({
+      name: "MemoriesClientError",
+      type: "validation_error",
+      errorCode: "INVALID_MANAGEMENT_INPUT",
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 })

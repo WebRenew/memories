@@ -203,6 +203,23 @@ When you manage API keys or tenant mappings programmatically, prefer the SDK man
 - `/api/sdk/v1/management/keys`
 - `/api/sdk/v1/management/tenants`
 
+The core client exposes these directly:
+
+```typescript
+const keyStatus = await client.management.keys.get()
+const rotated = await client.management.keys.create({
+  expiresAt: "2026-12-31T00:00:00.000Z",
+})
+await client.management.keys.revoke()
+
+const mappings = await client.management.tenants.list()
+await client.management.tenants.upsert({
+  tenantId: "acme-prod",
+  mode: "provision",
+})
+await client.management.tenants.disable("acme-prod")
+```
+
 Legacy MCP management routes (`/api/mcp/key`, `/api/mcp/tenants`) remain available for backward compatibility.
 
 For single-user apps, `tenantId` can be your app environment or workspace id:

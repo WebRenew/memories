@@ -67,6 +67,12 @@ Recommended pattern for SaaS apps:
 - `memories.list(options?)`
 - `memories.edit(id, updates)`
 - `memories.forget(id)`
+- `management.keys.get()`
+- `management.keys.create({ expiresAt })`
+- `management.keys.revoke()`
+- `management.tenants.list()`
+- `management.tenants.upsert(input)`
+- `management.tenants.disable(tenantId)`
 - `buildSystemPrompt({ rules, memories })`
 
 `context.get` mode behavior:
