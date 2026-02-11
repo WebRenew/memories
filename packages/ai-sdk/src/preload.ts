@@ -14,5 +14,8 @@ export async function preloadContext(options: PreloadContextOptions = {}): Promi
     userId: options.userId,
     tenantId: options.tenantId,
     mode: options.mode,
+    strategy: options.strategy,
+    graphDepth: options.graphDepth,
+    graphLimit: options.graphLimit,
   })
 }

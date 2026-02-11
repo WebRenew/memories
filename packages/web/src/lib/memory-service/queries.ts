@@ -1,6 +1,10 @@
 import {
   apiError,
+  type ContextRetrievalStrategy,
+  type ContextTrace,
   formatMemory,
+  GRAPH_RETRIEVAL_ENABLED,
+  type GraphExplainability,
   MEMORY_COLUMNS,
   MEMORY_COLUMNS_ALIASED,
   type MemoryLayer,
@@ -16,6 +20,7 @@ import {
   buildUserScopeFilter,
   parseMemoryLayer,
 } from "./scope"
+import { expandMemoryGraph } from "./graph/retrieval"
 
 function dedupeMemories(rows: MemoryRow[]): MemoryRow[] {
   const seen = new Set<string>()
@@ -27,6 +32,72 @@ function dedupeMemories(rows: MemoryRow[]): MemoryRow[] {
     deduped.push(row)
   }
   return deduped
+}
+
+function resolveMemoryLayer(row: MemoryRow): MemoryLayer {
+  if (row.memory_layer === "rule" || row.memory_layer === "working" || row.memory_layer === "long_term") {
+    return row.memory_layer
+  }
+  return row.type === "rule" ? "rule" : "long_term"
+}
+
+function normalizeRetrievalStrategy(value: ContextRetrievalStrategy | undefined): ContextRetrievalStrategy {
+  return value === "hybrid_graph" ? "hybrid_graph" : "baseline"
+}
+
+function normalizeGraphDepth(value: number | undefined): 0 | 1 | 2 {
+  if (value === 0 || value === 1 || value === 2) {
+    return value
+  }
+  return 1
+}
+
+function normalizeGraphLimit(value: number | undefined): number {
+  if (!Number.isFinite(value)) return 8
+  return Math.max(1, Math.min(Math.floor(value ?? 8), 50))
+}
+
+function graphReasonRank(reason: GraphExplainability | undefined): number {
+  if (!reason) return 0
+  const sharedNodeBoost = reason.edgeType === "shared_node" ? 0.25 : 0
+  return sharedNodeBoost + 1 / Math.max(1, reason.hopCount)
+}
+
+async function listScopedMemoriesByIds(
+  turso: TursoClient,
+  memoryIds: string[],
+  projectId: string | undefined,
+  userId: string | null,
+  nowIso: string,
+  limit: number
+): Promise<MemoryRow[]> {
+  const uniqueIds = Array.from(new Set(memoryIds.filter(Boolean)))
+  if (uniqueIds.length === 0 || limit <= 0) {
+    return []
+  }
+
+  const userFilter = buildUserScopeFilter(userId)
+  const activeFilter = buildNotExpiredFilter(nowIso)
+  const idPlaceholders = uniqueIds.map(() => "?").join(", ")
+  let sql = `SELECT ${MEMORY_COLUMNS} FROM memories
+             WHERE id IN (${idPlaceholders})
+               AND deleted_at IS NULL
+               AND type != 'rule'
+               AND (memory_layer = 'working' OR memory_layer IS NULL OR memory_layer = 'long_term')
+               AND ${userFilter.clause}
+               AND ${activeFilter.clause}
+               AND (scope = 'global'`
+  const args: (string | number)[] = [...uniqueIds, ...userFilter.args, ...activeFilter.args]
+
+  if (projectId) {
+    sql += " OR (scope = 'project' AND project_id = ?)"
+    args.push(projectId)
+  }
+  sql += ") ORDER BY updated_at DESC LIMIT ?"
+  args.push(limit)
+
+  const result = await turso.execute({ sql, args })
+  return result.rows as unknown as MemoryRow[]
 }
 
 async function searchWithFts(
@@ -158,16 +229,30 @@ export async function getContextPayload(params: {
   nowIso: string
   query: string
   limit: number
+  retrievalStrategy?: ContextRetrievalStrategy
+  graphDepth?: 0 | 1 | 2
+  graphLimit?: number
 }): Promise<{
   text: string
   data: {
     rules: ReturnType<typeof toStructuredMemory>[]
-    workingMemories: ReturnType<typeof toStructuredMemory>[]
-    longTermMemories: ReturnType<typeof toStructuredMemory>[]
-    memories: ReturnType<typeof toStructuredMemory>[]
+    workingMemories: Array<ReturnType<typeof toStructuredMemory> & { graph?: GraphExplainability }>
+    longTermMemories: Array<ReturnType<typeof toStructuredMemory> & { graph?: GraphExplainability }>
+    memories: Array<ReturnType<typeof toStructuredMemory> & { graph?: GraphExplainability }>
+    trace: ContextTrace
   }
 }> {
-  const { turso, projectId, userId, nowIso, query, limit } = params
+  const {
+    turso,
+    projectId,
+    userId,
+    nowIso,
+    query,
+    limit,
+    retrievalStrategy,
+    graphDepth,
+    graphLimit,
+  } = params
   const workingLimit = Math.max(1, Math.min(limit, 3))
 
   let rulesSql = `SELECT ${MEMORY_COLUMNS} FROM memories
@@ -219,7 +304,103 @@ export async function getContextPayload(params: {
     })
   }
 
-  const relevantMemories = dedupeMemories([...workingMemories, ...longTermMemories])
+  let relevantMemories = dedupeMemories([...workingMemories, ...longTermMemories])
+  const baselineCandidates = relevantMemories.length
+  const resolvedStrategy = normalizeRetrievalStrategy(retrievalStrategy)
+  const resolvedGraphDepth = normalizeGraphDepth(graphDepth)
+  const resolvedGraphLimit = normalizeGraphLimit(graphLimit)
+  const useHybridGraph =
+    resolvedStrategy === "hybrid_graph" &&
+    GRAPH_RETRIEVAL_ENABLED &&
+    resolvedGraphDepth > 0 &&
+    resolvedGraphLimit > 0
+
+  const graphExplainabilityByMemoryId = new Map<string, GraphExplainability>()
+  let graphCandidates = 0
+  let graphExpandedCount = 0
+
+  if (useHybridGraph && relevantMemories.length > 0) {
+    try {
+      const seededIds = new Set(relevantMemories.map((row) => row.id))
+      const expansion = await expandMemoryGraph({
+        turso,
+        seedMemoryIds: [...seededIds],
+        nowIso,
+        depth: resolvedGraphDepth,
+        limit: resolvedGraphLimit,
+      })
+      graphCandidates = expansion.totalCandidates
+
+      if (expansion.memoryIds.length > 0) {
+        const candidateRows = await listScopedMemoriesByIds(
+          turso,
+          expansion.memoryIds,
+          projectId,
+          userId,
+          nowIso,
+          resolvedGraphLimit
+        )
+
+        const sortedCandidates = candidateRows
+          .filter((row) => !seededIds.has(row.id))
+          .sort((a, b) => {
+            const reasonA = expansion.reasons.get(a.id)
+            const reasonB = expansion.reasons.get(b.id)
+            const rankDelta = graphReasonRank(reasonB) - graphReasonRank(reasonA)
+            if (rankDelta !== 0) return rankDelta
+            return String(b.updated_at).localeCompare(String(a.updated_at))
+          })
+
+        const addedRows: MemoryRow[] = []
+        for (const row of sortedCandidates) {
+          if (addedRows.length >= resolvedGraphLimit) {
+            break
+          }
+          if (seededIds.has(row.id)) {
+            continue
+          }
+          seededIds.add(row.id)
+          addedRows.push(row)
+          const reason = expansion.reasons.get(row.id)
+          if (reason) {
+            graphExplainabilityByMemoryId.set(row.id, reason)
+          }
+        }
+
+        graphExpandedCount = addedRows.length
+        const workingExpanded = addedRows.filter((row) => resolveMemoryLayer(row) === "working")
+        const longTermExpanded = addedRows.filter((row) => resolveMemoryLayer(row) === "long_term")
+        workingMemories = dedupeMemories([...workingMemories, ...workingExpanded])
+        longTermMemories = dedupeMemories([...longTermMemories, ...longTermExpanded])
+        relevantMemories = dedupeMemories([...workingMemories, ...longTermMemories])
+      }
+    } catch (err) {
+      console.error("Graph retrieval expansion failed; serving baseline context:", err)
+    }
+  }
+
+  const trace: ContextTrace = {
+    strategy: useHybridGraph ? "hybrid_graph" : "baseline",
+    graphDepth: useHybridGraph ? resolvedGraphDepth : 0,
+    graphLimit: useHybridGraph ? resolvedGraphLimit : 0,
+    baselineCandidates,
+    graphCandidates,
+    graphExpandedCount,
+    totalCandidates: relevantMemories.length,
+  }
+
+  const toContextMemory = (row: MemoryRow): ReturnType<typeof toStructuredMemory> & { graph?: GraphExplainability } => {
+    const memory = toStructuredMemory(row)
+    const explainability = graphExplainabilityByMemoryId.get(row.id)
+    if (!explainability) {
+      return memory
+    }
+    return {
+      ...memory,
+      graph: explainability,
+    }
+  }
+
   if (relevantMemories.length > 0) {
     if (text.length > 0) {
       text += "\n\n"
@@ -231,9 +412,10 @@ export async function getContextPayload(params: {
     text: text || "No rules or memories found.",
     data: {
       rules: (rulesResult.rows as unknown as MemoryRow[]).map(toStructuredMemory),
-      workingMemories: workingMemories.map(toStructuredMemory),
-      longTermMemories: longTermMemories.map(toStructuredMemory),
-      memories: relevantMemories.map(toStructuredMemory),
+      workingMemories: workingMemories.map(toContextMemory),
+      longTermMemories: longTermMemories.map(toContextMemory),
+      memories: relevantMemories.map(toContextMemory),
+      trace,
     },
   }
 }

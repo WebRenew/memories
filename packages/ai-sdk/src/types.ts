@@ -1,6 +1,7 @@
 import type {
   ContextGetInput,
   ContextMode,
+  ContextStrategy,
   ContextResult,
   ManagementKeyCreateInput,
   ManagementKeyCreateResult,
@@ -30,6 +31,9 @@ export interface MemoriesMiddlewareOptions extends MemoriesBaseOptions {
   limit?: number
   includeRules?: boolean
   mode?: ContextMode
+  strategy?: ContextStrategy
+  graphDepth?: 0 | 1 | 2
+  graphLimit?: number
   extractQuery?: (params: unknown) => string | undefined
   preloaded?: ContextResult
 }

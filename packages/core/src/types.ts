@@ -1,5 +1,6 @@
 export type MemoryType = "rule" | "decision" | "fact" | "note" | "skill"
 export type MemoryLayer = "rule" | "working" | "long_term"
+export type ContextStrategy = "baseline" | "hybrid_graph"
 
 export type MemoryScope = "global" | "project" | "unknown"
 
@@ -41,12 +42,28 @@ export interface MemoryRecord {
   scope: MemoryScope
   projectId: string | null
   tags: string[]
+  graph?: {
+    whyIncluded: "graph_expansion"
+    linkedViaNode: string
+    edgeType: string
+    hopCount: number
+    seedMemoryId: string
+  } | null
   raw?: string
 }
 
 export interface ContextResult {
   rules: MemoryRecord[]
   memories: MemoryRecord[]
+  trace?: {
+    strategy: ContextStrategy
+    graphDepth: 0 | 1 | 2
+    graphLimit: number
+    baselineCandidates: number
+    graphCandidates: number
+    graphExpandedCount: number
+    totalCandidates: number
+  }
   raw: string
 }
 
@@ -59,6 +76,9 @@ export interface ContextGetOptions {
   userId?: string
   tenantId?: string
   mode?: ContextMode
+  strategy?: ContextStrategy
+  graphDepth?: 0 | 1 | 2
+  graphLimit?: number
 }
 
 export interface ContextGetInput extends ContextGetOptions {

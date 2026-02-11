@@ -118,6 +118,15 @@ describe("/api/sdk/v1/context/get", () => {
           { id: "w1", content: "Working context", type: "note", layer: "working" },
           { id: "l1", content: "Long-term context", type: "fact", layer: "long_term" },
         ],
+        trace: {
+          strategy: "baseline",
+          graphDepth: 0,
+          graphLimit: 0,
+          baselineCandidates: 2,
+          graphCandidates: 0,
+          graphExpandedCount: 0,
+          totalCandidates: 2,
+        },
       },
     })
 
@@ -156,6 +165,9 @@ describe("/api/sdk/v1/context/get", () => {
         {
           query: "auth",
           mode: "working",
+          strategy: "hybrid_graph",
+          graphDepth: 2,
+          graphLimit: 12,
           includeRules: false,
           scope: {
             userId: "end-user-1",
@@ -172,6 +184,7 @@ describe("/api/sdk/v1/context/get", () => {
     expect(body.data.mode).toBe("working")
     expect(body.data.rules).toEqual([])
     expect(body.data.memories).toEqual([{ id: "w1", content: "Working context", type: "note", layer: "working" }])
+    expect(body.data.trace.strategy).toBe("baseline")
     expect(body.meta.endpoint).toBe("/api/sdk/v1/context/get")
     expect(typeof body.meta.requestId).toBe("string")
 
@@ -180,6 +193,9 @@ describe("/api/sdk/v1/context/get", () => {
         projectId: "github.com/acme/platform",
         query: "auth",
         userId: "end-user-1",
+        retrievalStrategy: "hybrid_graph",
+        graphDepth: 2,
+        graphLimit: 12,
       })
     )
   })
@@ -295,6 +311,15 @@ describe("/api/sdk/v1/context/get", () => {
               "type": "rule",
             },
           ],
+          "trace": {
+            "baselineCandidates": 2,
+            "graphCandidates": 0,
+            "graphDepth": 0,
+            "graphExpandedCount": 0,
+            "graphLimit": 0,
+            "strategy": "baseline",
+            "totalCandidates": 2,
+          },
           "workingMemories": [
             {
               "content": "Working context",

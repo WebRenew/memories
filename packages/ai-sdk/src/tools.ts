@@ -13,6 +13,9 @@ export function getContext(options: MemoriesBaseOptions = {}) {
       userId: input.userId ?? options.userId,
       tenantId: input.tenantId ?? options.tenantId,
       mode: input.mode,
+      strategy: input.strategy,
+      graphDepth: input.graphDepth,
+      graphLimit: input.graphLimit,
     })
 }
 

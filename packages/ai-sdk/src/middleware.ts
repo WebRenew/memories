@@ -64,6 +64,9 @@ export function memoriesMiddleware(options: MemoriesMiddlewareOptions = {}) {
               userId: options.userId,
               tenantId: options.tenantId,
               mode: options.mode,
+              strategy: options.strategy,
+              graphDepth: options.graphDepth,
+              graphLimit: options.graphLimit,
             })
           : emptyContext())
 

@@ -1,5 +1,6 @@
 import {
   apiError,
+  type ContextRetrievalStrategy,
   type ToolName,
   type ToolExecutionResult,
   type ToolStructuredContent,
@@ -33,6 +34,34 @@ export {
 } from "./types"
 
 export { ensureMemoryUserIdSchema, parseMemoryLayer, parseTenantId, parseUserId, resolveTenantTurso } from "./scope"
+
+function parseRetrievalStrategy(args: Record<string, unknown>): ContextRetrievalStrategy {
+  const raw = args.retrieval_strategy
+  if (raw === "hybrid_graph") {
+    return "hybrid_graph"
+  }
+  return "baseline"
+}
+
+function parseGraphDepth(args: Record<string, unknown>): 0 | 1 | 2 {
+  const raw = args.graph_depth
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return 1
+  }
+  const parsed = Math.floor(raw)
+  if (parsed === 0 || parsed === 1 || parsed === 2) {
+    return parsed
+  }
+  return 1
+}
+
+function parseGraphLimit(args: Record<string, unknown>): number {
+  const raw = args.graph_limit
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return 8
+  }
+  return Math.max(1, Math.min(Math.floor(raw), 50))
+}
 
 function buildToolEnvelope<T extends Record<string, unknown>>(
   tool: ToolName,
@@ -74,7 +103,20 @@ export async function executeMemoryTool(
         typeof args.limit === "number" && Number.isFinite(args.limit) && args.limit > 0
           ? Math.floor(args.limit)
           : 5
-      const payload = await getContextPayload({ turso, projectId, userId, nowIso, query, limit })
+      const retrievalStrategy = parseRetrievalStrategy(args)
+      const graphDepth = parseGraphDepth(args)
+      const graphLimit = parseGraphLimit(args)
+      const payload = await getContextPayload({
+        turso,
+        projectId,
+        userId,
+        nowIso,
+        query,
+        limit,
+        retrievalStrategy,
+        graphDepth,
+        graphLimit,
+      })
       return {
         content: [{ type: "text", text: payload.text }],
         structuredContent: buildToolEnvelope("get_context", payload.data, responseSchemaVersion),

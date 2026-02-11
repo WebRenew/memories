@@ -6,6 +6,7 @@ export type {
   BuildSystemPromptInput,
   ContextGetInput,
   ContextMode,
+  ContextStrategy,
   ContextGetOptions,
   ContextResult,
   MemoriesErrorData,

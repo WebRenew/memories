@@ -6,6 +6,7 @@ import type {
   ContextGetInput,
   ContextGetOptions,
   ContextMode,
+  ContextStrategy,
   ContextResult,
   ManagementKeyCreateInput,
   ManagementKeyCreateResult,
@@ -78,6 +79,16 @@ const structuredMemorySchema = z.object({
   scope: z.string(),
   projectId: z.string().nullable().optional(),
   tags: z.array(z.string()).optional().default([]),
+  graph: z
+    .object({
+      whyIncluded: z.literal("graph_expansion"),
+      linkedViaNode: z.string(),
+      edgeType: z.string(),
+      hopCount: z.number().int().nonnegative(),
+      seedMemoryId: z.string(),
+    })
+    .nullable()
+    .optional(),
 })
 
 const contextStructuredSchema = z.object({
@@ -85,6 +96,17 @@ const contextStructuredSchema = z.object({
   memories: z.array(structuredMemorySchema).optional().default([]),
   workingMemories: z.array(structuredMemorySchema).optional().default([]),
   longTermMemories: z.array(structuredMemorySchema).optional().default([]),
+  trace: z
+    .object({
+      strategy: z.union([z.literal("baseline"), z.literal("hybrid_graph")]),
+      graphDepth: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+      graphLimit: z.number().int().nonnegative(),
+      baselineCandidates: z.number().int().nonnegative(),
+      graphCandidates: z.number().int().nonnegative(),
+      graphExpandedCount: z.number().int().nonnegative(),
+      totalCandidates: z.number().int().nonnegative(),
+    })
+    .optional(),
 })
 
 const memoriesStructuredSchema = z.object({
@@ -269,6 +291,7 @@ function toMemoryRecord(memory: z.infer<typeof structuredMemorySchema>): MemoryR
     scope: normalizeMemoryScope(memory.scope),
     projectId: memory.projectId ?? null,
     tags: memory.tags ?? [],
+    graph: memory.graph ?? null,
   }
 }
 
@@ -287,6 +310,7 @@ function dedupeMemories(records: z.infer<typeof structuredMemorySchema>[]): z.in
 }
 
 const contextModes = new Set<ContextMode>(["all", "working", "long_term", "rules_only"])
+const contextStrategies = new Set<ContextStrategy>(["baseline", "hybrid_graph"])
 
 interface ContextBuckets {
   working: z.infer<typeof structuredMemorySchema>[]
@@ -295,6 +319,9 @@ interface ContextBuckets {
 
 interface NormalizedContextInput extends ContextGetInput {
   mode: ContextMode
+  strategy: ContextStrategy
+  graphDepth: 0 | 1 | 2
+  graphLimit: number
 }
 
 type ContextGetMethod = {
@@ -309,6 +336,27 @@ function normalizeContextMode(mode: unknown): ContextMode {
   return "all"
 }
 
+function normalizeContextStrategy(strategy: unknown): ContextStrategy {
+  if (typeof strategy === "string" && contextStrategies.has(strategy as ContextStrategy)) {
+    return strategy as ContextStrategy
+  }
+  return "baseline"
+}
+
+function normalizeGraphDepth(depth: unknown): 0 | 1 | 2 {
+  if (depth === 0 || depth === 1 || depth === 2) {
+    return depth
+  }
+  return 1
+}
+
+function normalizeGraphLimit(limit: unknown): number {
+  if (typeof limit !== "number" || !Number.isFinite(limit)) {
+    return 8
+  }
+  return Math.max(1, Math.min(Math.floor(limit), 50))
+}
+
 function normalizeContextInput(
   inputOrQuery?: string | ContextGetInput,
   options: ContextGetOptions = {}
@@ -321,6 +369,9 @@ function normalizeContextInput(
   return {
     ...fromObject,
     mode: normalizeContextMode(fromObject.mode),
+    strategy: normalizeContextStrategy(fromObject.strategy),
+    graphDepth: normalizeGraphDepth(fromObject.graphDepth),
+    graphLimit: normalizeGraphLimit(fromObject.graphLimit),
   }
 }
 
@@ -531,6 +582,9 @@ export class MemoriesClient {
             limit: input.limit,
             includeRules: input.includeRules,
             mode: input.mode,
+            strategy: input.strategy,
+            graphDepth: input.graphDepth,
+            graphLimit: input.graphLimit,
             scope: sdkScope,
           })
         : await this.callTool("get_context", {
@@ -539,6 +593,9 @@ export class MemoriesClient {
             project_id: input.projectId,
             user_id: input.userId,
             tenant_id: input.tenantId,
+            retrieval_strategy: input.strategy,
+            graph_depth: input.graphDepth,
+            graph_limit: input.graphLimit,
           })
 
       const structured = contextStructuredSchema.safeParse(result.structured)
@@ -547,6 +604,7 @@ export class MemoriesClient {
         const parsedFromStructured: ContextResult = {
           rules: structured.data.rules.map(toMemoryRecord),
           memories: orderedMemories.map(toMemoryRecord),
+          trace: structured.data.trace,
           raw: result.raw,
         }
         if (input.includeRules === false) {

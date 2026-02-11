@@ -235,6 +235,20 @@ const TOOLS = [
         user_id: { type: "string", description: "User identifier for scoped recall (includes shared + user-specific memories)" },
         tenant_id: { type: "string", description: "Tenant identifier to route requests to a tenant-specific memory database" },
         limit: { type: "number", description: "Max memories to return (default: 5)" },
+        retrieval_strategy: {
+          type: "string",
+          enum: ["baseline", "hybrid_graph"],
+          description: "Retrieval mode. baseline keeps tiered recall; hybrid_graph augments with graph expansion when enabled.",
+        },
+        graph_depth: {
+          type: "number",
+          enum: [0, 1, 2],
+          description: "Graph traversal depth for hybrid retrieval (default: 1, max: 2).",
+        },
+        graph_limit: {
+          type: "number",
+          description: "Maximum graph-expanded memories to add (default: 8, max: 50).",
+        },
       },
     },
   },

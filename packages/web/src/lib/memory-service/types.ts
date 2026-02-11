@@ -84,6 +84,25 @@ export interface MemoryRow {
 }
 
 export type MemoryLayer = "rule" | "working" | "long_term"
+export type ContextRetrievalStrategy = "baseline" | "hybrid_graph"
+
+export interface GraphExplainability {
+  whyIncluded: "graph_expansion"
+  linkedViaNode: string
+  edgeType: string
+  hopCount: number
+  seedMemoryId: string
+}
+
+export interface ContextTrace {
+  strategy: ContextRetrievalStrategy
+  graphDepth: 0 | 1 | 2
+  graphLimit: number
+  baselineCandidates: number
+  graphCandidates: number
+  graphExpandedCount: number
+  totalCandidates: number
+}
 
 export interface StructuredMemory {
   id: string | null
@@ -97,6 +116,7 @@ export interface StructuredMemory {
   paths: string[]
   category: string | null
   metadata: Record<string, unknown> | null
+  graph?: GraphExplainability
   createdAt: string | null
   updatedAt: string | null
 }

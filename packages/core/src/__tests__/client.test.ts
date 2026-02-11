@@ -284,6 +284,112 @@ describe("MemoriesClient", () => {
     }
   })
 
+  it("forwards hybrid graph options to MCP get_context args", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "1",
+          result: {
+            content: [{ type: "text", text: "" }],
+            structuredContent: {
+              ok: true,
+              data: {
+                rules: [],
+                workingMemories: [],
+                longTermMemories: [],
+                memories: [],
+                trace: {
+                  strategy: "hybrid_graph",
+                  graphDepth: 2,
+                  graphLimit: 12,
+                  baselineCandidates: 0,
+                  graphCandidates: 0,
+                  graphExpandedCount: 0,
+                  totalCandidates: 0,
+                },
+              },
+              error: null,
+              meta: { version: "2026-02-10", tool: "get_context" },
+            },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    )
+
+    const client = new MemoriesClient({
+      apiKey: "mcp_test",
+      baseUrl: "https://example.com/api/mcp",
+      fetch: fetchMock as unknown as typeof fetch,
+    })
+
+    const result = await client.context.get({
+      query: "auth",
+      strategy: "hybrid_graph",
+      graphDepth: 2,
+      graphLimit: 12,
+    })
+    expect(result.trace?.strategy).toBe("hybrid_graph")
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
+    const requestBody = JSON.parse((requestInit?.body as string) ?? "{}") as {
+      params?: { arguments?: Record<string, unknown> }
+    }
+    const args = requestBody.params?.arguments ?? {}
+    expect(args.retrieval_strategy).toBe("hybrid_graph")
+    expect(args.graph_depth).toBe(2)
+    expect(args.graph_limit).toBe(12)
+  })
+
+  it("forwards hybrid graph options to SDK context endpoint body", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            rules: [],
+            memories: [],
+            workingMemories: [],
+            longTermMemories: [],
+            trace: {
+              strategy: "hybrid_graph",
+              graphDepth: 1,
+              graphLimit: 8,
+              baselineCandidates: 0,
+              graphCandidates: 0,
+              graphExpandedCount: 0,
+              totalCandidates: 0,
+            },
+          },
+          error: null,
+          meta: { version: "2026-02-11" },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    )
+
+    const client = new MemoriesClient({
+      apiKey: "mcp_test",
+      baseUrl: "https://example.com",
+      fetch: fetchMock as unknown as typeof fetch,
+    })
+
+    await client.context.get({
+      query: "auth",
+      strategy: "hybrid_graph",
+      graphDepth: 1,
+      graphLimit: 8,
+    })
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("https://example.com/api/sdk/v1/context/get")
+    const parsedBody = JSON.parse((init.body as string) ?? "{}") as Record<string, unknown>
+    expect(parsedBody.strategy).toBe("hybrid_graph")
+    expect(parsedBody.graphDepth).toBe(1)
+    expect(parsedBody.graphLimit).toBe(8)
+  })
+
   it("parses structuredContent for memory list/search", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse((init?.body as string) ?? "{}") as { params?: { name?: string } }

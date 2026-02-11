@@ -15,12 +15,16 @@ import { z } from "zod"
 const ENDPOINT = "/api/sdk/v1/context/get"
 
 const contextModeSchema = z.enum(["all", "working", "long_term", "rules_only"])
+const contextStrategySchema = z.enum(["baseline", "hybrid_graph"])
 
 const requestSchema = z.object({
   query: z.string().trim().max(500).optional(),
   limit: z.number().int().positive().max(50).optional(),
   includeRules: z.boolean().optional(),
   mode: contextModeSchema.optional(),
+  strategy: contextStrategySchema.optional(),
+  graphDepth: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
+  graphLimit: z.number().int().positive().max(50).optional(),
   scope: scopeSchema,
 })
 
@@ -92,6 +96,9 @@ export async function POST(request: NextRequest) {
       nowIso: new Date().toISOString(),
       query: parsedRequest.query ?? "",
       limit: parsedRequest.limit ?? 5,
+      retrievalStrategy: parsedRequest.strategy ?? "baseline",
+      graphDepth: parsedRequest.graphDepth ?? 1,
+      graphLimit: parsedRequest.graphLimit ?? 8,
     })
 
     const rules = includeRules ? payload.data.rules : []
@@ -104,6 +111,7 @@ export async function POST(request: NextRequest) {
       memories,
       workingMemories: payload.data.workingMemories,
       longTermMemories: payload.data.longTermMemories,
+      trace: payload.data.trace,
     })
   } catch (error) {
     const detail =
