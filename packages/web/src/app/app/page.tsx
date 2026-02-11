@@ -3,7 +3,6 @@ import { createClient as createTurso } from "@libsql/client"
 import { ProvisioningScreen } from "@/components/dashboard/ProvisioningScreen"
 import { MemoriesSection } from "@/components/dashboard/MemoriesSection"
 import { ToolsPanel } from "@/components/dashboard/ToolsPanel"
-import { ApiKeySection } from "@/components/dashboard/ApiKeySection"
 import type { Memory } from "@/types/memory"
 import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 
@@ -52,9 +51,6 @@ export default async function MemoriesPage() {
     <div className="space-y-8">
       {/* Tools Panel */}
       <ToolsPanel ruleCount={ruleCount} />
-
-      {/* API Key Section */}
-      <ApiKeySection />
 
       {/* Memories Section with filters */}
       {connectError ? (
