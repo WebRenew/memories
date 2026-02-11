@@ -10,6 +10,54 @@ describe("MemoriesClient", () => {
     expect(() => new MemoriesClient({ apiKey: "mcp_test", tenantId: "   " })).toThrow(MemoriesClientError)
   })
 
+  it("uses SDK HTTP endpoints by default", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            id: "mem_1",
+            message: "Stored note",
+            memory: {
+              id: "mem_1",
+              content: "test",
+              type: "note",
+              layer: "long_term",
+              scope: "global",
+              projectId: null,
+              tags: [],
+            },
+          },
+          error: null,
+          meta: { version: "2026-02-11" },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } }
+      )
+    )
+
+    const client = new MemoriesClient({
+      apiKey: "mcp_test",
+      baseUrl: "https://example.com",
+      tenantId: "tenant-123",
+      userId: "user-abc",
+      fetch: fetchMock as unknown as typeof fetch,
+    })
+
+    const result = await client.memories.add({ content: "test" })
+    expect(result.ok).toBe(true)
+    expect(result.message).toBe("Stored note")
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("https://example.com/api/sdk/v1/memories/add")
+    expect(init.method).toBe("POST")
+    const parsedBody = JSON.parse((init.body as string) ?? "{}") as {
+      scope?: { tenantId?: string; userId?: string }
+    }
+    expect(parsedBody.scope?.tenantId).toBe("tenant-123")
+    expect(parsedBody.scope?.userId).toBe("user-abc")
+  })
+
   it("calls MCP tools through JSON-RPC", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       new Response(

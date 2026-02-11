@@ -20,6 +20,7 @@ import type {
 export interface MemoriesClientOptions {
   apiKey?: string
   baseUrl?: string
+  transport?: "sdk_http" | "mcp" | "auto"
   userId?: string
   tenantId?: string
   fetch?: typeof fetch
@@ -366,9 +367,32 @@ function messageFromEnvelope(envelope: MemoriesResponseEnvelope<unknown> | null)
   return parsed.data.message
 }
 
+function stripTrailingSlash(value: string): string {
+  return value.endsWith("/") ? value.slice(0, -1) : value
+}
+
+function deriveSdkBaseUrl(baseUrl: string): string {
+  if (baseUrl.endsWith("/api/mcp")) {
+    return baseUrl.slice(0, -"/api/mcp".length)
+  }
+  if (baseUrl.endsWith("/api/sdk/v1")) {
+    return baseUrl.slice(0, -"/api/sdk/v1".length)
+  }
+  return baseUrl
+}
+
+function deriveMcpUrl(baseUrl: string, sdkBaseUrl: string): string {
+  if (baseUrl.endsWith("/api/mcp")) {
+    return baseUrl
+  }
+  return `${sdkBaseUrl}/api/mcp`
+}
+
 export class MemoriesClient {
   private readonly apiKey: string
-  private readonly baseUrl: string
+  private readonly mcpUrl: string
+  private readonly sdkBaseUrl: string
+  private readonly transport: "sdk_http" | "mcp"
   private readonly userId: string | undefined
   private readonly tenantId: string | undefined
   private readonly fetcher: typeof fetch
@@ -380,7 +404,7 @@ export class MemoriesClient {
       throw new MemoriesClientError("Missing API key. Pass apiKey or set MEMORIES_API_KEY.")
     }
 
-    const baseUrl = options.baseUrl ?? "https://memories.sh/api/mcp"
+    const baseUrl = options.baseUrl ?? "https://memories.sh"
     const parsedBaseUrl = baseUrlSchema.safeParse(baseUrl)
     if (!parsedBaseUrl.success) {
       throw new MemoriesClientError("Invalid baseUrl. Expected a valid URL.")
@@ -395,8 +419,18 @@ export class MemoriesClient {
       throw new MemoriesClientError("Invalid tenantId. Expected a non-empty string when provided.")
     }
 
+    const normalizedBaseUrl = stripTrailingSlash(parsedBaseUrl.data)
+    const sdkBaseUrl = deriveSdkBaseUrl(normalizedBaseUrl)
+    const mcpUrl = deriveMcpUrl(normalizedBaseUrl, sdkBaseUrl)
+    const inferredTransport = normalizedBaseUrl.endsWith("/api/mcp") ? "mcp" : "sdk_http"
+    const resolvedTransport = options.transport === "auto" || options.transport === undefined
+      ? inferredTransport
+      : options.transport
+
     this.apiKey = apiKey
-    this.baseUrl = parsedBaseUrl.data
+    this.mcpUrl = mcpUrl
+    this.sdkBaseUrl = sdkBaseUrl
+    this.transport = resolvedTransport
     this.userId = options.userId
     this.tenantId = tenantId
     this.fetcher = options.fetch ?? fetch
@@ -409,21 +443,36 @@ export class MemoriesClient {
       options: ContextGetOptions = {}
     ): Promise<ContextResult> => {
       const input = normalizeContextInput(inputOrQuery, options)
-      const toolResult = await this.callTool("get_context", {
-        query: input.query,
-        limit: input.limit,
-        project_id: input.projectId,
-        user_id: input.userId,
-        tenant_id: input.tenantId,
+      const rawScope = this.withDefaultScopeSdk({
+        projectId: input.projectId,
+        userId: input.userId,
+        tenantId: input.tenantId,
       })
+      const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
 
-      const structured = contextStructuredSchema.safeParse(toolResult.structured)
+      const result = this.transport === "sdk_http"
+        ? await this.callSdkEndpoint("/api/sdk/v1/context/get", {
+            query: input.query,
+            limit: input.limit,
+            includeRules: input.includeRules,
+            mode: input.mode,
+            scope: sdkScope,
+          })
+        : await this.callTool("get_context", {
+            query: input.query,
+            limit: input.limit,
+            project_id: input.projectId,
+            user_id: input.userId,
+            tenant_id: input.tenantId,
+          })
+
+      const structured = contextStructuredSchema.safeParse(result.structured)
       if (structured.success) {
         const orderedMemories = pickMemoriesForMode(input.mode, structured.data)
         const parsedFromStructured: ContextResult = {
           rules: structured.data.rules.map(toMemoryRecord),
           memories: orderedMemories.map(toMemoryRecord),
-          raw: toolResult.raw,
+          raw: result.raw,
         }
         if (input.includeRules === false) {
           return { ...parsedFromStructured, rules: [] }
@@ -431,7 +480,7 @@ export class MemoriesClient {
         return parsedFromStructured
       }
 
-      const parsed = parseContextResponse(toolResult.raw)
+      const parsed = parseContextResponse(result.raw)
       const modeFiltered = input.mode === "rules_only" ? { ...parsed, memories: [] } : parsed
       if (input.includeRules === false) {
         return { ...modeFiltered, rules: [] }
@@ -442,88 +491,139 @@ export class MemoriesClient {
 
   readonly memories = {
     add: async (input: MemoryAddInput): Promise<MutationResult> => {
-      const toolResult = await this.callTool("add_memory", {
-        content: input.content,
-        type: input.type,
-        layer: input.layer,
-        tags: input.tags,
-        paths: input.paths,
-        category: input.category,
-        metadata: input.metadata,
-        project_id: input.projectId,
-      })
+      const rawScope = this.withDefaultScopeSdk({ projectId: input.projectId })
+      const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
+      const result = this.transport === "sdk_http"
+        ? await this.callSdkEndpoint("/api/sdk/v1/memories/add", {
+            content: input.content,
+            type: input.type,
+            layer: input.layer,
+            tags: input.tags,
+            paths: input.paths,
+            category: input.category,
+            metadata: input.metadata,
+            scope: sdkScope,
+          })
+        : await this.callTool("add_memory", {
+            content: input.content,
+            type: input.type,
+            layer: input.layer,
+            tags: input.tags,
+            paths: input.paths,
+            category: input.category,
+            metadata: input.metadata,
+            project_id: input.projectId,
+          })
 
-      const message = (messageFromEnvelope(toolResult.envelope) ?? toolResult.raw) || "Memory stored"
+      const message = (messageFromEnvelope(result.envelope) ?? result.raw) || "Memory stored"
       return {
         ok: true,
         message,
-        raw: toolResult.raw,
-        envelope: toolResult.envelope ?? undefined,
+        raw: result.raw,
+        envelope: result.envelope ?? undefined,
       }
     },
 
     search: async (query: string, options: MemorySearchOptions = {}): Promise<MemoryRecord[]> => {
-      const toolResult = await this.callTool("search_memories", {
-        query,
-        type: options.type,
-        layer: options.layer,
-        limit: options.limit,
-        project_id: options.projectId,
-      })
+      const rawScope = this.withDefaultScopeSdk({ projectId: options.projectId })
+      const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
+      const result = this.transport === "sdk_http"
+        ? await this.callSdkEndpoint("/api/sdk/v1/memories/search", {
+            query,
+            type: options.type,
+            layer: options.layer,
+            limit: options.limit,
+            scope: sdkScope,
+          })
+        : await this.callTool("search_memories", {
+            query,
+            type: options.type,
+            layer: options.layer,
+            limit: options.limit,
+            project_id: options.projectId,
+          })
 
-      const structured = memoriesStructuredSchema.safeParse(toolResult.structured)
+      const structured = memoriesStructuredSchema.safeParse(result.structured)
       if (structured.success) {
         return structured.data.memories.map(toMemoryRecord)
       }
 
-      return parseMemoryListResponse(toolResult.raw)
+      return parseMemoryListResponse(result.raw)
     },
 
     list: async (options: MemoryListOptions = {}): Promise<MemoryRecord[]> => {
-      const toolResult = await this.callTool("list_memories", {
-        type: options.type,
-        layer: options.layer,
-        tags: options.tags,
-        limit: options.limit,
-        project_id: options.projectId,
-      })
+      const rawScope = this.withDefaultScopeSdk({ projectId: options.projectId })
+      const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
+      const result = this.transport === "sdk_http"
+        ? await this.callSdkEndpoint("/api/sdk/v1/memories/list", {
+            type: options.type,
+            layer: options.layer,
+            tags: options.tags,
+            limit: options.limit,
+            scope: sdkScope,
+          })
+        : await this.callTool("list_memories", {
+            type: options.type,
+            layer: options.layer,
+            tags: options.tags,
+            limit: options.limit,
+            project_id: options.projectId,
+          })
 
-      const structured = memoriesStructuredSchema.safeParse(toolResult.structured)
+      const structured = memoriesStructuredSchema.safeParse(result.structured)
       if (structured.success) {
         return structured.data.memories.map(toMemoryRecord)
       }
 
-      return parseMemoryListResponse(toolResult.raw)
+      return parseMemoryListResponse(result.raw)
     },
 
     edit: async (id: string, updates: MemoryEditInput): Promise<MutationResult> => {
-      const toolResult = await this.callTool("edit_memory", {
-        id,
-        content: updates.content,
-        type: updates.type,
-        layer: updates.layer,
-        tags: updates.tags,
-        paths: updates.paths,
-        category: updates.category,
-        metadata: updates.metadata,
-      })
-      const message = (messageFromEnvelope(toolResult.envelope) ?? toolResult.raw) || `Updated memory ${id}`
+      const rawScope = this.withDefaultScopeSdk()
+      const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
+      const result = this.transport === "sdk_http"
+        ? await this.callSdkEndpoint("/api/sdk/v1/memories/edit", {
+            id,
+            content: updates.content,
+            type: updates.type,
+            layer: updates.layer,
+            tags: updates.tags,
+            paths: updates.paths,
+            category: updates.category,
+            metadata: updates.metadata,
+            scope: sdkScope,
+          })
+        : await this.callTool("edit_memory", {
+            id,
+            content: updates.content,
+            type: updates.type,
+            layer: updates.layer,
+            tags: updates.tags,
+            paths: updates.paths,
+            category: updates.category,
+            metadata: updates.metadata,
+          })
+      const message = (messageFromEnvelope(result.envelope) ?? result.raw) || `Updated memory ${id}`
       return {
         ok: true,
         message,
-        raw: toolResult.raw,
-        envelope: toolResult.envelope ?? undefined,
+        raw: result.raw,
+        envelope: result.envelope ?? undefined,
       }
     },
 
     forget: async (id: string): Promise<MutationResult> => {
-      const toolResult = await this.callTool("forget_memory", { id })
-      const message = (messageFromEnvelope(toolResult.envelope) ?? toolResult.raw) || `Deleted memory ${id}`
+      const rawScope = this.withDefaultScopeSdk()
+      const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
+      const result = this.transport === "sdk_http"
+        ? await this.callSdkEndpoint("/api/sdk/v1/memories/forget", { id, scope: sdkScope })
+        : await this.callTool("forget_memory", { id })
+      const message = (messageFromEnvelope(result.envelope) ?? result.raw) || `Deleted memory ${id}`
       return {
         ok: true,
         message,
-        raw: toolResult.raw,
-        envelope: toolResult.envelope ?? undefined,
+        raw: result.raw,
+        envelope: result.envelope ?? undefined,
       }
     },
   }
@@ -542,7 +642,7 @@ export class MemoriesClient {
 
     let response: Response
     try {
-      response = await this.fetcher(this.baseUrl, {
+      response = await this.fetcher(this.mcpUrl, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -610,6 +710,108 @@ export class MemoriesClient {
     }
 
     return json.result
+  }
+
+  private withDefaultScopeSdk(
+    scope?: {
+      tenantId?: string
+      userId?: string
+      projectId?: string
+    }
+  ): {
+    tenantId?: string
+    userId?: string
+    projectId?: string
+  } {
+    const scoped: {
+      tenantId?: string
+      userId?: string
+      projectId?: string
+    } = {}
+    const tenantId = scope?.tenantId ?? this.tenantId
+    const userId = scope?.userId ?? this.userId
+    if (tenantId) {
+      scoped.tenantId = tenantId
+    }
+    if (userId) {
+      scoped.userId = userId
+    }
+    if (scope?.projectId) {
+      scoped.projectId = scope.projectId
+    }
+    return scoped
+  }
+
+  private async callSdkEndpoint(path: string, body: Record<string, unknown>): Promise<ParsedToolResult> {
+    let response: Response
+    try {
+      response = await this.fetcher(`${this.sdkBaseUrl}${path}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${this.apiKey}`,
+          ...this.defaultHeaders,
+        },
+        body: JSON.stringify(body),
+      })
+    } catch (error) {
+      throw new MemoriesClientError("Network request failed", {
+        type: "network_error",
+        errorCode: "NETWORK_ERROR",
+        retryable: true,
+        details: error,
+      })
+    }
+
+    let json: unknown = null
+    try {
+      json = await response.json()
+    } catch {
+      json = null
+    }
+
+    const parsedEnvelope = responseEnvelopeSchema.safeParse(json)
+
+    if (!response.ok) {
+      if (parsedEnvelope.success && parsedEnvelope.data.error) {
+        throw toClientError(parsedEnvelope.data.error, { status: response.status })
+      }
+      const typedError = toTypedHttpError(response.status, json)
+      throw toClientError(typedError, { status: response.status })
+    }
+
+    if (!parsedEnvelope.success) {
+      throw new MemoriesClientError("Invalid SDK response envelope", {
+        status: response.status,
+        type: "http_error",
+        errorCode: "INVALID_RESPONSE_ENVELOPE",
+        retryable: false,
+        details: json,
+      })
+    }
+
+    const envelope: MemoriesResponseEnvelope<unknown> = {
+      ok: parsedEnvelope.data.ok,
+      data: parsedEnvelope.data.data,
+      error: parsedEnvelope.data.error,
+      meta: parsedEnvelope.data.meta,
+    }
+
+    if (!envelope.ok) {
+      const envelopeError = envelope.error ?? {
+        type: "tool_error",
+        code: "SDK_ENDPOINT_ERROR",
+        message: "SDK endpoint returned an error",
+        retryable: false,
+      }
+      throw toClientError(envelopeError, { status: response.status })
+    }
+
+    return {
+      raw: typeof envelope.data === "string" ? envelope.data : JSON.stringify(envelope.data ?? {}),
+      structured: envelope.data,
+      envelope,
+    }
   }
 
   private withDefaultScope(args: Record<string, unknown>): Record<string, unknown> {
