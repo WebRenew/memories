@@ -12,26 +12,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  node-starters:
-    name: Node Starter (${{ matrix.starter }})
+  nextjs-starter:
+    name: Next.js Starter Flow
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - starter: nextjs
-            path: examples/nextjs-starter
-            smoke: |
-              npm run typecheck
-              npm run build
-          - starter: express
-            path: examples/express-starter
-            smoke: |
-              node --check src/memories-client.js
-              node --check src/server.js
     defaults:
       run:
-        working-directory: ${{ matrix.path }}
+        working-directory: examples/nextjs-starter
     steps:
       - uses: actions/checkout@v4
 
@@ -42,11 +28,106 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund --no-package-lock
 
-      - name: Smoke test
-        run: ${{ matrix.smoke }}
+      - name: Compile checks
+        run: |
+          npm run typecheck
+          npm run build
+
+      - name: Start mock memories API
+        run: |
+          MOCK_MEMORIES_API_KEY=mem_ci_test MOCK_MEMORIES_PORT=5010 \
+            node .github/scripts/mock-memories-sdk-server.mjs > /tmp/mock-memories.log 2>&1 &
+          echo $! > /tmp/mock-memories.pid
+          bash .github/scripts/wait-for-http.sh http://127.0.0.1:5010/health 60
+        working-directory: ${{ github.workspace }}
+
+      - name: Start Next.js starter
+        run: |
+          MEMORIES_API_KEY=mem_ci_test \
+          MEMORIES_BASE_URL=http://127.0.0.1:5010 \
+          MEMORIES_PROJECT_ID=ci-starter \
+          PORT=3100 \
+          npm run start > /tmp/nextjs-starter.log 2>&1 &
+          echo $! > /tmp/nextjs-starter.pid
+          bash "${{ github.workspace }}/.github/scripts/wait-for-http.sh" http://127.0.0.1:3100/ 90
+        working-directory: ${{ github.workspace }}/examples/nextjs-starter
+
+      - name: Run flow test (add/search/context)
+        run: |
+          STARTER_BASE_URL=http://127.0.0.1:3100 \
+          STARTER_ADD_PATH=/api/memories/add \
+          STARTER_SEARCH_PATH=/api/memories/search \
+          STARTER_CONTEXT_PATH=/api/memories/context \
+          node .github/scripts/run-starter-flow.mjs
+        working-directory: ${{ github.workspace }}
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          echo "---- Mock API log ----"
+          cat /tmp/mock-memories.log || true
+          echo "---- Next.js starter log ----"
+          cat /tmp/nextjs-starter.log || true
+
+  express-starter:
+    name: Express Starter Flow
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/express-starter
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --no-package-lock
+
+      - name: Compile checks
+        run: |
+          node --check src/memories-client.js
+          node --check src/server.js
+
+      - name: Start mock memories API
+        run: |
+          MOCK_MEMORIES_API_KEY=mem_ci_test MOCK_MEMORIES_PORT=5010 \
+            node .github/scripts/mock-memories-sdk-server.mjs > /tmp/mock-memories.log 2>&1 &
+          echo $! > /tmp/mock-memories.pid
+          bash .github/scripts/wait-for-http.sh http://127.0.0.1:5010/health 60
+        working-directory: ${{ github.workspace }}
+
+      - name: Start Express starter
+        run: |
+          MEMORIES_API_KEY=mem_ci_test \
+          MEMORIES_BASE_URL=http://127.0.0.1:5010 \
+          MEMORIES_PROJECT_ID=ci-starter \
+          PORT=8788 \
+          npm run start > /tmp/express-starter.log 2>&1 &
+          echo $! > /tmp/express-starter.pid
+          bash "${{ github.workspace }}/.github/scripts/wait-for-http.sh" http://127.0.0.1:8788/health 60
+        working-directory: ${{ github.workspace }}/examples/express-starter
+
+      - name: Run flow test (add/search/context)
+        run: |
+          STARTER_BASE_URL=http://127.0.0.1:8788 \
+          STARTER_ADD_PATH=/memories/add \
+          STARTER_SEARCH_PATH=/memories/search \
+          STARTER_CONTEXT_PATH=/context \
+          node .github/scripts/run-starter-flow.mjs
+        working-directory: ${{ github.workspace }}
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          echo "---- Mock API log ----"
+          cat /tmp/mock-memories.log || true
+          echo "---- Express starter log ----"
+          cat /tmp/express-starter.log || true
 
   python-starter:
-    name: Python Starter
+    name: Python Starter Flow
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -58,10 +139,49 @@ jobs:
         with:
           python-version: "3.11"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Smoke test
+      - name: Compile checks
         run: |
           python -m py_compile app.py
           python -c "import app"
+
+      - name: Start mock memories API
+        run: |
+          MOCK_MEMORIES_API_KEY=mem_ci_test MOCK_MEMORIES_PORT=5010 \
+            node .github/scripts/mock-memories-sdk-server.mjs > /tmp/mock-memories.log 2>&1 &
+          echo $! > /tmp/mock-memories.pid
+          bash .github/scripts/wait-for-http.sh http://127.0.0.1:5010/health 60
+        working-directory: ${{ github.workspace }}
+
+      - name: Start Python starter
+        run: |
+          MEMORIES_API_KEY=mem_ci_test \
+          MEMORIES_BASE_URL=http://127.0.0.1:5010 \
+          MEMORIES_PROJECT_ID=ci-starter \
+          uvicorn app:app --host 127.0.0.1 --port 8001 > /tmp/python-starter.log 2>&1 &
+          echo $! > /tmp/python-starter.pid
+          bash "${{ github.workspace }}/.github/scripts/wait-for-http.sh" http://127.0.0.1:8001/health 60
+        working-directory: ${{ github.workspace }}/examples/python-starter
+
+      - name: Run flow test (add/search/context)
+        run: |
+          STARTER_BASE_URL=http://127.0.0.1:8001 \
+          STARTER_ADD_PATH=/memories/add \
+          STARTER_SEARCH_PATH=/memories/search \
+          STARTER_CONTEXT_PATH=/context \
+          node .github/scripts/run-starter-flow.mjs
+        working-directory: ${{ github.workspace }}
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          echo "---- Mock API log ----"
+          cat /tmp/mock-memories.log || true
+          echo "---- Python starter log ----"
+          cat /tmp/python-starter.log || true
