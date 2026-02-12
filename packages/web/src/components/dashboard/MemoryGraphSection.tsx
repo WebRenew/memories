@@ -1076,7 +1076,7 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
                     {graphCanvas.edges.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No relationships for this node.</p>
                     ) : (
-                      <div className="space-y-2 max-h-[210px] overflow-y-auto pr-1">
+                      <div className="space-y-2 max-h-[210px] overflow-y-auto overflow-x-hidden scrollbar-ghost pr-0">
                         {graphCanvas.edges.map((edge) => {
                           const isActive = selectedEdge?.id === edge.id
                           return (
@@ -1114,7 +1114,7 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
                     {explorerData.memories.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No memory links for this node.</p>
                     ) : (
-                      <div className="space-y-2 max-h-[330px] overflow-y-auto pr-1">
+                      <div className="space-y-2 max-h-[330px] overflow-y-auto overflow-x-hidden scrollbar-ghost pr-0">
                         {explorerData.memories.slice(0, 20).map((memory) => {
                           const isEvidence = Boolean(
                             selectedEdge?.evidenceMemoryId &&
