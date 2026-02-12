@@ -12,6 +12,10 @@ interface MigrateResult {
   skipped: number
   total: number
   direction: string
+  graph?: {
+    mapped: number
+    skipped: number
+  }
 }
 
 export function MemoryMigrationCard({ orgId }: MemoryMigrationCardProps) {
@@ -91,6 +95,12 @@ export function MemoryMigrationCard({ orgId }: MemoryMigrationCardProps) {
                 </span>
               )}
             </p>
+            {result.graph && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Graph mappings synced: {result.graph.mapped}
+                {result.graph.skipped > 0 ? ` (${result.graph.skipped} skipped)` : ""}
+              </p>
+            )}
           </div>
         )}
         {error && (
