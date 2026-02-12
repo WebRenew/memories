@@ -1,18 +1,18 @@
 ---
-title: BLACKBOX CLI
-description: Integrate memories.sh with BLACKBOX CLI via MCP.
+title: Blackbox CLI
+description: Integrate memories.sh with Blackbox CLI via MCP.
 ---
 
-[BLACKBOX CLI](https://docs.blackbox.ai/features/blackbox-cli/getting-started) is an open-source terminal coding assistant. You can connect it to memories.sh through MCP.
+[Blackbox CLI](https://docs.blackbox.ai/features/blackbox-cli/getting-started) is an open-source terminal coding assistant. You can connect it to memories.sh through MCP.
 
 ## Quick Setup (Local MCP)
 
-### 1. Install and configure BLACKBOX CLI
+### 1. Install and configure Blackbox CLI
 
 Follow the official setup:
 
-- [BLACKBOX CLI Getting Started](https://docs.blackbox.ai/features/blackbox-cli/getting-started)
-- [BLACKBOX CLI on GitHub](https://github.com/blackboxaicode/cli)
+- [Blackbox CLI Getting Started](https://docs.blackbox.ai/features/blackbox-cli/getting-started)
+- [Blackbox CLI on GitHub](https://github.com/blackboxaicode/cli)
 
 At minimum:
 
@@ -28,13 +28,13 @@ memories serve --sse --port 3030
 
 This exposes an MCP endpoint at `http://127.0.0.1:3030/mcp`.
 
-### 3. Add memories.sh MCP to BLACKBOX CLI
+### 3. Add memories.sh MCP to Blackbox CLI
 
 ```bash
 blackbox mcp add memories http://127.0.0.1:3030/mcp -t http
 ```
 
-### 4. Start BLACKBOX CLI
+### 4. Start Blackbox CLI
 
 ```bash
 blackbox
@@ -51,7 +51,7 @@ If you want BLACKBOX to use your hosted memories.sh account instead of a local M
 3. Configure an `Authorization: Bearer YOUR_API_KEY` header in your BLACKBOX MCP connection settings
 
 <Callout type="info">
-If your BLACKBOX CLI build does not expose custom-header flags in `blackbox mcp add`, use the local MCP setup above.
+If your Blackbox CLI build does not expose custom-header flags in `blackbox mcp add`, use the local MCP setup above.
 </Callout>
 
 ## Useful Prompts in BLACKBOX

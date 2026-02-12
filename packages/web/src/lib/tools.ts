@@ -91,7 +91,7 @@ export const TOOLS: Tool[] = [
     docsUrl: "/docs/integrations/opencode",
   },
   {
-    name: "BLACKBOX CLI",
+    name: "Blackbox CLI",
     logo: "/logos/blackbox.svg",
     slug: "blackbox",
     status: "Available",
