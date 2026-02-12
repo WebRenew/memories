@@ -44,8 +44,8 @@ export function Integrations() {
                   </span>
                   
                   {/* Icon - consistent height across all logos */}
-                  <div className="flex items-center h-[60px] mb-12 opacity-80 group-hover:opacity-100 relative z-10">
-                    <ToolLogo src={a.logo} alt={a.name} size="md-lg" />
+                  <div className="flex items-center h-[60px] mb-12 opacity-80 group-hover:opacity-100 relative z-10 -ml-4">
+                    <ToolLogo src={a.logo} alt={a.name} size="md-lg" className="object-left" />
                   </div>
                   
                   <h4 className="text-lg font-bold mb-3 tracking-tight text-foreground relative z-10">{a.name}</h4>
