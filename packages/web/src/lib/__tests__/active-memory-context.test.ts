@@ -10,10 +10,22 @@ interface Fixtures {
     turso_db_url: string | null
     turso_db_token: string | null
     turso_db_name: string | null
+    repo_workspace_routing_mode?: "auto" | "active_workspace" | null
   } | null
   membership: { role: "owner" | "admin" | "member" } | null
   organization: {
     id: string
+    slug: string | null
+    plan: string | null
+    subscription_status: "active" | "past_due" | "cancelled" | null
+    stripe_subscription_id: string | null
+    turso_db_url: string | null
+    turso_db_token: string | null
+    turso_db_name: string | null
+  } | null
+  organizationBySlug?: {
+    id: string
+    slug: string | null
     plan: string | null
     subscription_status: "active" | "past_due" | "cancelled" | null
     stripe_subscription_id: string | null
@@ -41,6 +53,13 @@ function makeClient(fixtures: Fixtures) {
           fixtures.membership
         ) {
           return { data: fixtures.membership, error: null }
+        }
+
+        if (table === "organizations" && filters.slug) {
+          return {
+            data: fixtures.organizationBySlug ?? null,
+            error: fixtures.organizationBySlug ? null : { message: "not found" },
+          }
         }
 
         if (table === "organizations" && filters.id) {
@@ -79,6 +98,7 @@ describe("resolveActiveMemoryContext", () => {
       },
       membership: null,
       organization: null,
+      organizationBySlug: null,
     })
 
     const context = await resolveActiveMemoryContext(client, "user-1")
@@ -100,6 +120,7 @@ describe("resolveActiveMemoryContext", () => {
       membership: { role: "member" },
       organization: {
         id: "org-1",
+        slug: "webrenew",
         plan: "pro",
         subscription_status: "active",
         stripe_subscription_id: "sub_123",
@@ -107,6 +128,7 @@ describe("resolveActiveMemoryContext", () => {
         turso_db_token: "org-token",
         turso_db_name: "org-db",
       },
+      organizationBySlug: null,
     })
 
     const context = await resolveActiveMemoryContext(client, "user-1")
@@ -130,6 +152,7 @@ describe("resolveActiveMemoryContext", () => {
       membership: { role: "owner" },
       organization: {
         id: "org-1",
+        slug: "webrenew",
         plan: "pro",
         subscription_status: "active",
         stripe_subscription_id: null,
@@ -137,6 +160,7 @@ describe("resolveActiveMemoryContext", () => {
         turso_db_token: null,
         turso_db_name: null,
       },
+      organizationBySlug: null,
     })
 
     const context = await resolveActiveMemoryContext(client, "user-1")
@@ -158,6 +182,7 @@ describe("resolveActiveMemoryContext", () => {
       membership: { role: "owner" },
       organization: {
         id: "org-1",
+        slug: "webrenew",
         plan: "pro",
         subscription_status: "active",
         stripe_subscription_id: null,
@@ -165,6 +190,7 @@ describe("resolveActiveMemoryContext", () => {
         turso_db_token: null,
         turso_db_name: null,
       },
+      organizationBySlug: null,
     })
 
     const context = await resolveActiveMemoryContext(client, "user-1", {
@@ -188,6 +214,7 @@ describe("resolveActiveMemoryContext", () => {
       membership: { role: "owner" },
       organization: {
         id: "org-1",
+        slug: "webrenew",
         plan: "pro",
         subscription_status: "past_due",
         stripe_subscription_id: "sub_123",
@@ -195,6 +222,7 @@ describe("resolveActiveMemoryContext", () => {
         turso_db_token: "org-token",
         turso_db_name: "org-db",
       },
+      organizationBySlug: null,
     })
 
     const context = await resolveActiveMemoryContext(client, "user-1")
@@ -214,6 +242,7 @@ describe("resolveActiveMemoryContext", () => {
       membership: { role: "owner" },
       organization: {
         id: "org-1",
+        slug: "webrenew",
         plan: "pro",
         subscription_status: "cancelled",
         stripe_subscription_id: null,
@@ -221,9 +250,111 @@ describe("resolveActiveMemoryContext", () => {
         turso_db_token: "org-token",
         turso_db_name: "org-db",
       },
+      organizationBySlug: null,
     })
 
     const context = await resolveActiveMemoryContext(client, "user-1")
     expect(context?.plan).toBe("free")
+  })
+
+  it("routes repo-scoped requests to matching org workspace in auto mode", async () => {
+    const client = makeClient({
+      user: {
+        id: "user-1",
+        current_org_id: null,
+        plan: "free",
+        turso_db_url: "libsql://user.turso.io",
+        turso_db_token: "user-token",
+        turso_db_name: "user-db",
+        repo_workspace_routing_mode: "auto",
+      },
+      membership: { role: "admin" },
+      organization: null,
+      organizationBySlug: {
+        id: "org-webrenew",
+        slug: "webrenew",
+        plan: "team",
+        subscription_status: "active",
+        stripe_subscription_id: "sub_123",
+        turso_db_url: "libsql://org-webrenew.turso.io",
+        turso_db_token: "org-token",
+        turso_db_name: "org-db",
+      },
+    })
+
+    const context = await resolveActiveMemoryContext(client, "user-1", {
+      projectId: "github.com/WebRenew/memories",
+    })
+
+    expect(context?.ownerType).toBe("organization")
+    expect(context?.orgId).toBe("org-webrenew")
+    expect(context?.turso_db_url).toBe("libsql://org-webrenew.turso.io")
+  })
+
+  it("routes non-org repo scopes to personal workspace in auto mode", async () => {
+    const client = makeClient({
+      user: {
+        id: "user-1",
+        current_org_id: "org-webrenew",
+        plan: "free",
+        turso_db_url: "libsql://user.turso.io",
+        turso_db_token: "user-token",
+        turso_db_name: "user-db",
+        repo_workspace_routing_mode: "auto",
+      },
+      membership: null,
+      organization: {
+        id: "org-webrenew",
+        slug: "webrenew",
+        plan: "team",
+        subscription_status: "active",
+        stripe_subscription_id: "sub_123",
+        turso_db_url: "libsql://org-webrenew.turso.io",
+        turso_db_token: "org-token",
+        turso_db_name: "org-db",
+      },
+      organizationBySlug: null,
+    })
+
+    const context = await resolveActiveMemoryContext(client, "user-1", {
+      projectId: "github.com/personal/repo",
+    })
+
+    expect(context?.ownerType).toBe("user")
+    expect(context?.orgId).toBeNull()
+    expect(context?.turso_db_url).toBe("libsql://user.turso.io")
+  })
+
+  it("uses active workspace when routing mode override is active_workspace", async () => {
+    const client = makeClient({
+      user: {
+        id: "user-1",
+        current_org_id: "org-webrenew",
+        plan: "free",
+        turso_db_url: "libsql://user.turso.io",
+        turso_db_token: "user-token",
+        turso_db_name: "user-db",
+        repo_workspace_routing_mode: "active_workspace",
+      },
+      membership: { role: "owner" },
+      organization: {
+        id: "org-webrenew",
+        slug: "webrenew",
+        plan: "pro",
+        subscription_status: "active",
+        stripe_subscription_id: "sub_123",
+        turso_db_url: "libsql://org-webrenew.turso.io",
+        turso_db_token: "org-token",
+        turso_db_name: "org-db",
+      },
+      organizationBySlug: null,
+    })
+
+    const context = await resolveActiveMemoryContext(client, "user-1", {
+      projectId: "github.com/personal/repo",
+    })
+
+    expect(context?.ownerType).toBe("organization")
+    expect(context?.orgId).toBe("org-webrenew")
   })
 })

@@ -81,6 +81,7 @@ async function withAuthenticatedTurso(
     ownerUserId: authResult.userId,
     apiKeyHash: authResult.apiKeyHash,
     tenantId,
+    projectId,
     endpoint: ENDPOINT,
     requestId,
   })

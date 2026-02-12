@@ -77,11 +77,13 @@ export async function POST(request: NextRequest) {
   try {
     const tenantId = parseTenantId({ tenant_id: parsedRequest.scope?.tenantId })
     const userId = parseUserId({ user_id: parsedRequest.scope?.userId })
+    const projectId = parsedRequest.scope?.projectId
 
     const turso = await resolveTursoForScope({
       ownerUserId: authResult.userId,
       apiKeyHash: authResult.apiKeyHash,
       tenantId,
+      projectId,
       endpoint: ENDPOINT,
       requestId,
     })

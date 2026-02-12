@@ -33,6 +33,7 @@ export default async function SettingsPage() {
           avatar_url: profile?.avatar_url ?? "",
           plan: profile?.plan ?? "free",
           embedding_model: profile?.embedding_model ?? null,
+          repo_workspace_routing_mode: profile?.repo_workspace_routing_mode ?? "auto",
           auth_providers: (user.identities || [])
             .map((identity) => identity.provider)
             .filter((provider): provider is string => Boolean(provider)),

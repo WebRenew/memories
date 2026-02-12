@@ -1,3 +1,5 @@
+type RepoWorkspaceRoutingMode = "auto" | "active_workspace"
+
 interface UserMemoryRow {
   id: string
   current_org_id: string | null
@@ -5,12 +7,14 @@ interface UserMemoryRow {
   turso_db_url: string | null
   turso_db_token: string | null
   turso_db_name: string | null
+  repo_workspace_routing_mode?: RepoWorkspaceRoutingMode | null
 }
 
 type OrgSubscriptionStatus = "active" | "past_due" | "cancelled" | null
 
 interface OrganizationMemoryRow {
   id: string
+  slug: string | null
   plan: string | null
   subscription_status: OrgSubscriptionStatus
   stripe_subscription_id: string | null
@@ -37,6 +41,8 @@ export interface ActiveMemoryContext {
 export interface ResolveActiveMemoryContextOptions {
   // If false, keeps organization context even when organization credentials are missing.
   fallbackToUserWithoutOrgCredentials?: boolean
+  // Optional project identifier (e.g. github.com/acme/repo) used for repo-aware workspace routing.
+  projectId?: string | null
 }
 
 function toUserContext(user: UserMemoryRow): ActiveMemoryContext {
@@ -64,13 +70,13 @@ function resolveOrganizationPlan(
     return "free"
   }
 
-  // Active subscription with a Stripe subscription ID is definitively pro
+  // Active subscription with a Stripe subscription ID is definitively pro.
   if (org.subscription_status === "active" && org.stripe_subscription_id) {
     return "pro"
   }
 
   // Org plan "team" or "enterprise" with active status is a paid tier,
-  // even without a dedicated stripe_subscription_id (e.g. owner's personal sub covers it)
+  // even without a dedicated stripe_subscription_id (e.g. owner's personal sub covers it).
   if (
     org.subscription_status === "active" &&
     (org.plan === "team" || org.plan === "enterprise")
@@ -79,6 +85,38 @@ function resolveOrganizationPlan(
   }
 
   return org.plan ?? fallbackPlan
+}
+
+function normalizeRoutingMode(value: string | null | undefined): RepoWorkspaceRoutingMode {
+  return value === "active_workspace" ? "active_workspace" : "auto"
+}
+
+function parseGithubOwner(projectId: string | null | undefined): string | null {
+  const raw = projectId?.trim()
+  if (!raw) return null
+
+  const normalized = raw
+    .replace(/^https?:\/\//i, "")
+    .replace(/^git@github\.com:/i, "github.com/")
+    .replace(/\.git$/i, "")
+    .toLowerCase()
+
+  const parts = normalized.split("/").filter(Boolean)
+  if (parts.length < 3 || parts[0] !== "github.com") return null
+  return parts[1] || null
+}
+
+function isMissingColumnError(error: unknown, columnName: string): boolean {
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message ?? "").toLowerCase()
+      : ""
+
+  return (
+    message.includes("column") &&
+    message.includes(columnName.toLowerCase()) &&
+    message.includes("does not exist")
+  )
 }
 
 export async function resolveActiveMemoryContext(
@@ -102,11 +140,23 @@ export async function resolveActiveMemoryContext(
   const fallbackToUserWithoutOrgCredentials =
     options.fallbackToUserWithoutOrgCredentials ?? false
 
-  const { data: userData, error: userError } = await supabase
+  let { data: userData, error: userError } = await supabase
     .from("users")
-    .select("id, current_org_id, plan, turso_db_url, turso_db_token, turso_db_name")
+    .select(
+      "id, current_org_id, plan, turso_db_url, turso_db_token, turso_db_name, repo_workspace_routing_mode"
+    )
     .eq("id", userId)
     .single()
+
+  if (userError && isMissingColumnError(userError, "repo_workspace_routing_mode")) {
+    const fallback = await supabase
+      .from("users")
+      .select("id, current_org_id, plan, turso_db_url, turso_db_token, turso_db_name")
+      .eq("id", userId)
+      .single()
+    userData = fallback.data
+    userError = fallback.error
+  }
 
   if (userError || !userData) {
     return null
@@ -114,6 +164,58 @@ export async function resolveActiveMemoryContext(
 
   const user = userData as UserMemoryRow
   const userContext = toUserContext(user)
+  const routingMode = normalizeRoutingMode(user.repo_workspace_routing_mode)
+  const projectOwner = parseGithubOwner(options.projectId)
+
+  // Default behavior: repo-scoped memories route by GitHub owner.
+  // If owner matches an org slug this user belongs to, route to org workspace.
+  // Otherwise route to personal workspace.
+  if (routingMode === "auto" && options.projectId?.trim()) {
+    if (!projectOwner) {
+      return userContext
+    }
+
+    const { data: orgBySlugData, error: orgBySlugError } = await supabase
+      .from("organizations")
+      .select(
+        "id, slug, plan, subscription_status, stripe_subscription_id, turso_db_url, turso_db_token, turso_db_name"
+      )
+      .eq("slug", projectOwner)
+      .single()
+
+    if (orgBySlugError || !orgBySlugData) {
+      return userContext
+    }
+
+    const orgBySlug = orgBySlugData as OrganizationMemoryRow
+    const { data: membershipBySlugData, error: membershipBySlugError } = await supabase
+      .from("org_members")
+      .select("role")
+      .eq("org_id", orgBySlug.id)
+      .eq("user_id", userId)
+      .single()
+
+    if (membershipBySlugError || !membershipBySlugData) {
+      return userContext
+    }
+
+    // Auto mode should never strand requests on an org without Turso credentials.
+    if (!orgBySlug.turso_db_url || !orgBySlug.turso_db_token) {
+      return userContext
+    }
+
+    const membership = membershipBySlugData as OrgMembershipRow
+    return {
+      ownerType: "organization",
+      userId,
+      orgId: orgBySlug.id,
+      orgRole: membership.role,
+      plan: resolveOrganizationPlan(orgBySlug, user.plan),
+      turso_db_url: orgBySlug.turso_db_url,
+      turso_db_token: orgBySlug.turso_db_token,
+      turso_db_name: orgBySlug.turso_db_name,
+    }
+  }
 
   if (!user.current_org_id) {
     return userContext
@@ -133,7 +235,7 @@ export async function resolveActiveMemoryContext(
   const { data: orgData, error: orgError } = await supabase
     .from("organizations")
     .select(
-      "id, plan, subscription_status, stripe_subscription_id, turso_db_url, turso_db_token, turso_db_name"
+      "id, slug, plan, subscription_status, stripe_subscription_id, turso_db_url, turso_db_token, turso_db_name"
     )
     .eq("id", user.current_org_id)
     .single()

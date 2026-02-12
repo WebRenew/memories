@@ -184,10 +184,11 @@ export async function resolveTursoForScope(params: {
   ownerUserId: string
   apiKeyHash: string
   tenantId: string | null
+  projectId?: string | null
   endpoint: string
   requestId: string
 }): Promise<ReturnType<typeof createTurso> | NextResponse> {
-  const { ownerUserId, apiKeyHash, tenantId, endpoint, requestId } = params
+  const { ownerUserId, apiKeyHash, tenantId, projectId, endpoint, requestId } = params
 
   if (tenantId) {
     try {
@@ -207,7 +208,10 @@ export async function resolveTursoForScope(params: {
   }
 
   const admin = createAdminClient()
-  const context = await resolveActiveMemoryContext(admin, ownerUserId)
+  const context = await resolveActiveMemoryContext(admin, ownerUserId, {
+    projectId: projectId ?? null,
+    fallbackToUserWithoutOrgCredentials: true,
+  })
   if (!context?.turso_db_url || !context?.turso_db_token) {
     return errorResponse(
       endpoint,

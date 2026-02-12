@@ -332,6 +332,16 @@ describe("updateUserSchema", () => {
     expect(result.success).toBe(false)
   })
 
+  it("should accept valid repo workspace routing mode", () => {
+    const result = updateUserSchema.safeParse({ repo_workspace_routing_mode: "active_workspace" })
+    expect(result.success).toBe(true)
+  })
+
+  it("should reject invalid repo workspace routing mode", () => {
+    const result = updateUserSchema.safeParse({ repo_workspace_routing_mode: "invalid-mode" })
+    expect(result.success).toBe(false)
+  })
+
   it("should reject name over 200 chars", () => {
     const result = updateUserSchema.safeParse({ name: "a".repeat(201) })
     expect(result.success).toBe(false)

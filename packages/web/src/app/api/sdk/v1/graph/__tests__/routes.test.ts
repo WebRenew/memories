@@ -298,6 +298,14 @@ describe("/api/sdk/v1/graph/*", () => {
         topNodesLimit: 7,
       })
     )
+    expect(mockResolveActiveMemoryContext).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.objectContaining({
+        projectId: "github.com/acme/repo",
+        fallbackToUserWithoutOrgCredentials: true,
+      })
+    )
   })
 
   it("graph/status GET parses query parameters", async () => {

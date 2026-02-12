@@ -303,6 +303,14 @@ describe("/api/mcp", () => {
       const body = await response.json()
       expect(body.result.content[0].text).toContain("Global Rules")
       expect(body.result.content[0].text).toContain("Project Rules")
+      expect(mockResolveActiveMemoryContext).toHaveBeenCalledWith(
+        expect.anything(),
+        "user-1",
+        expect.objectContaining({
+          projectId: "github.com/user/repo",
+          fallbackToUserWithoutOrgCredentials: true,
+        })
+      )
     })
 
     it("should include search results when query provided", async () => {

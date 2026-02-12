@@ -198,6 +198,14 @@ describe("/api/sdk/v1/context/get", () => {
         graphLimit: 12,
       })
     )
+    expect(mockResolveActiveMemoryContext).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.objectContaining({
+        projectId: "github.com/acme/platform",
+        fallbackToUserWithoutOrgCredentials: true,
+      })
+    )
   })
 
   it("routes to tenant database when tenantId is provided", async () => {

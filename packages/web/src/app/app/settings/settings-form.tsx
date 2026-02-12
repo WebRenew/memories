@@ -72,11 +72,13 @@ interface SettingsFormProps {
     avatar_url: string
     plan: string
     embedding_model: string | null
+    repo_workspace_routing_mode: RepoWorkspaceRoutingMode
     auth_providers: string[]
   }
 }
 
 type OAuthProvider = "github" | "google"
+type RepoWorkspaceRoutingMode = "auto" | "active_workspace"
 
 const OAUTH_PROVIDERS: Array<{ id: OAuthProvider; label: string; scopes: string }> = [
   { id: "github", label: "GitHub", scopes: "read:user user:email" },
@@ -88,6 +90,9 @@ export function SettingsForm({ profile }: SettingsFormProps) {
   const [name, setName] = useState(profile.name)
   const [embeddingModel, setEmbeddingModel] = useState(
     profile.embedding_model || "all-MiniLM-L6-v2"
+  )
+  const [repoRoutingMode, setRepoRoutingMode] = useState<RepoWorkspaceRoutingMode>(
+    profile.repo_workspace_routing_mode
   )
   const [saving, setSaving] = useState(false)
   const [showModelDropdown, setShowModelDropdown] = useState(false)
@@ -125,7 +130,11 @@ export function SettingsForm({ profile }: SettingsFormProps) {
       const res = await fetch("/api/user", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, embedding_model: embeddingModel }),
+        body: JSON.stringify({
+          name,
+          embedding_model: embeddingModel,
+          repo_workspace_routing_mode: repoRoutingMode,
+        }),
       })
 
       if (!res.ok) {
@@ -145,7 +154,8 @@ export function SettingsForm({ profile }: SettingsFormProps) {
 
   const hasChanges =
     name !== profile.name ||
-    embeddingModel !== (profile.embedding_model || "all-MiniLM-L6-v2")
+    embeddingModel !== (profile.embedding_model || "all-MiniLM-L6-v2") ||
+    repoRoutingMode !== profile.repo_workspace_routing_mode
 
   const effectiveProviders = (identities.length > 0
     ? identities.map((identity) => identity.provider)
@@ -401,6 +411,49 @@ export function SettingsForm({ profile }: SettingsFormProps) {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="border border-border bg-card/20 p-6 space-y-6">
+        <div>
+          <h2 className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground/60">
+            Repo Workspace Routing
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            Default mode routes GitHub org repos to org memory and personal repos to personal memory.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setRepoRoutingMode("auto")}
+            className={`text-left border px-4 py-3 transition-colors ${
+              repoRoutingMode === "auto"
+                ? "border-primary bg-primary/10"
+                : "border-border bg-muted/20 hover:bg-muted/30"
+            }`}
+          >
+            <p className="text-xs font-bold uppercase tracking-[0.1em]">Auto (Default)</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Org repo owner maps to org workspace; everything else maps to personal workspace.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setRepoRoutingMode("active_workspace")}
+            className={`text-left border px-4 py-3 transition-colors ${
+              repoRoutingMode === "active_workspace"
+                ? "border-primary bg-primary/10"
+                : "border-border bg-muted/20 hover:bg-muted/30"
+            }`}
+          >
+            <p className="text-xs font-bold uppercase tracking-[0.1em]">Use Active Workspace</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Always route to your currently selected workspace, ignoring repo owner.
+            </p>
+          </button>
+        </div>
       </div>
 
       {/* Connected Accounts */}

@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
       ownerUserId: authResult.userId,
       apiKeyHash: authResult.apiKeyHash,
       tenantId,
+      projectId,
       endpoint: ENDPOINT,
       requestId,
     })

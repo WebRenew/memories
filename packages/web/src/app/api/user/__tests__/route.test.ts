@@ -61,6 +61,7 @@ describe("/api/user", () => {
                 plan: "free",
                 embedding_model: "all-MiniLM-L6-v2",
                 current_org_id: "org-1",
+                repo_workspace_routing_mode: "auto",
               },
               error: null,
             }),
@@ -73,6 +74,7 @@ describe("/api/user", () => {
       const body = await response.json()
       expect(body.user.id).toBe("user-1")
       expect(body.user.current_org_id).toBe("org-1")
+      expect(body.user.repo_workspace_routing_mode).toBe("auto")
     })
   })
 
@@ -168,6 +170,25 @@ describe("/api/user", () => {
       const response = await PATCH(makePatchRequest({ current_org_id: null }))
       expect(response.status).toBe(200)
       expect(mockUpdate).toHaveBeenCalledWith({ current_org_id: null })
+    })
+
+    it("updates repo workspace routing mode", async () => {
+      mockAuthenticateRequest.mockResolvedValue({ userId: "user-1", email: "u@example.com" })
+
+      const mockUpdate = vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      })
+
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table === "users") {
+          return { update: mockUpdate }
+        }
+        return {}
+      })
+
+      const response = await PATCH(makePatchRequest({ repo_workspace_routing_mode: "active_workspace" }))
+      expect(response.status).toBe(200)
+      expect(mockUpdate).toHaveBeenCalledWith({ repo_workspace_routing_mode: "active_workspace" })
     })
   })
 })

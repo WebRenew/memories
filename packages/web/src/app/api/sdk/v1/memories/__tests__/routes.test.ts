@@ -205,6 +205,14 @@ describe("/api/sdk/v1/memories/*", () => {
         userId: "end-user-1",
       })
     )
+    expect(mockResolveActiveMemoryContext).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.objectContaining({
+        projectId: "github.com/acme/platform",
+        fallbackToUserWithoutOrgCredentials: true,
+      })
+    )
   })
 
   it("search returns results envelope", async () => {

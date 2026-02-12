@@ -152,7 +152,9 @@ async function authenticateAndGetTurso(apiKey: string): Promise<AuthSuccess | Au
     }
   }
 
-  const context = await resolveActiveMemoryContext(admin, user.id)
+  const context = await resolveActiveMemoryContext(admin, user.id, {
+    fallbackToUserWithoutOrgCredentials: true,
+  })
   if (!context?.turso_db_url || !context?.turso_db_token) {
     return {
       error: apiError({
@@ -448,6 +450,7 @@ export async function POST(request: NextRequest) {
   
   let turso: ReturnType<typeof createTurso>
   let apiKeyHash: string | null = null
+  let ownerUserId: string | null = null
   let controller: ReadableStreamDefaultController<Uint8Array> | null = null
   let activeSessionId: string | null = null
 
@@ -459,6 +462,7 @@ export async function POST(request: NextRequest) {
     touchConnection(sessionId)
     turso = conn.turso
     apiKeyHash = conn.apiKeyHash
+    ownerUserId = conn.userId
     controller = conn.controller
     activeSessionId = sessionId
   } else {
@@ -486,6 +490,7 @@ export async function POST(request: NextRequest) {
     }
     turso = auth.turso
     apiKeyHash = auth.apiKeyHash
+    ownerUserId = auth.user.id
   }
 
   let body: unknown
@@ -587,6 +592,11 @@ export async function POST(request: NextRequest) {
 
         try {
           const tenantId = parseTenantId(args)
+          const projectId =
+            typeof args.project_id === "string" && args.project_id.trim().length > 0
+              ? args.project_id
+              : null
+
           if (tenantId && !apiKeyHash) {
             throw new ToolExecutionError(
               apiError({
@@ -598,9 +608,45 @@ export async function POST(request: NextRequest) {
               })
             )
           }
-          const toolTurso = tenantId
-            ? await resolveTenantTurso(apiKeyHash as string, tenantId)
-            : turso
+          if (!ownerUserId) {
+            throw new ToolExecutionError(
+              apiError({
+                type: "internal_error",
+                code: "USER_CONTEXT_MISSING",
+                message: "User context is unavailable for this request",
+                status: 500,
+                retryable: true,
+              })
+            )
+          }
+
+          let toolTurso = turso
+          if (tenantId) {
+            toolTurso = await resolveTenantTurso(apiKeyHash as string, tenantId)
+          } else if (projectId) {
+            const admin = createAdminClient()
+            const context = await resolveActiveMemoryContext(admin, ownerUserId, {
+              projectId,
+              fallbackToUserWithoutOrgCredentials: true,
+            })
+
+            if (!context?.turso_db_url || !context?.turso_db_token) {
+              throw new ToolExecutionError(
+                apiError({
+                  type: "not_found_error",
+                  code: "DATABASE_NOT_CONFIGURED",
+                  message: "Database not configured. Visit memories.sh/app to set up.",
+                  status: 400,
+                  retryable: false,
+                })
+              )
+            }
+
+            toolTurso = createTurso({
+              url: context.turso_db_url,
+              authToken: context.turso_db_token,
+            })
+          }
           await ensureMemoryUserIdSchema(toolTurso)
           result = await executeMemoryTool(toolName, args, toolTurso, {
             responseSchemaVersion: MCP_RESPONSE_SCHEMA_VERSION,

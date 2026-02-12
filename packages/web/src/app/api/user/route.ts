@@ -4,6 +4,29 @@ import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 import { parseBody, updateUserSchema } from "@/lib/validations"
 
+type UserProfileRow = {
+  id: string
+  email: string | null
+  name: string | null
+  plan: string | null
+  embedding_model: string | null
+  current_org_id: string | null
+  repo_workspace_routing_mode?: "auto" | "active_workspace" | null
+}
+
+function isMissingColumnError(error: unknown, columnName: string): boolean {
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message ?? "").toLowerCase()
+      : ""
+
+  return (
+    message.includes("column") &&
+    message.includes(columnName.toLowerCase()) &&
+    message.includes("does not exist")
+  )
+}
+
 export async function GET(request: Request) {
   const auth = await authenticateRequest(request)
   if (!auth) {
@@ -14,17 +37,34 @@ export async function GET(request: Request) {
   if (rateLimited) return rateLimited
 
   const admin = createAdminClient()
-  const { data: profile, error } = await admin
+  const primaryQuery = await admin
     .from("users")
-    .select("id, email, name, plan, embedding_model, current_org_id")
+    .select("id, email, name, plan, embedding_model, current_org_id, repo_workspace_routing_mode")
     .eq("id", auth.userId)
     .single()
+  let profile = primaryQuery.data as UserProfileRow | null
+  let error = primaryQuery.error
+
+  if (error && isMissingColumnError(error, "repo_workspace_routing_mode")) {
+    const fallback = await admin
+      .from("users")
+      .select("id, email, name, plan, embedding_model, current_org_id")
+      .eq("id", auth.userId)
+      .single()
+    profile = fallback.data as UserProfileRow | null
+    error = fallback.error
+  }
 
   if (error || !profile) {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
 
-  return NextResponse.json({ user: profile })
+  return NextResponse.json({
+    user: {
+      ...profile,
+      repo_workspace_routing_mode: profile.repo_workspace_routing_mode ?? "auto",
+    },
+  })
 }
 
 export async function PATCH(request: Request) {
@@ -48,6 +88,10 @@ export async function PATCH(request: Request) {
 
   if (parsed.data.embedding_model !== undefined) {
     updates.embedding_model = parsed.data.embedding_model
+  }
+
+  if (parsed.data.repo_workspace_routing_mode !== undefined) {
+    updates.repo_workspace_routing_mode = parsed.data.repo_workspace_routing_mode
   }
 
   if (parsed.data.current_org_id !== undefined) {
