@@ -168,7 +168,7 @@ export async function PATCH(
   const rateLimited = await checkRateLimit(apiRateLimit, user.id)
   if (rateLimited) return rateLimited
 
-  const parsed = parseBody(updateMemberRoleSchema, await request.json())
+  const parsed = parseBody(updateMemberRoleSchema, await request.json().catch(() => ({})))
   if (!parsed.success) return parsed.response
   const { userId, role } = parsed.data
 

@@ -72,7 +72,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
   }
 
-  const parsed = parseBody(updateOrgSchema, await request.json())
+  const parsed = parseBody(updateOrgSchema, await request.json().catch(() => ({})))
   if (!parsed.success) return parsed.response
 
   const updates: Record<string, string> = {}

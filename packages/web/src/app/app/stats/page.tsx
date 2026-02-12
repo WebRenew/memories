@@ -79,6 +79,17 @@ export default async function StatsPage() {
   try {
     const { createClient: createTurso } = await import("@libsql/client")
     const turso = createTurso({ url: context.turso_db_url!, authToken: context.turso_db_token! })
+    const withStatsFallback = async (
+      queryName: string,
+      query: ReturnType<typeof turso.execute>
+    ): Promise<Awaited<ReturnType<typeof turso.execute>> | null> => {
+      try {
+        return await query
+      } catch (error) {
+        console.error(`Stats query failed (${queryName}):`, error)
+        return null
+      }
+    }
 
     const [
       totalResult,
@@ -93,27 +104,27 @@ export default async function StatsPage() {
       scopeResult,
     ] = await Promise.all([
       // Total memories
-      turso.execute("SELECT COUNT(*) as count FROM memories WHERE deleted_at IS NULL"),
+      withStatsFallback("total", turso.execute("SELECT COUNT(*) as count FROM memories WHERE deleted_at IS NULL")),
       // Rule count
-      turso.execute("SELECT COUNT(*) as count FROM memories WHERE deleted_at IS NULL AND type = 'rule'"),
+      withStatsFallback("rule_count", turso.execute("SELECT COUNT(*) as count FROM memories WHERE deleted_at IS NULL AND type = 'rule'")),
       // Unique projects
-      turso.execute("SELECT COUNT(DISTINCT project_id) as count FROM memories WHERE deleted_at IS NULL AND project_id IS NOT NULL"),
+      withStatsFallback("project_count", turso.execute("SELECT COUNT(DISTINCT project_id) as count FROM memories WHERE deleted_at IS NULL AND project_id IS NOT NULL")),
       // This week
-      turso.execute("SELECT COUNT(*) as count FROM memories WHERE deleted_at IS NULL AND created_at >= datetime('now', '-7 days')"),
+      withStatsFallback("this_week", turso.execute("SELECT COUNT(*) as count FROM memories WHERE deleted_at IS NULL AND created_at >= datetime('now', '-7 days')")),
       // Today
-      turso.execute("SELECT COUNT(*) as count FROM memories WHERE deleted_at IS NULL AND DATE(created_at) = DATE('now')"),
+      withStatsFallback("today", turso.execute("SELECT COUNT(*) as count FROM memories WHERE deleted_at IS NULL AND DATE(created_at) = DATE('now')")),
       // By type
-      turso.execute("SELECT type, COUNT(*) as count FROM memories WHERE deleted_at IS NULL GROUP BY type ORDER BY count DESC"),
+      withStatsFallback("by_type", turso.execute("SELECT type, COUNT(*) as count FROM memories WHERE deleted_at IS NULL GROUP BY type ORDER BY count DESC")),
       // By day and type (last 14 days)
-      turso.execute(`
+      withStatsFallback("by_day_and_type", turso.execute(`
         SELECT DATE(created_at) as date, type, COUNT(*) as count 
         FROM memories 
         WHERE deleted_at IS NULL AND created_at >= datetime('now', '-14 days')
         GROUP BY DATE(created_at), type 
         ORDER BY date DESC, type
-      `),
+      `)),
       // By project (top 10)
-      turso.execute(`
+      withStatsFallback("by_project", turso.execute(`
         SELECT 
           project_id,
           scope,
@@ -127,45 +138,45 @@ export default async function StatsPage() {
         GROUP BY COALESCE(project_id, 'global'), scope
         ORDER BY count DESC
         LIMIT 10
-      `),
+      `)),
       // Recent memories (last 10)
-      turso.execute(`
+      withStatsFallback("recent", turso.execute(`
         SELECT id, content, type, scope, project_id, created_at 
         FROM memories 
         WHERE deleted_at IS NULL 
         ORDER BY created_at DESC 
         LIMIT 10
-      `),
+      `)),
       // Global vs Project breakdown
-      turso.execute(`
+      withStatsFallback("global_vs_project", turso.execute(`
         SELECT scope, COUNT(*) as count 
         FROM memories 
         WHERE deleted_at IS NULL 
         GROUP BY scope
-      `),
+      `)),
     ])
 
-    const scopeCounts = scopeResult.rows.reduce((acc, r) => {
+    const scopeCounts = (scopeResult?.rows ?? []).reduce((acc, r) => {
       acc[String(r.scope)] = Number(r.count)
       return acc
     }, {} as Record<string, number>)
 
     stats = {
-      total: Number(totalResult.rows[0]?.count ?? 0),
-      ruleCount: Number(ruleCountResult.rows[0]?.count ?? 0),
-      projectCount: Number(projectCountResult.rows[0]?.count ?? 0),
-      thisWeek: Number(thisWeekResult.rows[0]?.count ?? 0),
-      today: Number(todayResult.rows[0]?.count ?? 0),
-      byType: typeResult.rows.map((r) => ({
+      total: Number(totalResult?.rows[0]?.count ?? 0),
+      ruleCount: Number(ruleCountResult?.rows[0]?.count ?? 0),
+      projectCount: Number(projectCountResult?.rows[0]?.count ?? 0),
+      thisWeek: Number(thisWeekResult?.rows[0]?.count ?? 0),
+      today: Number(todayResult?.rows[0]?.count ?? 0),
+      byType: (typeResult?.rows ?? []).map((r) => ({
         type: String(r.type ?? "note"),
         count: Number(r.count),
       })),
-      byDayAndType: dailyTypeResult.rows.map((r) => ({
+      byDayAndType: (dailyTypeResult?.rows ?? []).map((r) => ({
         date: String(r.date),
         type: String(r.type ?? "note"),
         count: Number(r.count),
       })),
-      byProject: projectResult.rows.map((r) => ({
+      byProject: (projectResult?.rows ?? []).map((r) => ({
         project_id: r.project_id ? String(r.project_id) : null,
         scope: String(r.scope),
         count: Number(r.count),
@@ -174,7 +185,7 @@ export default async function StatsPage() {
         decision_count: Number(r.decision_count ?? 0),
         note_count: Number(r.note_count ?? 0),
       })),
-      recent: recentResult.rows.map((r) => ({
+      recent: (recentResult?.rows ?? []).map((r) => ({
         id: String(r.id),
         content: String(r.content),
         type: String(r.type ?? "note"),

@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   const rateLimited = await checkRateLimit(apiRateLimit, auth.userId)
   if (rateLimited) return rateLimited
 
-  const parsed = parseBody(createOrgSchema, await request.json())
+  const parsed = parseBody(createOrgSchema, await request.json().catch(() => ({})))
   if (!parsed.success) return parsed.response
   const { name } = parsed.data
 

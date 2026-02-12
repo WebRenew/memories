@@ -32,7 +32,8 @@ export async function GET() {
     )
 
     return NextResponse.json({ memories: result.rows })
-  } catch {
+  } catch (err) {
+    console.error("Failed to list memories:", err)
     return NextResponse.json({ error: "Failed to connect to Turso" }, { status: 500 })
   }
 }
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
   const rateLimited = await checkRateLimit(apiRateLimit, user.id)
   if (rateLimited) return rateLimited
 
-  const parsed = parseBody(createMemorySchema, await request.json())
+  const parsed = parseBody(createMemorySchema, await request.json().catch(() => ({})))
   if (!parsed.success) return parsed.response
   const { content, type, scope, tags, project_id, paths, category, metadata } = parsed.data
 
@@ -102,7 +103,7 @@ export async function PATCH(request: NextRequest) {
   const rateLimited = await checkRateLimit(apiRateLimit, user.id)
   if (rateLimited) return rateLimited
 
-  const parsed = parseBody(updateMemorySchema, await request.json())
+  const parsed = parseBody(updateMemorySchema, await request.json().catch(() => ({})))
   if (!parsed.success) return parsed.response
   const { id, content, tags, type, paths, category, metadata } = parsed.data
 
@@ -153,7 +154,8 @@ export async function PATCH(request: NextRequest) {
     })
 
     return NextResponse.json({ success: true })
-  } catch {
+  } catch (err) {
+    console.error("Failed to update memory:", err)
     return NextResponse.json({ error: "Failed to update memory" }, { status: 500 })
   }
 }
@@ -169,7 +171,7 @@ export async function DELETE(request: NextRequest) {
   const rateLimited = await checkRateLimit(apiRateLimit, user.id)
   if (rateLimited) return rateLimited
 
-  const parsed = parseBody(deleteMemorySchema, await request.json())
+  const parsed = parseBody(deleteMemorySchema, await request.json().catch(() => ({})))
   if (!parsed.success) return parsed.response
   const { id } = parsed.data
 
@@ -192,7 +194,8 @@ export async function DELETE(request: NextRequest) {
     })
 
     return NextResponse.json({ success: true })
-  } catch {
+  } catch (err) {
+    console.error("Failed to delete memory:", err)
     return NextResponse.json({ error: "Failed to delete memory" }, { status: 500 })
   }
 }

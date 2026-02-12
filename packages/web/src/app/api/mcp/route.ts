@@ -488,10 +488,61 @@ export async function POST(request: NextRequest) {
     apiKeyHash = auth.apiKeyHash
   }
 
+  let body: unknown
   try {
-    const body = await request.json()
-    const { method, params, id } = body
+    body = await request.json()
+  } catch {
+    return jsonRpcErrorResponse(
+      null,
+      -32700,
+      apiError({
+        type: "validation_error",
+        code: "PARSE_ERROR",
+        message: "Invalid JSON payload",
+        status: 400,
+        retryable: false,
+      }),
+      400
+    )
+  }
 
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return jsonRpcErrorResponse(
+      null,
+      -32600,
+      apiError({
+        type: "validation_error",
+        code: "INVALID_REQUEST",
+        message: "Invalid JSON-RPC request",
+        status: 400,
+        retryable: false,
+      }),
+      400
+    )
+  }
+
+  const { method, params, id } = body as {
+    method?: unknown
+    params?: unknown
+    id?: unknown
+  }
+
+  if (typeof method !== "string" || method.length === 0) {
+    return jsonRpcErrorResponse(
+      id ?? null,
+      -32600,
+      apiError({
+        type: "validation_error",
+        code: "INVALID_REQUEST",
+        message: "JSON-RPC method must be a non-empty string",
+        status: 400,
+        retryable: false,
+      }),
+      400
+    )
+  }
+
+  try {
     let result: unknown
 
     switch (method) {
@@ -514,9 +565,24 @@ export async function POST(request: NextRequest) {
       }
 
       case "tools/call": {
-        const toolName = params?.name
-        const args = (params?.arguments && typeof params.arguments === "object")
-          ? (params.arguments as Record<string, unknown>)
+        const parsedParams = (params && typeof params === "object") ? (params as Record<string, unknown>) : {}
+        const toolName = typeof parsedParams.name === "string" ? parsedParams.name : ""
+        if (!toolName) {
+          return jsonRpcErrorResponse(
+            id,
+            -32602,
+            apiError({
+              type: "validation_error",
+              code: "INVALID_TOOL_NAME",
+              message: "tools/call requires a string name",
+              status: 400,
+              retryable: false,
+            }),
+            400
+          )
+        }
+        const args = (parsedParams.arguments && typeof parsedParams.arguments === "object")
+          ? (parsedParams.arguments as Record<string, unknown>)
           : {}
 
         try {
@@ -540,7 +606,7 @@ export async function POST(request: NextRequest) {
             responseSchemaVersion: MCP_RESPONSE_SCHEMA_VERSION,
           })
         } catch (err) {
-          const toolError = toToolExecutionError(err, typeof toolName === "string" ? toolName : undefined)
+          const toolError = toToolExecutionError(err, toolName)
           return jsonRpcErrorResponse(id, toolError.rpcCode, toolError.detail)
         }
         break

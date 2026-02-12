@@ -82,7 +82,7 @@ export async function POST(
     return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
   }
 
-  const parsed = parseBody(createInviteSchema, await request.json())
+  const parsed = parseBody(createInviteSchema, await request.json().catch(() => ({})))
   if (!parsed.success) return parsed.response
   const { email, role } = parsed.data
 

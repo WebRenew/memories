@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const rateLimited = await checkRateLimit(apiRateLimit, user.id)
   if (rateLimited) return rateLimited
 
-  const parsed = parseBody(acceptInviteSchema, await request.json())
+  const parsed = parseBody(acceptInviteSchema, await request.json().catch(() => ({})))
   if (!parsed.success) return parsed.response
   const { token, billing } = parsed.data
 

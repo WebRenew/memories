@@ -54,7 +54,8 @@ export async function GET() {
         count: Number(r.count),
       })),
     })
-  } catch {
+  } catch (error) {
+    console.error("Failed to load memory stats:", error)
     return NextResponse.json({ error: "Failed to connect to Turso" }, { status: 500 })
   }
 }
