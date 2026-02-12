@@ -1,13 +1,69 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { existsSync } from "node:fs";
-import { getDb, getConfigDir } from "../lib/db.js";
+import { getDb, getConfigDir, repairFtsSchema } from "../lib/db.js";
 import { getProjectId } from "../lib/git.js";
 import { join } from "node:path";
+import type { Client } from "@libsql/client";
 
 interface Check {
   name: string;
   run: () => Promise<{ ok: boolean; message: string }>;
+}
+
+const REQUIRED_FTS_TRIGGERS = ["memories_ai", "memories_ad", "memories_au"] as const;
+
+export async function checkWritePath(db: Client): Promise<{ ok: boolean; message: string }> {
+  const triggerResult = await db.execute(
+    `SELECT name FROM sqlite_master
+     WHERE type = 'trigger'
+       AND name IN ('memories_ai', 'memories_ad', 'memories_au')`,
+  );
+  const present = new Set(triggerResult.rows.map((row) => String(row.name)));
+  const missing = REQUIRED_FTS_TRIGGERS.filter((name) => !present.has(name));
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      message: `Missing FTS trigger(s): ${missing.join(", ")}`,
+    };
+  }
+
+  const probeId = `doctor_probe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    // Insert as soft-deleted first. If a subsequent update fails, this avoids leaving an active probe memory.
+    await db.execute({
+      sql: "INSERT INTO memories (id, content, scope, type, deleted_at) VALUES (?, ?, 'global', 'note', datetime('now'))",
+      args: [probeId, "doctor write probe"],
+    });
+
+    // Bring active, then soft-delete again to exercise the same trigger path used by `forget`.
+    await db.execute({
+      sql: "UPDATE memories SET deleted_at = NULL, updated_at = datetime('now') WHERE id = ?",
+      args: [probeId],
+    });
+    await db.execute({
+      sql: "UPDATE memories SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ?",
+      args: [probeId],
+    });
+    await db.execute({
+      sql: "DELETE FROM memories WHERE id = ?",
+      args: [probeId],
+    });
+
+    return { ok: true, message: "Insert/update/delete trigger path is healthy" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, message: `Write probe failed: ${message}` };
+  } finally {
+    try {
+      await db.execute({
+        sql: "DELETE FROM memories WHERE id = ?",
+        args: [probeId],
+      });
+    } catch {
+      // Best-effort cleanup only.
+    }
+  }
 }
 
 export const doctorCommand = new Command("doctor")
@@ -83,6 +139,13 @@ export const doctorCommand = new Command("doctor")
           },
         },
         {
+          name: "Write path",
+          run: async () => {
+            const db = await getDb();
+            return checkWritePath(db);
+          },
+        },
+        {
           name: "Git project detection",
           run: async () => {
             const projectId = getProjectId();
@@ -142,12 +205,13 @@ export const doctorCommand = new Command("doctor")
         );
         console.log(`  ${chalk.green("✓")} Purged ${purged.rowsAffected} soft-deleted records`);
 
-        // Rebuild FTS
+        // Hard-repair FTS table + triggers and rebuild index from active records.
         try {
-          await db.execute("INSERT INTO memories_fts(memories_fts) VALUES('rebuild')");
-          console.log(`  ${chalk.green("✓")} Rebuilt FTS index`);
-        } catch {
-          console.log(`  ${chalk.yellow("⚠")} Could not rebuild FTS index`);
+          await repairFtsSchema(db);
+          console.log(`  ${chalk.green("✓")} Repaired FTS schema and rebuilt index`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Unknown error";
+          console.log(`  ${chalk.yellow("⚠")} Could not repair FTS schema: ${message}`);
         }
       }
 

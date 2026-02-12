@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 process.env.MEMORIES_DATA_DIR = mkdtempSync(join(tmpdir(), "memories-doctor-test-"));
 
 import { addMemory, forgetMemory } from "../lib/memory.js";
-import { getDb } from "../lib/db.js";
+import { getDb, repairFtsSchema } from "../lib/db.js";
+import { checkWritePath } from "./doctor.js";
 
 describe("doctor checks", () => {
   beforeAll(async () => {
@@ -49,5 +50,25 @@ describe("doctor checks", () => {
       "SELECT COUNT(*) as count FROM memories WHERE deleted_at IS NOT NULL",
     );
     expect(Number(result.rows[0]?.count)).toBeGreaterThan(0);
+  });
+
+  it("should pass write path probe", async () => {
+    const db = await getDb();
+    const result = await checkWritePath(db);
+    expect(result.ok).toBe(true);
+  });
+
+  it("should repair missing FTS triggers", async () => {
+    const db = await getDb();
+    await db.execute("DROP TRIGGER IF EXISTS memories_au");
+
+    const before = await checkWritePath(db);
+    expect(before.ok).toBe(false);
+    expect(before.message).toContain("Missing FTS trigger");
+
+    await repairFtsSchema(db);
+
+    const after = await checkWritePath(db);
+    expect(after.ok).toBe(true);
   });
 });

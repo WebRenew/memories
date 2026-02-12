@@ -4,6 +4,42 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
+interface FtsTriggerDefinition {
+  name: string;
+  createSql: string;
+}
+
+const FTS_TRIGGER_DEFINITIONS: FtsTriggerDefinition[] = [
+  {
+    name: "memories_ai",
+    createSql: `
+      CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories
+      WHEN NEW.deleted_at IS NULL
+      BEGIN
+        INSERT INTO memories_fts(rowid, content, tags) VALUES (NEW.rowid, NEW.content, NEW.tags);
+      END
+    `,
+  },
+  {
+    name: "memories_ad",
+    createSql: `
+      CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, rowid, content, tags) VALUES('delete', OLD.rowid, OLD.content, OLD.tags);
+      END
+    `,
+  },
+  {
+    name: "memories_au",
+    createSql: `
+      CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, rowid, content, tags) VALUES('delete', OLD.rowid, OLD.content, OLD.tags);
+        INSERT INTO memories_fts(rowid, content, tags)
+          SELECT NEW.rowid, NEW.content, NEW.tags WHERE NEW.deleted_at IS NULL;
+      END
+    `,
+  },
+];
+
 function resolveConfigDir(): string {
   return process.env.MEMORIES_DATA_DIR ?? join(homedir(), ".config", "memories");
 }
@@ -209,46 +245,7 @@ async function runMigrations(db: Client): Promise<void> {
     )`
   );
 
-  // FTS5 virtual table for full-text search
-  // We use content_rowid to link to the memories table
-  await db.execute(
-    `CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
-      content,
-      tags,
-      content='memories',
-      content_rowid='rowid'
-    )`
-  );
-
-  // Triggers to keep FTS in sync with memories table
-  // Drop and recreate to ensure latest logic (fixes soft-delete FTS leak)
-  await db.execute(`DROP TRIGGER IF EXISTS memories_ai`);
-  await db.execute(`DROP TRIGGER IF EXISTS memories_ad`);
-  await db.execute(`DROP TRIGGER IF EXISTS memories_au`);
-
-  // Only index non-deleted memories
-  await db.execute(`
-    CREATE TRIGGER memories_ai AFTER INSERT ON memories
-    WHEN NEW.deleted_at IS NULL
-    BEGIN
-      INSERT INTO memories_fts(rowid, content, tags) VALUES (NEW.rowid, NEW.content, NEW.tags);
-    END
-  `);
-
-  await db.execute(`
-    CREATE TRIGGER memories_ad AFTER DELETE ON memories BEGIN
-      INSERT INTO memories_fts(memories_fts, rowid, content, tags) VALUES('delete', OLD.rowid, OLD.content, OLD.tags);
-    END
-  `);
-
-  // On update: always remove old entry, only re-insert if not soft-deleted
-  await db.execute(`
-    CREATE TRIGGER memories_au AFTER UPDATE ON memories BEGIN
-      INSERT INTO memories_fts(memories_fts, rowid, content, tags) VALUES('delete', OLD.rowid, OLD.content, OLD.tags);
-      INSERT INTO memories_fts(rowid, content, tags)
-        SELECT NEW.rowid, NEW.content, NEW.tags WHERE NEW.deleted_at IS NULL;
-    END
-  `);
+  await ensureFtsSchema(db);
 
   // Note: We do NOT run FTS 'rebuild' here because content-sync FTS5 rebuild
   // re-indexes ALL rows from the source table (including soft-deleted ones).
@@ -297,6 +294,53 @@ async function runMigrations(db: Client): Promise<void> {
   } catch {
     // Index might already exist
   }
+}
+
+async function createFtsTable(db: Client): Promise<void> {
+  // FTS5 virtual table for full-text search.
+  // We use content_rowid to link to the memories table.
+  await db.execute(
+    `CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+      content,
+      tags,
+      content='memories',
+      content_rowid='rowid'
+    )`
+  );
+}
+
+async function ensureFtsTriggers(db: Client): Promise<void> {
+  // Use IF NOT EXISTS so parallel CLI processes don't fail startup when both run migrations.
+  for (const trigger of FTS_TRIGGER_DEFINITIONS) {
+    await db.execute(trigger.createSql);
+  }
+}
+
+async function dropFtsTriggers(db: Client): Promise<void> {
+  for (const trigger of FTS_TRIGGER_DEFINITIONS) {
+    await db.execute(`DROP TRIGGER IF EXISTS ${trigger.name}`);
+  }
+}
+
+/**
+ * Ensure FTS schema exists without destructive changes.
+ * Safe to call during normal startup migrations.
+ */
+export async function ensureFtsSchema(db: Client): Promise<void> {
+  await createFtsTable(db);
+  await ensureFtsTriggers(db);
+}
+
+/**
+ * Hard-reset FTS table and triggers, then rebuild index from active rows.
+ * Use this only for repair flows (e.g. `memories doctor --fix`).
+ */
+export async function repairFtsSchema(db: Client): Promise<void> {
+  await dropFtsTriggers(db);
+  await db.execute("DROP TABLE IF EXISTS memories_fts");
+  await createFtsTable(db);
+  await ensureFtsTriggers(db);
+  await db.execute("INSERT INTO memories_fts(memories_fts) VALUES('rebuild')");
 }
 
 async function ensureGraphSchema(db: Client): Promise<void> {

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 // Must be set before any db import
 process.env.MEMORIES_DATA_DIR = mkdtempSync(join(tmpdir(), "memories-db-test-"));
 
-import { getDb, resetDb } from "./db.js";
+import { getDb, resetDb, ensureFtsSchema, repairFtsSchema } from "./db.js";
 
 const GRAPH_TABLES = ["graph_nodes", "graph_edges", "memory_node_links"];
 const GRAPH_INDEXES = [
@@ -19,6 +19,8 @@ const GRAPH_INDEXES = [
   "idx_memory_node_links_node_id",
   "idx_memory_node_links_memory_id",
 ];
+
+const FTS_TRIGGERS = ["memories_ai", "memories_ad", "memories_au"];
 
 describe("db graph migrations", () => {
   beforeAll(async () => {
@@ -78,5 +80,36 @@ describe("db graph migrations", () => {
     });
 
     expect(Number(result.rows[0]?.count)).toBe(GRAPH_TABLES.length);
+  });
+
+  it("creates FTS triggers", async () => {
+    const db = await getDb();
+    const result = await db.execute({
+      sql: "SELECT COUNT(*) as count FROM sqlite_master WHERE type = 'trigger' AND name IN (?, ?, ?)",
+      args: FTS_TRIGGERS,
+    });
+    expect(Number(result.rows[0]?.count)).toBe(FTS_TRIGGERS.length);
+  });
+
+  it("ensures FTS schema idempotently", async () => {
+    const db = await getDb();
+    await ensureFtsSchema(db);
+    await ensureFtsSchema(db);
+    const result = await db.execute({
+      sql: "SELECT COUNT(*) as count FROM sqlite_master WHERE type = 'trigger' AND name IN (?, ?, ?)",
+      args: FTS_TRIGGERS,
+    });
+    expect(Number(result.rows[0]?.count)).toBe(FTS_TRIGGERS.length);
+  });
+
+  it("repairs FTS schema idempotently", async () => {
+    const db = await getDb();
+    await repairFtsSchema(db);
+    await repairFtsSchema(db);
+    const result = await db.execute({
+      sql: "SELECT COUNT(*) as count FROM sqlite_master WHERE type = 'trigger' AND name IN (?, ?, ?)",
+      args: FTS_TRIGGERS,
+    });
+    expect(Number(result.rows[0]?.count)).toBe(FTS_TRIGGERS.length);
   });
 });
