@@ -1,7 +1,9 @@
 import {
+  defaultLayerForType,
   GRAPH_LLM_EXTRACTION_ENABLED,
   GRAPH_MAPPING_ENABLED,
   GRAPH_RETRIEVAL_ENABLED,
+  type MemoryLayer,
   type TursoClient,
 } from "../types"
 import {
@@ -10,6 +12,7 @@ import {
   type GraphRolloutConfig,
   type GraphRolloutMetricsSummary,
 } from "./rollout"
+import { removeMemoryGraphMapping, syncMemoryGraphMapping } from "./upsert"
 
 interface GraphTopNodeRow {
   node_type: string
@@ -18,6 +21,17 @@ interface GraphTopNodeRow {
   memory_links: number
   outbound_edges: number
   inbound_edges: number
+}
+
+interface GraphSyncMemoryRow {
+  id: string
+  type: string
+  memory_layer: string | null
+  expires_at: string | null
+  project_id: string | null
+  user_id: string | null
+  tags: string | null
+  category: string | null
 }
 
 export interface GraphStatusTopNode {
@@ -94,6 +108,8 @@ interface GraphStatusInput {
   topNodesLimit: number
 }
 
+const GRAPH_STATUS_SYNC_BATCH_LIMIT = 250
+
 async function scalarCount(turso: TursoClient, sql: string, args: (string | number)[] = []): Promise<number> {
   const result = await turso.execute({ sql, args })
   return Number(result.rows[0]?.count ?? 0)
@@ -114,6 +130,164 @@ async function tableExists(turso: TursoClient, table: string): Promise<boolean> 
 function normalizeTopNodesLimit(value: number): number {
   if (!Number.isFinite(value)) return 10
   return Math.max(1, Math.min(Math.floor(value), 50))
+}
+
+function parseLayer(type: string, memoryLayer: string | null): MemoryLayer {
+  if (memoryLayer === "rule" || memoryLayer === "working" || memoryLayer === "long_term") {
+    return memoryLayer
+  }
+  return defaultLayerForType(type)
+}
+
+function parseTagList(tags: string | null): string[] {
+  if (!tags) return []
+  return tags
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+}
+
+function isMissingDeletedAtColumnError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : ""
+  return message.includes("no such column") && message.includes("deleted_at")
+}
+
+async function listUnmappedMemories(turso: TursoClient): Promise<GraphSyncMemoryRow[]> {
+  const queryWithDeletedAt = {
+    sql: `SELECT
+            m.id,
+            m.type,
+            m.memory_layer,
+            m.expires_at,
+            m.project_id,
+            m.user_id,
+            m.tags,
+            m.category
+          FROM memories m
+          WHERE m.deleted_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM memory_node_links l WHERE l.memory_id = m.id)
+          ORDER BY m.updated_at DESC, m.created_at DESC
+          LIMIT ?`,
+    args: [GRAPH_STATUS_SYNC_BATCH_LIMIT],
+  }
+
+  try {
+    const result = await turso.execute(queryWithDeletedAt)
+    return result.rows as unknown as GraphSyncMemoryRow[]
+  } catch (error) {
+    if (!isMissingDeletedAtColumnError(error)) throw error
+  }
+
+  const fallbackResult = await turso.execute({
+    sql: `SELECT
+            m.id,
+            m.type,
+            m.memory_layer,
+            m.expires_at,
+            m.project_id,
+            m.user_id,
+            m.tags,
+            m.category
+          FROM memories m
+          WHERE NOT EXISTS (SELECT 1 FROM memory_node_links l WHERE l.memory_id = m.id)
+          ORDER BY m.updated_at DESC, m.created_at DESC
+          LIMIT ?`,
+    args: [GRAPH_STATUS_SYNC_BATCH_LIMIT],
+  })
+
+  return fallbackResult.rows as unknown as GraphSyncMemoryRow[]
+}
+
+async function listStaleLinkedMemoryIds(turso: TursoClient): Promise<string[]> {
+  const queryWithDeletedAt = {
+    sql: `SELECT DISTINCT l.memory_id
+          FROM memory_node_links l
+          LEFT JOIN memories m ON m.id = l.memory_id
+          WHERE m.id IS NULL OR m.deleted_at IS NOT NULL
+          LIMIT ?`,
+    args: [GRAPH_STATUS_SYNC_BATCH_LIMIT],
+  }
+
+  try {
+    const result = await turso.execute(queryWithDeletedAt)
+    return result.rows
+      .map((row) => row.memory_id as string | null)
+      .filter((id): id is string => Boolean(id))
+  } catch (error) {
+    if (!isMissingDeletedAtColumnError(error)) throw error
+  }
+
+  const fallbackResult = await turso.execute({
+    sql: `SELECT DISTINCT l.memory_id
+          FROM memory_node_links l
+          LEFT JOIN memories m ON m.id = l.memory_id
+          WHERE m.id IS NULL
+          LIMIT ?`,
+    args: [GRAPH_STATUS_SYNC_BATCH_LIMIT],
+  })
+
+  return fallbackResult.rows
+    .map((row) => row.memory_id as string | null)
+    .filter((id): id is string => Boolean(id))
+}
+
+async function opportunisticGraphSync(
+  turso: TursoClient,
+  recentErrors: GraphStatusError[]
+): Promise<void> {
+  if (!(await tableExists(turso, "memories"))) {
+    return
+  }
+
+  let syncFailures = 0
+  let cleanupFailures = 0
+
+  const unmappedMemories = await listUnmappedMemories(turso)
+  for (const row of unmappedMemories) {
+    try {
+      await syncMemoryGraphMapping(turso, {
+        id: row.id,
+        type: row.type,
+        layer: parseLayer(row.type, row.memory_layer),
+        expiresAt: row.expires_at,
+        projectId: row.project_id,
+        userId: row.user_id,
+        tags: parseTagList(row.tags),
+        category: row.category,
+      })
+    } catch (error) {
+      syncFailures += 1
+      console.error("Failed opportunistic graph sync for memory:", row.id, error)
+    }
+  }
+
+  const staleLinkedMemoryIds = await listStaleLinkedMemoryIds(turso)
+  for (const memoryId of staleLinkedMemoryIds) {
+    try {
+      await removeMemoryGraphMapping(turso, memoryId)
+    } catch (error) {
+      cleanupFailures += 1
+      console.error("Failed opportunistic graph cleanup for memory:", memoryId, error)
+    }
+  }
+
+  if (syncFailures > 0) {
+    recentErrors.push({
+      code: "GRAPH_MAPPING_SYNC_FAILED",
+      message: `${syncFailures} memory mapping sync operation${syncFailures === 1 ? "" : "s"} failed.`,
+      source: "mapping",
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  if (cleanupFailures > 0) {
+    recentErrors.push({
+      code: "GRAPH_MAPPING_CLEANUP_FAILED",
+      message: `${cleanupFailures} stale graph mapping cleanup operation${cleanupFailures === 1 ? "" : "s"} failed.`,
+      source: "mapping",
+      timestamp: new Date().toISOString(),
+    })
+  }
 }
 
 export async function getGraphStatusPayload(input: GraphStatusInput): Promise<GraphStatusPayload> {
@@ -223,6 +397,18 @@ export async function getGraphStatusPayload(input: GraphStatusInput): Promise<Gr
       recentErrors,
       sampledAt: nowIso,
     }
+  }
+
+  try {
+    await opportunisticGraphSync(turso, recentErrors)
+  } catch (error) {
+    recentErrors.push({
+      code: "GRAPH_MAPPING_SYNC_UNAVAILABLE",
+      message: "Graph mapping sync did not complete for this status sample.",
+      source: "mapping",
+      timestamp: nowIso,
+    })
+    console.error("Failed opportunistic graph sync:", error)
   }
 
   const nodes = await scalarCount(turso, "SELECT COUNT(*) as count FROM graph_nodes")
