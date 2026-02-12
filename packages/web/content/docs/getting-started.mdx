@@ -27,7 +27,7 @@ Navigate to a git repository and initialize memories:
 
 ```bash
 cd your-project
-memories init
+memories setup
 ```
 
 The `init` command does several things automatically:
@@ -60,19 +60,19 @@ Example output:
 
 ```bash
 # Skip automatic MCP configuration
-memories init --skip-mcp
+memories setup --skip-mcp
 
 # Skip generating instruction files  
-memories init --skip-generate
+memories setup --skip-generate
 
 # Auto-confirm all prompts
-memories init -y
+memories setup -y
 
 # Initialize with starter rules
-memories init --rule "Use TypeScript strict mode" --rule "Prefer pnpm"
+memories setup --rule "Use TypeScript strict mode" --rule "Prefer pnpm"
 
 # Initialize global memories (apply to all projects)
-memories init --global
+memories setup --global
 ```
 
 ## Add Your First Memory
@@ -179,7 +179,7 @@ memories embed
 
 The primary workflow is `memories generate` — it writes native config files that each tool reads natively. For browser-based agents (v0, bolt.new, Lovable) or any MCP client where the CLI can't run, the built-in MCP server provides real-time access.
 
-If you ran `memories init`, MCP is already configured for your detected tools. To start the server manually:
+If you ran `memories setup` (or `memories init`), MCP is already configured for your detected tools. To start the server manually:
 
 ```bash
 memories serve

@@ -10,24 +10,31 @@ import { detectTools } from "../lib/setup.js";
 
 interface Check {
   id: string;
+  code: string;
+  category: DoctorCheckCategory;
   name: string;
   run: () => Promise<DoctorCheckOutcome>;
 }
 
 type CheckStatus = "pass" | "warn" | "fail";
+type DoctorCheckCategory = "config" | "database" | "mcp" | "cloud" | "project" | "data";
 
 interface DoctorCheckOutcome {
   status: CheckStatus;
   message: string;
   remediation?: string[];
+  details?: Record<string, unknown>;
 }
 
 export interface DoctorCheckResult extends DoctorCheckOutcome {
   id: string;
+  code: string;
+  category: DoctorCheckCategory;
   name: string;
 }
 
 export interface DoctorReport {
+  schemaVersion: "1.1";
   generatedAt: string;
   ok: boolean;
   summary: {
@@ -36,6 +43,7 @@ export interface DoctorReport {
     failed: number;
   };
   checks: DoctorCheckResult[];
+  nextSteps: string[];
   fixes: {
     applied: boolean;
     actions: string[];
@@ -67,6 +75,30 @@ function normalizeRemediation(remediation: string[] | undefined): string[] {
   return normalized;
 }
 
+function buildNextSteps(checks: DoctorCheckResult[]): string[] {
+  const prioritized = checks
+    .filter((check) => check.status !== "pass")
+    .sort((a, b) => {
+      const severity = (status: CheckStatus) => (status === "fail" ? 0 : 1);
+      const severityDelta = severity(a.status) - severity(b.status);
+      if (severityDelta !== 0) return severityDelta;
+      return a.name.localeCompare(b.name);
+    });
+
+  const nextSteps: string[] = [];
+  const seen = new Set<string>();
+
+  for (const check of prioritized) {
+    for (const step of normalizeRemediation(check.remediation)) {
+      if (seen.has(step)) continue;
+      seen.add(step);
+      nextSteps.push(step);
+    }
+  }
+
+  return nextSteps;
+}
+
 function cloudIssueRemediation(issues: string[] | undefined): string[] {
   const base = [
     "Run: memories org current",
@@ -80,7 +112,7 @@ function cloudIssueRemediation(issues: string[] | undefined): string[] {
 
   const mapped = issues.map((issue) => {
     if (issue.toLowerCase().includes("database is not provisioned")) {
-      return "Run: memories login (or provision a workspace DB from dashboard)"
+      return "Run: memories login (or provision a workspace DB from dashboard)";
     }
     if (issue.toLowerCase().includes("graph schema")) {
       return "Run a graph mapping sync by opening dashboard /app or running a memory migration copy once";
@@ -148,6 +180,8 @@ function buildChecks(): Check[] {
   return [
     {
       id: "config_file",
+      code: "CONFIG_FILE_MISSING",
+      category: "config",
       name: "Project config",
       run: async () => {
         const configPath = join(process.cwd(), ".agents", "config.yaml");
@@ -166,6 +200,8 @@ function buildChecks(): Check[] {
     },
     {
       id: "db_file",
+      code: "DB_FILE_MISSING",
+      category: "database",
       name: "Database file",
       run: async () => {
         const dbPath = join(getConfigDir(), "local.db");
@@ -184,6 +220,8 @@ function buildChecks(): Check[] {
     },
     {
       id: "db_connection",
+      code: "DB_CONNECTION_FAILED",
+      category: "database",
       name: "Database connection",
       run: async () => {
         try {
@@ -204,6 +242,8 @@ function buildChecks(): Check[] {
     },
     {
       id: "schema_integrity",
+      code: "DB_INTEGRITY_FAILED",
+      category: "database",
       name: "Schema integrity",
       run: async () => {
         const db = await getDb();
@@ -224,6 +264,8 @@ function buildChecks(): Check[] {
     },
     {
       id: "fts_index",
+      code: "FTS_INDEX_UNHEALTHY",
+      category: "database",
       name: "FTS index",
       run: async () => {
         const db = await getDb();
@@ -260,6 +302,8 @@ function buildChecks(): Check[] {
     },
     {
       id: "write_path",
+      code: "DB_WRITE_PATH_UNHEALTHY",
+      category: "database",
       name: "Write path",
       run: async () => {
         const db = await getDb();
@@ -279,6 +323,8 @@ function buildChecks(): Check[] {
     },
     {
       id: "mcp_wiring",
+      code: "MCP_WIRING_INCOMPLETE",
+      category: "mcp",
       name: "MCP wiring",
       run: async () => {
         const detected = detectTools(process.cwd());
@@ -314,6 +360,8 @@ function buildChecks(): Check[] {
     },
     {
       id: "cloud_integration",
+      code: "CLOUD_INTEGRATION_UNHEALTHY",
+      category: "cloud",
       name: "Cloud integration",
       run: async () => {
         const auth = await readAuth();
@@ -426,6 +474,8 @@ function buildChecks(): Check[] {
     },
     {
       id: "git_project_detection",
+      code: "PROJECT_DETECTION_INACTIVE",
+      category: "project",
       name: "Git project detection",
       run: async () => {
         const projectId = getProjectId();
@@ -437,6 +487,8 @@ function buildChecks(): Check[] {
     },
     {
       id: "orphaned_project_memories",
+      code: "PROJECT_MEMORIES_PRESENT",
+      category: "project",
       name: "Orphaned project memories",
       run: async () => {
         const db = await getDb();
@@ -455,6 +507,8 @@ function buildChecks(): Check[] {
     },
     {
       id: "soft_deleted_records",
+      code: "SOFT_DELETED_RECORDS_FOUND",
+      category: "data",
       name: "Soft-deleted records",
       run: async () => {
         const db = await getDb();
@@ -486,10 +540,13 @@ export async function runDoctorChecks(options: RunDoctorChecksOptions = {}): Pro
     const outcome = await check.run();
     results.push({
       id: check.id,
+      code: check.code,
+      category: check.category,
       name: check.name,
       status: outcome.status,
       message: outcome.message,
       remediation: normalizeRemediation(outcome.remediation),
+      details: outcome.details,
     });
   }
 
@@ -515,8 +572,10 @@ export async function runDoctorChecks(options: RunDoctorChecksOptions = {}): Pro
   const warned = results.filter((result) => result.status === "warn").length;
   const failed = results.filter((result) => result.status === "fail").length;
   const ok = failed === 0;
+  const nextSteps = buildNextSteps(results);
 
   return {
+    schemaVersion: "1.1",
     generatedAt: new Date().toISOString(),
     ok,
     summary: {
@@ -525,6 +584,7 @@ export async function runDoctorChecks(options: RunDoctorChecksOptions = {}): Pro
       failed,
     },
     checks: results,
+    nextSteps,
     fixes,
   };
 }
@@ -532,7 +592,8 @@ export async function runDoctorChecks(options: RunDoctorChecksOptions = {}): Pro
 function printDoctorReport(report: DoctorReport, fixRequested: boolean): void {
   for (const check of report.checks) {
     const icon = statusIcon(check.status);
-    console.log(`  ${icon} ${chalk.bold(check.name)}: ${check.message}`);
+    const code = chalk.dim(`[${check.code}]`);
+    console.log(`  ${icon} ${chalk.bold(check.name)} ${code}: ${check.message}`);
     if ((check.status === "warn" || check.status === "fail") && check.remediation && check.remediation.length > 0) {
       for (const step of check.remediation) {
         console.log(chalk.dim(`     ↳ ${step}`));
@@ -547,6 +608,13 @@ function printDoctorReport(report: DoctorReport, fixRequested: boolean): void {
     }
     for (const error of report.fixes.errors) {
       console.log(`  ${chalk.yellow("⚠")} ${error}`);
+    }
+  }
+
+  if (report.nextSteps.length > 0) {
+    console.log(chalk.bold("\nNext steps:\n"));
+    for (const step of report.nextSteps) {
+      console.log(chalk.dim(`  • ${step}`));
     }
   }
 
@@ -591,8 +659,24 @@ export const doctorCommand = new Command("doctor")
         console.log(
           JSON.stringify(
             {
+              schemaVersion: "1.1",
               ok: false,
-              error: error instanceof Error ? error.message : "Unknown error",
+              summary: {
+                passed: 0,
+                warned: 0,
+                failed: 1,
+              },
+              checks: [],
+              nextSteps: ["Run: memories setup", "Retry: memories doctor --json"],
+              fixes: {
+                applied: Boolean(opts.fix),
+                actions: [],
+                errors: [],
+              },
+              error: {
+                code: "DOCTOR_EXECUTION_FAILED",
+                message: error instanceof Error ? error.message : "Unknown error",
+              },
             },
             null,
             2,

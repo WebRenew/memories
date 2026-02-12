@@ -31,7 +31,7 @@ memories.sh solves this by being the **single source of truth**:
 pnpm add -g @memories.sh/cli
 
 # Initialize (auto-configures MCP for detected tools)
-memories init
+memories setup
 
 # Add your first rule
 memories add --rule "Always use TypeScript strict mode"
@@ -43,9 +43,9 @@ memories add --decision "Chose PostgreSQL over MySQL for JSONB support"
 memories generate all
 ```
 
-## What `memories init` does
+## What `memories setup` does
 
-When you run `memories init`, it:
+When you run `memories setup` (alias: `memories init`), it:
 
 1. Creates the local database at `~/.config/memories/local.db`
 2. Detects installed AI tools (Cursor, Claude Code, Windsurf, VS Code)

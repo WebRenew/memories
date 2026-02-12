@@ -1,19 +1,21 @@
 ---
 title: memories doctor
-description: Check memories health and diagnose issues.
+description: Run deterministic health checks and get exact remediation steps.
 ---
 
 ```bash
 memories doctor [options]
 ```
 
-Run diagnostic checks on your memories database and optionally fix issues.
+Run deterministic diagnostic checks across local DB, MCP wiring, project detection, and cloud integration.
 
 ## Options
 
 | Option | Description |
 |--------|-------------|
 | `--fix` | Attempt to fix issues found |
+| `--json` | Output machine-readable report (stable schema) |
+| `--strict` | Exit with code `1` when warnings or failures exist |
 
 ## Checks Performed
 
@@ -21,9 +23,12 @@ Run diagnostic checks on your memories database and optionally fix issues.
 2. **Connection** — Tests that the database can be opened and queried
 3. **Schema integrity** — Runs `PRAGMA integrity_check` to verify data consistency
 4. **FTS index** — Checks the full-text search index is operational and that no soft-deleted records have leaked into the FTS index
-5. **Git detection** — Verifies project detection is working in the current directory
-6. **Orphaned memories** — Checks for project-scoped memories with no matching project
-7. **Soft-deleted records** — Reports the count of soft-deleted records
+5. **Write path** — Validates insert/update/delete triggers and end-to-end write safety
+6. **MCP wiring** — Checks MCP is configured for detected tools
+7. **Cloud integration** — Verifies auth/session/workspace health endpoint connectivity
+8. **Git detection** — Verifies project detection is working in the current directory
+9. **Orphaned memories** — Checks for project-scoped memories with no matching project
+10. **Soft-deleted records** — Reports the count of soft-deleted records
 
 ## Fix Mode
 
@@ -48,3 +53,15 @@ Diagnose and fix:
 ```bash
 memories doctor --fix
 ```
+
+Machine-readable report for CI/automation:
+
+```bash
+memories doctor --json --strict
+```
+
+`--json` now returns:
+
+- `schemaVersion` (current: `1.1`)
+- `checks[]` with stable `id`, `code`, `category`, `status`, `message`, `remediation`
+- `nextSteps[]` aggregated from non-pass checks (deduplicated, priority ordered)

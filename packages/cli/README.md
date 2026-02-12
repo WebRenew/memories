@@ -17,7 +17,7 @@ Requires Node.js >= 20.
 
 ```bash
 # Initialize in your project (auto-detects tools, configures MCP)
-memories init
+memories setup
 
 # Add memories
 memories add --rule "Always use TypeScript strict mode"

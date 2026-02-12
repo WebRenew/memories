@@ -8,7 +8,7 @@ process.env.MEMORIES_DATA_DIR = mkdtempSync(join(tmpdir(), "memories-doctor-test
 
 import { addMemory, forgetMemory } from "../lib/memory.js";
 import { getDb, repairFtsSchema } from "../lib/db.js";
-import { checkWritePath } from "./doctor.js";
+import { checkWritePath, runDoctorChecks } from "./doctor.js";
 
 describe("doctor checks", () => {
   beforeAll(async () => {
@@ -70,5 +70,32 @@ describe("doctor checks", () => {
 
     const after = await checkWritePath(db);
     expect(after.ok).toBe(true);
+  });
+
+  it("should produce stable doctor JSON report metadata", async () => {
+    const report = await runDoctorChecks();
+    expect(report.schemaVersion).toBe("1.1");
+    expect(Array.isArray(report.nextSteps)).toBe(true);
+    expect(report.checks.length).toBeGreaterThan(0);
+
+    for (const check of report.checks) {
+      expect(check.id.length).toBeGreaterThan(0);
+      expect(check.code.length).toBeGreaterThan(0);
+      expect([
+        "config",
+        "database",
+        "mcp",
+        "cloud",
+        "project",
+        "data",
+      ]).toContain(check.category);
+      expect(["pass", "warn", "fail"]).toContain(check.status);
+    }
+  });
+
+  it("should deduplicate next steps", async () => {
+    const report = await runDoctorChecks();
+    const unique = new Set(report.nextSteps);
+    expect(unique.size).toBe(report.nextSteps.length);
   });
 });

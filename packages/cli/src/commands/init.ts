@@ -13,6 +13,7 @@ import { execSync, execFileSync } from "node:child_process";
 
 const DEFAULT_API_URL = "https://memories.sh";
 const PERSONAL_WORKSPACE_VALUE = "__personal_workspace__";
+type SetupMode = "auto" | "local" | "cloud";
 
 interface SetupOrganization {
   id: string;
@@ -126,6 +127,15 @@ function workspaceLabel(organizations: SetupOrganization[], orgId: string | null
   return `${org.name} (${org.slug})`;
 }
 
+function parseSetupMode(rawMode: string | undefined): SetupMode {
+  if (!rawMode) return "auto";
+  const normalized = rawMode.trim().toLowerCase();
+  if (normalized === "auto" || normalized === "local" || normalized === "cloud") {
+    return normalized;
+  }
+  throw new Error(`Invalid setup mode "${rawMode}". Use one of: auto, local, cloud.`);
+}
+
 async function fetchOrganizationsAndProfile(apiFetch: ReturnType<typeof getApiClient>): Promise<{
   organizations: SetupOrganization[];
   user: SetupUserProfile;
@@ -193,6 +203,7 @@ export const initCommand = new Command("init")
   .option("-g, --global", "Initialize global rules (apply to all projects)")
   .option("-r, --rule <rule>", "Add an initial rule", (val, acc: string[]) => [...acc, val], [])
   .option("--api-url <url>", "API base URL for guided login", DEFAULT_API_URL)
+  .option("--mode <mode>", "Setup mode: auto | local | cloud", "auto")
   .option("--skip-mcp", "Skip MCP configuration")
   .option("--skip-generate", "Skip generating instruction files")
   .option("--skip-auth", "Skip guided login for cloud sync")
@@ -204,6 +215,7 @@ export const initCommand = new Command("init")
     global?: boolean;
     rule?: string[];
     apiUrl?: string;
+    mode?: string;
     skipMcp?: boolean;
     skipGenerate?: boolean;
     skipAuth?: boolean;
@@ -217,9 +229,42 @@ export const initCommand = new Command("init")
       
       console.log(chalk.dim("  One place for your rules. Works with every tool.\n"));
 
-      const shouldRunCloudGuidance = !opts.skipAuth || !opts.skipWorkspace || Boolean(opts.workspace);
+      let setupMode = parseSetupMode(opts.mode);
+      if (
+        setupMode === "auto" &&
+        !opts.yes &&
+        !opts.skipAuth &&
+        !opts.skipWorkspace &&
+        !opts.workspace
+      ) {
+        setupMode = await select<SetupMode>({
+          message: "Choose setup mode:",
+          choices: [
+            {
+              name: "Cloud + workspace (recommended) — login, select workspace, provision DB, run verification",
+              value: "cloud",
+            },
+            {
+              name: "Local only — skip login/workspace prompts",
+              value: "local",
+            },
+          ],
+          default: "cloud",
+        });
+      }
+
+      const effectiveSkipAuth = setupMode === "local" ? true : Boolean(opts.skipAuth);
+      const effectiveSkipWorkspace = setupMode === "local" ? true : Boolean(opts.skipWorkspace);
+      const shouldRunCloudGuidance =
+        !effectiveSkipAuth || !effectiveSkipWorkspace || Boolean(opts.workspace);
       const totalSteps = 4 + (shouldRunCloudGuidance ? 1 : 0) + (opts.skipVerify ? 0 : 1);
       const cwd = process.cwd();
+
+      ui.dim(
+        shouldRunCloudGuidance
+          ? "Setup mode: cloud + workspace guidance"
+          : "Setup mode: local only",
+      );
 
       // Step 1: Database
       ui.step(1, totalSteps, "Setting up local storage...");
@@ -360,8 +405,12 @@ export const initCommand = new Command("init")
       }
 
       // Auth status
-      if (opts.skipWorkspace && opts.workspace) {
-        ui.warn("Ignoring --workspace because --skip-workspace is set.");
+      if (effectiveSkipWorkspace && opts.workspace) {
+        if (setupMode === "local") {
+          ui.warn("Ignoring --workspace because setup mode is local.");
+        } else {
+          ui.warn("Ignoring --workspace because --skip-workspace is set.");
+        }
       }
 
       let auth = await readAuth();
@@ -377,7 +426,7 @@ export const initCommand = new Command("init")
         currentStep += 1;
         ui.step(currentStep, totalSteps, "Guiding cloud and workspace setup...");
 
-        if (!auth && !opts.skipAuth) {
+        if (!auth && !effectiveSkipAuth) {
           const shouldLogin = opts.yes || await confirm({
             message: "Log in now to enable cloud sync and workspace setup?",
             default: true,
@@ -406,9 +455,9 @@ export const initCommand = new Command("init")
 
             let target: ResolvedWorkspaceTarget | null = null;
 
-            if (!opts.skipWorkspace && opts.workspace) {
+            if (!effectiveSkipWorkspace && opts.workspace) {
               target = resolveWorkspaceTarget(organizations, opts.workspace);
-            } else if (!opts.skipWorkspace && organizations.length > 0 && !opts.yes) {
+            } else if (!effectiveSkipWorkspace && organizations.length > 0 && !opts.yes) {
               const choices = [
                 {
                   name: `Personal workspace${user.current_org_id === null ? chalk.dim(" (current)") : ""}`,
@@ -449,7 +498,7 @@ export const initCommand = new Command("init")
               ui.dim(`Active workspace: ${workspaceLabel(organizations, user.current_org_id)}`);
             }
 
-            if (!opts.skipWorkspace) {
+            if (!effectiveSkipWorkspace) {
               const healthResponse = await fetchIntegrationHealth(apiFetch);
               const workspaceHealth = healthResponse?.health?.workspace;
 

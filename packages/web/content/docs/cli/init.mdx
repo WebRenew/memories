@@ -7,6 +7,12 @@ description: Initialize memories and auto-configure MCP for your AI coding tools
 memories init [options]
 ```
 
+Alias:
+
+```bash
+memories setup [options]
+```
+
 Initialize the memories database and automatically set up MCP integration for detected AI coding tools. This is the recommended first command after installing memories.sh.
 
 ## What it does
@@ -24,9 +30,16 @@ Initialize the memories database and automatically set up MCP integration for de
 |--------|-------------|
 | `-g, --global` | Initialize global memories (apply to all projects) |
 | `-r, --rule <rule>` | Add an initial rule (can be repeated) |
+| `--mode <mode>` | Setup mode: `auto`, `local`, or `cloud` |
 | `--skip-mcp` | Skip automatic MCP configuration |
 | `--skip-generate` | Skip generating instruction files |
 | `-y, --yes` | Auto-confirm all prompts |
+
+### Setup mode
+
+- `auto` (default): prompts for local vs cloud guidance in interactive sessions
+- `local`: skips login/workspace provisioning prompts
+- `cloud`: runs guided login + workspace checks/provisioning
 
 ## Detected Tools
 
@@ -50,7 +63,7 @@ For each detected tool, init will:
 
 ```bash
 cd your-project
-memories init
+memories setup
 ```
 
 Output:
@@ -78,7 +91,7 @@ Output:
 ### Non-interactive mode
 
 ```bash
-memories init -y
+memories setup -y
 ```
 
 Auto-confirms all prompts — useful for scripts or CI.
@@ -87,13 +100,13 @@ Auto-confirms all prompts — useful for scripts or CI.
 
 ```bash
 # Only create database, don't configure tools
-memories init --skip-mcp --skip-generate
+memories setup --skip-mcp --skip-generate
 ```
 
 ### Initialize with starter rules
 
 ```bash
-memories init \
+memories setup \
   --rule "Use TypeScript strict mode" \
   --rule "Prefer functional components" \
   --rule "Use pnpm as package manager"
@@ -102,7 +115,7 @@ memories init \
 ### Global initialization
 
 ```bash
-memories init --global
+memories setup --global
 ```
 
 Useful when not in a git repository, or when you want to set up memories that apply to all projects.

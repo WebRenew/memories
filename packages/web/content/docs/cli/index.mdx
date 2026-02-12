@@ -9,7 +9,7 @@ The `memories` CLI is the primary interface for managing your AI agent memory st
 
 ```bash
 # First-time setup (auto-configures MCP for detected tools)
-memories init
+memories setup
 
 # Add memories
 memories add --rule "Always use TypeScript strict mode"
@@ -34,7 +34,7 @@ memories files apply --global
 
 | Command | Description |
 |---------|-------------|
-| [`init`](/docs/cli/init) | Initialize memories and auto-configure MCP for detected tools |
+| [`init`](/docs/cli/init) | Initialize memories and auto-configure MCP for detected tools (`setup` alias) |
 | [`login`](/docs/cli/login) | Authenticate for cloud sync features |
 
 ### Core Commands
@@ -111,7 +111,7 @@ memories files apply --global
 
 ### MCP Integration
 
-When you run `memories init`, it automatically:
+When you run `memories setup` (or `memories init`), it automatically:
 1. Detects installed AI tools (Cursor, Claude Code, Windsurf, VS Code)
 2. Configures MCP for each detected tool
 3. Generates instruction files with your existing memories

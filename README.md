@@ -46,7 +46,7 @@ Requires Node.js >= 20. Also available via `pnpm add -g @memories.sh/cli`.
 
 ```bash
 # Initialize in your project (auto-detects tools, configures MCP)
-memories init
+memories setup
 
 # Add memories
 memories add --rule "Always use TypeScript strict mode"
@@ -69,7 +69,7 @@ memories generate
 - **`.agents/` canonical directory** — tool-agnostic intermediate format, checked into git
 - **Semantic search** — AI-powered embeddings find related memories, not just keyword matches
 - **MCP server** — fallback MCP server for agents that need real-time access beyond static configs
-- **Auto-setup** — `memories init` detects installed tools and configures MCP automatically
+- **Auto-setup** — `memories setup` (`init` alias) detects installed tools and configures MCP automatically
 - **Cloud sync** — optional sync via Turso embedded replicas (local speed, cloud backup)
 - **Import/Export** — ingest existing rule files, export to YAML for sharing
 
@@ -151,7 +151,7 @@ Or configure in your tool's MCP settings:
 
 | Command | Description |
 |---------|-------------|
-| `memories init` | Initialize in current project, auto-detect tools |
+| `memories setup` | Initialize in current project, auto-detect tools |
 | `memories add <content>` | Add a memory with type, tags, paths, category |
 | `memories edit [id]` | Edit a memory (interactive picker or by ID) |
 | `memories forget <id>` | Soft-delete a memory |
