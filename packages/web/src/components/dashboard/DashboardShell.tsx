@@ -224,7 +224,7 @@ export function DashboardShell({
         </nav>
 
         {/* Main content */}
-        <main className="flex-1 min-h-[calc(100vh-4rem)] p-6 md:p-8 pb-20 md:pb-8 max-w-[min(80vw,1280px)]">
+        <main className="flex-1 min-w-0 w-full min-h-[calc(100vh-4rem)] p-6 md:p-8 pb-20 md:pb-8">
           {children}
         </main>
       </div>
