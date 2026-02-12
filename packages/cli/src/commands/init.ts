@@ -1,32 +1,224 @@
 import { Command } from "commander";
 import chalk from "chalk";
-import { confirm, checkbox } from "@inquirer/prompts";
+import { confirm, checkbox, select } from "@inquirer/prompts";
 import { getDb, getConfigDir } from "../lib/db.js";
 import { getProjectId, getGitRoot } from "../lib/git.js";
 import { addMemory, listMemories } from "../lib/memory.js";
-import { readAuth } from "../lib/auth.js";
+import { readAuth, getApiClient } from "../lib/auth.js";
 import { detectTools, getAllTools, setupMcp, type DetectedTool } from "../lib/setup.js";
 import { initConfig } from "../lib/config.js";
 import { runDoctorChecks } from "./doctor.js";
 import * as ui from "../lib/ui.js";
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
+
+const DEFAULT_API_URL = "https://memories.sh";
+const PERSONAL_WORKSPACE_VALUE = "__personal_workspace__";
+
+interface SetupOrganization {
+  id: string;
+  name: string;
+  slug: string;
+  role: "owner" | "admin" | "member";
+}
+
+interface SetupUserProfile {
+  id: string;
+  email: string;
+  current_org_id: string | null;
+}
+
+interface SetupOrganizationsResponse {
+  organizations: SetupOrganization[];
+}
+
+interface SetupUserResponse {
+  user: SetupUserProfile;
+}
+
+interface ResolvedWorkspaceTarget {
+  orgId: string | null;
+  label: string;
+}
+
+interface IntegrationHealthResponse {
+  health?: {
+    workspace?: {
+      label?: string;
+      hasDatabase?: boolean;
+      canProvision?: boolean;
+      ownerType?: "user" | "organization" | null;
+    };
+  };
+}
+
+function normalizeWorkspaceTarget(target: string): string {
+  return target.trim().toLowerCase();
+}
+
+function isPersonalWorkspaceTarget(target: string): boolean {
+  const normalized = normalizeWorkspaceTarget(target);
+  return normalized === "personal" || normalized === "none";
+}
+
+function resolveWorkspaceTarget(
+  organizations: SetupOrganization[],
+  rawTarget: string,
+): ResolvedWorkspaceTarget {
+  if (isPersonalWorkspaceTarget(rawTarget)) {
+    return {
+      orgId: null,
+      label: "Personal workspace",
+    };
+  }
+
+  const target = normalizeWorkspaceTarget(rawTarget);
+  const directMatch = organizations.find(
+    (org) => org.id === rawTarget || normalizeWorkspaceTarget(org.slug) === target,
+  );
+  if (directMatch) {
+    return {
+      orgId: directMatch.id,
+      label: `${directMatch.name} (${directMatch.slug})`,
+    };
+  }
+
+  const exactNameMatches = organizations.filter(
+    (org) => normalizeWorkspaceTarget(org.name) === target,
+  );
+  if (exactNameMatches.length === 1) {
+    const org = exactNameMatches[0];
+    return {
+      orgId: org.id,
+      label: `${org.name} (${org.slug})`,
+    };
+  }
+
+  if (exactNameMatches.length > 1) {
+    throw new Error(
+      `Multiple organizations match "${rawTarget}". Use the organization slug or ID.`,
+    );
+  }
+
+  const prefixSlugMatches = organizations.filter((org) =>
+    normalizeWorkspaceTarget(org.slug).startsWith(target),
+  );
+  if (prefixSlugMatches.length === 1) {
+    const org = prefixSlugMatches[0];
+    return {
+      orgId: org.id,
+      label: `${org.name} (${org.slug})`,
+    };
+  }
+
+  if (prefixSlugMatches.length > 1) {
+    throw new Error(`Multiple organizations match "${rawTarget}". Be more specific.`);
+  }
+
+  throw new Error(
+    `Organization "${rawTarget}" not found. Run ${chalk.cyan("memories org list")} for available targets.`,
+  );
+}
+
+function workspaceLabel(organizations: SetupOrganization[], orgId: string | null): string {
+  if (!orgId) return "Personal workspace";
+  const org = organizations.find((item) => item.id === orgId);
+  if (!org) return `Organization (${orgId})`;
+  return `${org.name} (${org.slug})`;
+}
+
+async function fetchOrganizationsAndProfile(apiFetch: ReturnType<typeof getApiClient>): Promise<{
+  organizations: SetupOrganization[];
+  user: SetupUserProfile;
+}> {
+  const [orgsRes, userRes] = await Promise.all([
+    apiFetch("/api/orgs"),
+    apiFetch("/api/user"),
+  ]);
+
+  if (!orgsRes.ok) {
+    const text = await orgsRes.text();
+    throw new Error(`Failed to fetch organizations: ${text || orgsRes.statusText}`);
+  }
+
+  if (!userRes.ok) {
+    const text = await userRes.text();
+    throw new Error(`Failed to fetch user profile: ${text || userRes.statusText}`);
+  }
+
+  const orgsBody = (await orgsRes.json()) as SetupOrganizationsResponse;
+  const userBody = (await userRes.json()) as SetupUserResponse;
+
+  return {
+    organizations: orgsBody.organizations ?? [],
+    user: userBody.user,
+  };
+}
+
+async function switchWorkspace(
+  apiFetch: ReturnType<typeof getApiClient>,
+  orgId: string | null,
+): Promise<void> {
+  const response = await apiFetch("/api/user", {
+    method: "PATCH",
+    body: JSON.stringify({ current_org_id: orgId }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Failed to switch workspace: ${text || response.statusText}`);
+  }
+}
+
+async function fetchIntegrationHealth(
+  apiFetch: ReturnType<typeof getApiClient>,
+): Promise<IntegrationHealthResponse | null> {
+  const response = await apiFetch("/api/integration/health", { method: "GET" });
+  if (!response.ok) return null;
+  return (await response.json()) as IntegrationHealthResponse;
+}
+
+async function provisionWorkspaceDatabase(
+  apiFetch: ReturnType<typeof getApiClient>,
+): Promise<boolean> {
+  const response = await apiFetch("/api/db/provision", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  return response.ok;
+}
 
 export const initCommand = new Command("init")
   .alias("setup")
   .description("Initialize memories - set up MCP and instruction files for your AI tools")
   .option("-g, --global", "Initialize global rules (apply to all projects)")
   .option("-r, --rule <rule>", "Add an initial rule", (val, acc: string[]) => [...acc, val], [])
+  .option("--api-url <url>", "API base URL for guided login", DEFAULT_API_URL)
   .option("--skip-mcp", "Skip MCP configuration")
   .option("--skip-generate", "Skip generating instruction files")
+  .option("--skip-auth", "Skip guided login for cloud sync")
+  .option("--skip-workspace", "Skip guided workspace selection/provisioning")
+  .option("--workspace <target>", "Set active workspace (org slug/id/name, or 'personal')")
   .option("--skip-verify", "Skip post-setup verification checks")
   .option("-y, --yes", "Auto-confirm all prompts")
-  .action(async (opts: { global?: boolean; rule?: string[]; skipMcp?: boolean; skipGenerate?: boolean; skipVerify?: boolean; yes?: boolean }) => {
+  .action(async (opts: {
+    global?: boolean;
+    rule?: string[];
+    apiUrl?: string;
+    skipMcp?: boolean;
+    skipGenerate?: boolean;
+    skipAuth?: boolean;
+    skipWorkspace?: boolean;
+    workspace?: string;
+    skipVerify?: boolean;
+    yes?: boolean;
+  }) => {
     try {
       ui.banner();
       
       console.log(chalk.dim("  One place for your rules. Works with every tool.\n"));
 
-      const totalSteps = opts.skipVerify ? 4 : 5;
+      const shouldRunCloudGuidance = !opts.skipAuth || !opts.skipWorkspace || Boolean(opts.workspace);
+      const totalSteps = 4 + (shouldRunCloudGuidance ? 1 : 0) + (opts.skipVerify ? 0 : 1);
       const cwd = process.cwd();
 
       // Step 1: Database
@@ -168,15 +360,136 @@ export const initCommand = new Command("init")
       }
 
       // Auth status
-      const auth = await readAuth();
+      if (opts.skipWorkspace && opts.workspace) {
+        ui.warn("Ignoring --workspace because --skip-workspace is set.");
+      }
+
+      let auth = await readAuth();
       if (auth) {
         ui.success(`Syncing as ${chalk.bold(auth.email)}`);
       } else {
         ui.dim("Local only. Run " + chalk.cyan("memories login") + " to sync across machines.");
       }
 
+      let currentStep = 4;
+
+      if (shouldRunCloudGuidance) {
+        currentStep += 1;
+        ui.step(currentStep, totalSteps, "Guiding cloud and workspace setup...");
+
+        if (!auth && !opts.skipAuth) {
+          const shouldLogin = opts.yes || await confirm({
+            message: "Log in now to enable cloud sync and workspace setup?",
+            default: true,
+          });
+
+          if (shouldLogin) {
+            try {
+              execFileSync("node", [process.argv[1], "login", "--api-url", opts.apiUrl ?? DEFAULT_API_URL], {
+                cwd,
+                stdio: "inherit",
+              });
+              auth = await readAuth();
+            } catch {
+              ui.warn("Login did not complete. Continuing with local setup only.");
+            }
+          }
+        }
+
+        if (!auth) {
+          ui.warn("Cloud guidance skipped (not logged in).");
+          ui.dim(`Run ${chalk.cyan("memories login")} later to enable workspace setup and provisioning.`);
+        } else {
+          const apiFetch = getApiClient(auth);
+          try {
+            const { organizations, user } = await fetchOrganizationsAndProfile(apiFetch);
+
+            let target: ResolvedWorkspaceTarget | null = null;
+
+            if (!opts.skipWorkspace && opts.workspace) {
+              target = resolveWorkspaceTarget(organizations, opts.workspace);
+            } else if (!opts.skipWorkspace && organizations.length > 0 && !opts.yes) {
+              const choices = [
+                {
+                  name: `Personal workspace${user.current_org_id === null ? chalk.dim(" (current)") : ""}`,
+                  value: PERSONAL_WORKSPACE_VALUE,
+                },
+                ...organizations.map((org) => ({
+                  name: `${org.name} (${org.slug}) ${chalk.dim(org.role)}${user.current_org_id === org.id ? chalk.dim(" (current)") : ""}`,
+                  value: org.id,
+                })),
+              ];
+
+              const selectedWorkspace = await select({
+                message: "Choose active workspace for setup:",
+                choices,
+                default: user.current_org_id ?? PERSONAL_WORKSPACE_VALUE,
+              });
+
+              if (selectedWorkspace === PERSONAL_WORKSPACE_VALUE) {
+                target = {
+                  orgId: null,
+                  label: "Personal workspace",
+                };
+              } else {
+                const selectedOrg = organizations.find((org) => org.id === selectedWorkspace);
+                if (selectedOrg) {
+                  target = {
+                    orgId: selectedOrg.id,
+                    label: `${selectedOrg.name} (${selectedOrg.slug})`,
+                  };
+                }
+              }
+            }
+
+            if (target && target.orgId !== user.current_org_id) {
+              await switchWorkspace(apiFetch, target.orgId);
+              ui.success(`Active workspace set to ${target.label}`);
+            } else {
+              ui.dim(`Active workspace: ${workspaceLabel(organizations, user.current_org_id)}`);
+            }
+
+            if (!opts.skipWorkspace) {
+              const healthResponse = await fetchIntegrationHealth(apiFetch);
+              const workspaceHealth = healthResponse?.health?.workspace;
+
+              if (!workspaceHealth) {
+                ui.warn("Could not verify workspace health from cloud API.");
+              } else if (workspaceHealth.hasDatabase) {
+                ui.success("Workspace database is provisioned.");
+              } else if (workspaceHealth.canProvision) {
+                const shouldProvision = opts.yes || await confirm({
+                  message: "Active workspace has no cloud database. Provision now?",
+                  default: true,
+                });
+
+                if (shouldProvision) {
+                  const provisioned = await provisionWorkspaceDatabase(apiFetch);
+                  if (provisioned) {
+                    ui.success("Workspace database provisioned.");
+                  } else {
+                    ui.warn("Database provisioning failed. Run memories doctor for remediation steps.");
+                  }
+                } else {
+                  ui.dim(`Run ${chalk.cyan("memories doctor")} to check and provision later.`);
+                }
+              } else {
+                ui.warn("Active workspace has no cloud database and this account cannot provision it.");
+                ui.dim("Ask an organization owner/admin to provision the workspace database.");
+              }
+            }
+          } catch (error) {
+            ui.warn(
+              "Cloud guidance incomplete: " +
+                (error instanceof Error ? error.message : "Unknown error"),
+            );
+          }
+        }
+      }
+
       if (!opts.skipVerify) {
-        ui.step(5, totalSteps, "Running integration verification...");
+        currentStep += 1;
+        ui.step(currentStep, totalSteps, "Running integration verification...");
         const report = await runDoctorChecks();
         const problematicChecks = report.checks.filter((check) => check.status !== "pass");
 
@@ -217,6 +530,9 @@ export const initCommand = new Command("init")
       console.log("");
       console.log(chalk.dim("  Run full health checks any time:"));
       console.log(`     ${chalk.cyan("memories doctor --fix")}`);
+      console.log("");
+      console.log(chalk.dim("  Check/switch workspace:"));
+      console.log(`     ${chalk.cyan("memories org current")} ${chalk.dim("or")} ${chalk.cyan("memories org use personal")}`);
       console.log("");
       console.log(chalk.dim("  Your rules will be available via MCP and in generated files."));
       console.log("");
