@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { X, Copy, Check } from "lucide-react"
+import { getTeamInviteExpiryLabel } from "@/lib/team-invites"
 
 interface InviteModalProps {
   orgId: string
@@ -12,6 +13,7 @@ interface InviteModalProps {
 }
 
 export function InviteModal({ orgId, isOwner, loading: parentLoading, onClose, onInviteSent }: InviteModalProps) {
+  const inviteExpiryLabel = getTeamInviteExpiryLabel()
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member")
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
@@ -80,6 +82,9 @@ export function InviteModal({ orgId, isOwner, loading: parentLoading, onClose, o
                 {emailSent
                   ? "We've sent an email with the invite link. You can also share this link directly:"
                   : "Share this link with the person you want to invite:"}
+              </p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Invite expires in {inviteExpiryLabel}.
               </p>
             </div>
             <div className="flex items-center gap-2">

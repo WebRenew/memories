@@ -1,4 +1,5 @@
 import { Resend } from "resend"
+import { getTeamInviteExpiryLabel } from "./team-invites"
 
 let resend: Resend | null = null
 
@@ -26,6 +27,7 @@ export async function sendTeamInviteEmail({
   role: string
 }) {
   const resend = getResend()
+  const inviteExpiryLabel = getTeamInviteExpiryLabel()
 
   const fromEmail = process.env.RESEND_FROM_EMAIL || "memories.sh <team@memories.sh>"
   
@@ -66,7 +68,7 @@ export async function sendTeamInviteEmail({
       </a>
       
       <p style="color: #525252; font-size: 12px; margin: 24px 0 0; line-height: 1.6;">
-        This invite expires in 7 days. If you didn't expect this invite, you can ignore this email.
+        This invite expires in ${inviteExpiryLabel}. If you didn't expect this invite, you can ignore this email.
       </p>
     </div>
     
@@ -86,7 +88,7 @@ memories.sh helps teams share rules and context across AI coding tools like Curs
 
 Accept your invite: ${inviteUrl}
 
-This invite expires in 7 days.
+This invite expires in ${inviteExpiryLabel}.
     `.trim(),
   })
 }

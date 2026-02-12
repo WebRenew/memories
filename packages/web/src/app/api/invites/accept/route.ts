@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { addTeamSeat } from "@/lib/stripe/teams"
 import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
@@ -19,12 +20,15 @@ export async function POST(request: Request) {
   const parsed = parseBody(acceptInviteSchema, await request.json().catch(() => ({})))
   if (!parsed.success) return parsed.response
   const { token, billing } = parsed.data
+  const inviteToken = token.trim()
+  const adminSupabase = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : null
+  const inviteLookup = adminSupabase ?? supabase
 
   // Find invite with org details
-  const { data: invite, error: inviteError } = await supabase
+  const { data: invite, error: inviteError } = await inviteLookup
     .from("org_invites")
     .select("*, organization:organizations(id, name, slug, stripe_customer_id, stripe_subscription_id)")
-    .eq("token", token)
+    .eq("token", inviteToken)
     .is("accepted_at", null)
     .gt("expires_at", new Date().toISOString())
     .single()
@@ -92,7 +96,7 @@ export async function POST(request: Request) {
 
     // If new subscription created, save it to org
     if (result.action === "created") {
-      await supabase
+      await (adminSupabase ?? supabase)
         .from("organizations")
         .update({ stripe_subscription_id: result.subscriptionId })
         .eq("id", org.id)
@@ -104,7 +108,8 @@ export async function POST(request: Request) {
   }
 
   // Mark invite as accepted FIRST to prevent race conditions
-  const { error: acceptError } = await supabase
+  const writeClient = adminSupabase ?? supabase
+  const { error: acceptError } = await writeClient
     .from("org_invites")
     .update({ accepted_at: new Date().toISOString() })
     .eq("id", invite.id)
@@ -116,7 +121,7 @@ export async function POST(request: Request) {
   }
 
   // Add as member
-  const { error: memberError } = await supabase
+  const { error: memberError } = await writeClient
     .from("org_members")
     .insert({
       org_id: invite.org_id,
@@ -127,7 +132,7 @@ export async function POST(request: Request) {
 
   if (memberError) {
     // Rollback invite acceptance if member insert fails
-    await supabase
+    await writeClient
       .from("org_invites")
       .update({ accepted_at: null })
       .eq("id", invite.id)
@@ -135,7 +140,7 @@ export async function POST(request: Request) {
   }
 
   // Set as user's current org if they don't have one
-  const { error: orgError } = await supabase
+  const { error: orgError } = await writeClient
     .from("users")
     .update({ current_org_id: invite.org_id })
     .eq("id", user.id)

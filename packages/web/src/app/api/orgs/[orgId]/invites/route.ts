@@ -3,6 +3,7 @@ import { sendTeamInviteEmail } from "@/lib/resend"
 import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 import { parseBody, createInviteSchema } from "@/lib/validations"
+import { getTeamInviteExpiresAt } from "@/lib/team-invites"
 
 // GET /api/orgs/[orgId]/invites - List pending invites
 export async function GET(
@@ -138,6 +139,7 @@ export async function POST(
       email: email.toLowerCase(),
       role,
       invited_by: user.id,
+      expires_at: getTeamInviteExpiresAt(),
     })
     .select()
     .single()

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { redirect } from "next/navigation"
 import { AcceptInviteContent } from "./accept-content"
 
@@ -17,10 +18,13 @@ export default async function AcceptInvitePage({
     redirect("/")
   }
 
+  const inviteToken = token.trim()
+  const adminSupabase = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : null
   const supabase = await createClient()
   
   // Get invite details
-  const { data: invite } = await supabase
+  const inviteLookup = adminSupabase ?? supabase
+  const { data: invite } = await inviteLookup
     .from("org_invites")
     .select(`
       id,
@@ -30,7 +34,7 @@ export default async function AcceptInvitePage({
       accepted_at,
       organization:organizations(id, name, slug)
     `)
-    .eq("token", token)
+    .eq("token", inviteToken)
     .single()
 
   if (!invite) {
@@ -102,7 +106,7 @@ export default async function AcceptInvitePage({
 
   return (
     <AcceptInviteContent
-      token={token}
+      token={inviteToken}
       orgName={org.name}
       role={invite.role}
       email={invite.email}
