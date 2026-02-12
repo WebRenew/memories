@@ -1,0 +1,187 @@
+import {
+  GRAPH_LLM_EXTRACTION_ENABLED,
+  GRAPH_MAPPING_ENABLED,
+  GRAPH_RETRIEVAL_ENABLED,
+  type TursoClient,
+} from "../types"
+
+interface GraphTopNodeRow {
+  node_type: string
+  node_key: string
+  label: string
+  memory_links: number
+  outbound_edges: number
+  inbound_edges: number
+}
+
+export interface GraphStatusTopNode {
+  nodeType: string
+  nodeKey: string
+  label: string
+  memoryLinks: number
+  outboundEdges: number
+  inboundEdges: number
+  degree: number
+}
+
+export interface GraphStatusPayload {
+  enabled: boolean
+  flags: {
+    mappingEnabled: boolean
+    retrievalEnabled: boolean
+    llmExtractionEnabled: boolean
+  }
+  health: "ok" | "schema_missing"
+  tables: {
+    graphNodes: boolean
+    graphEdges: boolean
+    memoryNodeLinks: boolean
+  }
+  counts: {
+    nodes: number
+    edges: number
+    memoryLinks: number
+    activeEdges: number
+    expiredEdges: number
+    orphanNodes: number
+  }
+  topConnectedNodes: GraphStatusTopNode[]
+  sampledAt: string
+}
+
+interface GraphStatusInput {
+  turso: TursoClient
+  nowIso: string
+  topNodesLimit: number
+}
+
+async function scalarCount(turso: TursoClient, sql: string, args: (string | number)[] = []): Promise<number> {
+  const result = await turso.execute({ sql, args })
+  return Number(result.rows[0]?.count ?? 0)
+}
+
+async function tableExists(turso: TursoClient, table: string): Promise<boolean> {
+  return (
+    (await scalarCount(
+      turso,
+      `SELECT COUNT(*) as count
+       FROM sqlite_master
+       WHERE type = 'table' AND name = ?`,
+      [table]
+    )) > 0
+  )
+}
+
+function normalizeTopNodesLimit(value: number): number {
+  if (!Number.isFinite(value)) return 10
+  return Math.max(1, Math.min(Math.floor(value), 50))
+}
+
+export async function getGraphStatusPayload(input: GraphStatusInput): Promise<GraphStatusPayload> {
+  const { turso, nowIso } = input
+  const topNodesLimit = normalizeTopNodesLimit(input.topNodesLimit)
+  const flags = {
+    mappingEnabled: GRAPH_MAPPING_ENABLED,
+    retrievalEnabled: GRAPH_RETRIEVAL_ENABLED,
+    llmExtractionEnabled: GRAPH_LLM_EXTRACTION_ENABLED,
+  }
+  const enabled = flags.mappingEnabled || flags.retrievalEnabled || flags.llmExtractionEnabled
+
+  const tables = {
+    graphNodes: await tableExists(turso, "graph_nodes"),
+    graphEdges: await tableExists(turso, "graph_edges"),
+    memoryNodeLinks: await tableExists(turso, "memory_node_links"),
+  }
+  const hasSchema = tables.graphNodes && tables.graphEdges && tables.memoryNodeLinks
+
+  if (!hasSchema) {
+    return {
+      enabled,
+      flags,
+      health: "schema_missing",
+      tables,
+      counts: {
+        nodes: 0,
+        edges: 0,
+        memoryLinks: 0,
+        activeEdges: 0,
+        expiredEdges: 0,
+        orphanNodes: 0,
+      },
+      topConnectedNodes: [],
+      sampledAt: nowIso,
+    }
+  }
+
+  const nodes = await scalarCount(turso, "SELECT COUNT(*) as count FROM graph_nodes")
+  const edges = await scalarCount(turso, "SELECT COUNT(*) as count FROM graph_edges")
+  const memoryLinks = await scalarCount(turso, "SELECT COUNT(*) as count FROM memory_node_links")
+  const activeEdges = await scalarCount(
+    turso,
+    "SELECT COUNT(*) as count FROM graph_edges WHERE expires_at IS NULL OR expires_at > ?",
+    [nowIso]
+  )
+  const expiredEdges = await scalarCount(
+    turso,
+    "SELECT COUNT(*) as count FROM graph_edges WHERE expires_at IS NOT NULL AND expires_at <= ?",
+    [nowIso]
+  )
+  const orphanNodes = await scalarCount(
+    turso,
+    `SELECT COUNT(*) as count
+     FROM graph_nodes n
+     WHERE NOT EXISTS (SELECT 1 FROM memory_node_links l WHERE l.node_id = n.id)
+       AND NOT EXISTS (
+         SELECT 1 FROM graph_edges e
+         WHERE (e.from_node_id = n.id OR e.to_node_id = n.id)
+           AND (e.expires_at IS NULL OR e.expires_at > ?)
+       )`,
+    [nowIso]
+  )
+
+  const topNodesResult = await turso.execute({
+    sql: `SELECT
+            n.node_type,
+            n.node_key,
+            n.label,
+            (SELECT COUNT(*) FROM memory_node_links l WHERE l.node_id = n.id) AS memory_links,
+            (SELECT COUNT(*) FROM graph_edges e WHERE e.from_node_id = n.id AND (e.expires_at IS NULL OR e.expires_at > ?)) AS outbound_edges,
+            (SELECT COUNT(*) FROM graph_edges e WHERE e.to_node_id = n.id AND (e.expires_at IS NULL OR e.expires_at > ?)) AS inbound_edges
+          FROM graph_nodes n
+          ORDER BY (memory_links + outbound_edges + inbound_edges) DESC, n.node_type ASC, n.node_key ASC
+          LIMIT ?`,
+    args: [nowIso, nowIso, topNodesLimit],
+  })
+
+  const topConnectedNodes = (topNodesResult.rows as unknown as GraphTopNodeRow[]).map((row) => {
+    const memoryLinksCount = Number(row.memory_links ?? 0)
+    const outboundEdgesCount = Number(row.outbound_edges ?? 0)
+    const inboundEdgesCount = Number(row.inbound_edges ?? 0)
+    return {
+      nodeType: row.node_type,
+      nodeKey: row.node_key,
+      label: row.label,
+      memoryLinks: memoryLinksCount,
+      outboundEdges: outboundEdgesCount,
+      inboundEdges: inboundEdgesCount,
+      degree: memoryLinksCount + outboundEdgesCount + inboundEdgesCount,
+    }
+  })
+
+  return {
+    enabled,
+    flags,
+    health: "ok",
+    tables,
+    counts: {
+      nodes,
+      edges,
+      memoryLinks,
+      activeEdges,
+      expiredEdges,
+      orphanNodes,
+    },
+    topConnectedNodes,
+    sampledAt: nowIso,
+  }
+}
