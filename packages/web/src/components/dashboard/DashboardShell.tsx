@@ -50,6 +50,10 @@ export function DashboardShell({
   const plan = workspace.plan
   const canManageBilling =
     workspace.ownerType === "user" || workspace.orgRole === "owner"
+  const sidebarOffsetClass =
+    plan === "past_due"
+      ? "top-[6.25rem] h-[calc(100vh-6.25rem)]"
+      : "top-16 h-[calc(100vh-4rem)]"
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
@@ -159,31 +163,33 @@ export function DashboardShell({
       {/* Content area with sidebar */}
       <div className={`flex ${plan === "past_due" ? "pt-[6.25rem]" : "pt-16"}`}>
         {/* Sidebar */}
-        <aside className="hidden md:flex flex-col w-56 shrink-0 border-r border-border h-[calc(100vh-4rem)] sticky top-16 p-4 gap-1 overflow-hidden">
-          {navItems.map((item) => {
-            const isActive =
-              item.href === "/app"
-                ? pathname === "/app"
-                : pathname.startsWith(item.href)
-            const Icon = item.icon
+        <aside className={`hidden md:flex flex-col w-56 shrink-0 border-r border-border sticky ${sidebarOffsetClass} p-4 overflow-hidden`}>
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1 space-y-1">
+            {navItems.map((item) => {
+              const isActive =
+                item.href === "/app"
+                  ? pathname === "/app"
+                  : pathname.startsWith(item.href)
+              const Icon = item.icon
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 px-4 py-3 text-xs uppercase tracking-[0.15em] font-bold transition-all duration-200 ${
-                  isActive
-                    ? "bg-primary/10 text-primary border border-primary/20"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {item.label}
-              </Link>
-            )
-          })}
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-4 py-3 text-xs uppercase tracking-[0.15em] font-bold transition-all duration-200 ${
+                    isActive
+                      ? "bg-primary/10 text-primary border border-primary/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {item.label}
+                </Link>
+              )
+            })}
+          </div>
 
-          <div className="mt-auto pt-4 border-t border-border">
+          <div className="pt-4 border-t border-border shrink-0">
             <form action="/auth/signout" method="post">
               <button
                 type="submit"
