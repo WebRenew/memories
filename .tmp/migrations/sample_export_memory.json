@@ -1,0 +1,13 @@
+{
+  "id": "TEE0guYtFU7b",
+  "content": "Decision: shadow metrics should run on every query when rollout mode is canary to compare hybrid vs baseline",
+  "type": "decision",
+  "tags": [
+    "rollout",
+    "canary",
+    "metrics",
+    "hybrid_graph"
+  ],
+  "scope": "project",
+  "created_at": "2026-02-12 01:25:42"
+}

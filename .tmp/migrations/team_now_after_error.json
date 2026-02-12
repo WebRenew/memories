@@ -1,0 +1,40 @@
+[
+  {
+    "id": "SPq01XGZ7_-t",
+    "content": "Rule: workspace setting hybrid_graph=true is the full switch for always-on hybrid retrieval",
+    "tags": "hybrid_graph,workspace,rollout,settings",
+    "project": null,
+    "created_at": "2026-02-12 15:39:58",
+    "updated_at": "2026-02-12 15:39:58",
+    "deleted_at": null,
+    "scope": "project",
+    "project_id": "github.com/WebRenew/memories",
+    "type": "rule",
+    "embedding": {},
+    "paths": null,
+    "category": null,
+    "metadata": null,
+    "user_id": null,
+    "memory_layer": "long_term",
+    "expires_at": null
+  },
+  {
+    "id": "kVyFL_fxbaCn",
+    "content": "Rule: if graph query fails, safe fallback must return baseline semantic recall and emit alarm event",
+    "tags": "graph,fallback,alarms,retrieval",
+    "project": null,
+    "created_at": "2026-02-12 15:39:58",
+    "updated_at": "2026-02-12 15:39:58",
+    "deleted_at": null,
+    "scope": "project",
+    "project_id": "github.com/WebRenew/memories",
+    "type": "rule",
+    "embedding": {},
+    "paths": null,
+    "category": null,
+    "metadata": null,
+    "user_id": null,
+    "memory_layer": "long_term",
+    "expires_at": null
+  }
+]

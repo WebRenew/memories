@@ -1,0 +1,19 @@
+Decision: expose /graph/status with node_count edge_count expired_edge_count and last_indexed_at for dashboard observability
+Decision: shadow metrics should run on every query when rollout mode is canary to compare hybrid vs baseline
+Fact: memory graph explorer needs node degree filters and recent error stream for operator debugging
+Fact: top nodes card should aggregate by edge participation over trailing 24h for quick hotspot detection
+Graph explorer should default to top connected node and allow hopping across adjacent edges.
+Graph retrieval depth should stay at 1 by default to cap noise and keep recall explainability clear.
+Graph smoke test memory: workspace-level hybrid_graph toggle should control retrieval mode without changing API schema
+Graph trace payloads must include requested strategy, applied strategy, rollout mode, and fallback reason.
+Keep graph alarm text concise and actionable so on-call can decide between canary and shadow quickly.
+Memory graph dashboard should surface rollout mode, fallback rate, and alarm severity before node details.
+Note: dashboard empty state should surface schema mismatch guidance and link to graph migration endpoint
+Rollout mode canary requires requests to ask strategy hybrid_graph; otherwise baseline remains applied.
+Rule: if graph query fails, safe fallback must return baseline semantic recall and emit alarm event
+Rule: recall trace payload must include mode selected_sources latency_ms and fallback_reason for every retrieval
+Rule: workspace setting hybrid_graph=true is the full switch for always-on hybrid retrieval
+Schema initialization should be best-effort; read paths must remain available when migration writes fail.
+Top nodes panel should emphasize repo, category, and topic node relationships for debugging traversal quality.
+Use /api/graph/explore for node neighborhood introspection including edges and linked memory evidence.
+When fallback rate exceeds 15 percent over 24h, treat as critical and degrade to shadow mode.

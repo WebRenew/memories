@@ -1,0 +1,254 @@
+{
+  "version": "1.0",
+  "exported_at": "2026-02-12T15:39:12.497Z",
+  "project_id": "github.com/WebRenew/memories",
+  "memories": [
+    {
+      "id": "TEE0guYtFU7b",
+      "content": "Decision: shadow metrics should run on every query when rollout mode is canary to compare hybrid vs baseline",
+      "type": "decision",
+      "tags": [
+        "rollout",
+        "canary",
+        "metrics",
+        "hybrid_graph"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:25:42"
+    },
+    {
+      "id": "z8Q99zKkfdMJ",
+      "content": "Decision: expose /graph/status with node_count edge_count expired_edge_count and last_indexed_at for dashboard observability",
+      "type": "decision",
+      "tags": [
+        "graph",
+        "status",
+        "dashboard",
+        "observability"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:25:13"
+    },
+    {
+      "id": "7cWXibmrIAWy",
+      "content": "Graph retrieval depth should stay at 1 by default to cap noise and keep recall explainability clear.",
+      "type": "decision",
+      "tags": [
+        "graph",
+        "retrieval",
+        "hybrid_graph",
+        "recall"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:23:00"
+    },
+    {
+      "id": "NUb2O_CcHevD",
+      "content": "Schema initialization should be best-effort; read paths must remain available when migration writes fail.",
+      "type": "decision",
+      "tags": [
+        "schema",
+        "graph",
+        "dashboard",
+        "resilience"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:22:19"
+    },
+    {
+      "id": "L6nskMKjYZLp",
+      "content": "Graph explorer should default to top connected node and allow hopping across adjacent edges.",
+      "type": "decision",
+      "tags": [
+        "graph",
+        "explorer",
+        "dashboard",
+        "navigation"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:21:39"
+    },
+    {
+      "id": "F2YMqU11_mM6",
+      "content": "Fact: top nodes card should aggregate by edge participation over trailing 24h for quick hotspot detection",
+      "type": "fact",
+      "tags": [
+        "dashboard",
+        "top-nodes",
+        "graph",
+        "metrics"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:26:11"
+    },
+    {
+      "id": "N0JCUPFklW-Y",
+      "content": "Fact: memory graph explorer needs node degree filters and recent error stream for operator debugging",
+      "type": "fact",
+      "tags": [
+        "graph",
+        "explorer",
+        "errors",
+        "dashboard"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:25:32"
+    },
+    {
+      "id": "ZxX20XBVIObB",
+      "content": "Graph smoke test memory: workspace-level hybrid_graph toggle should control retrieval mode without changing API schema",
+      "type": "fact",
+      "tags": [
+        "graph",
+        "hybrid_graph",
+        "smoke",
+        "workspace"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:24:51"
+    },
+    {
+      "id": "MxmSs2FaDjQ3",
+      "content": "Graph trace payloads must include requested strategy, applied strategy, rollout mode, and fallback reason.",
+      "type": "fact",
+      "tags": [
+        "graph",
+        "trace",
+        "api",
+        "rollout"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:22:09"
+    },
+    {
+      "id": "s5_fBb17gtFe",
+      "content": "Rollout mode canary requires requests to ask strategy hybrid_graph; otherwise baseline remains applied.",
+      "type": "fact",
+      "tags": [
+        "graph",
+        "rollout",
+        "hybrid_graph",
+        "strategy"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:21:49"
+    },
+    {
+      "id": "MkQAbRFIysIh",
+      "content": "Note: dashboard empty state should surface schema mismatch guidance and link to graph migration endpoint",
+      "type": "note",
+      "tags": [
+        "dashboard",
+        "graph",
+        "schema",
+        "empty-state"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:26:01"
+    },
+    {
+      "id": "3Ad8eLm2ZGtf",
+      "content": "Use /api/graph/explore for node neighborhood introspection including edges and linked memory evidence.",
+      "type": "note",
+      "tags": [
+        "graph",
+        "explore",
+        "api",
+        "dashboard"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:22:40"
+    },
+    {
+      "id": "M41y44tKMG3w",
+      "content": "Top nodes panel should emphasize repo, category, and topic node relationships for debugging traversal quality.",
+      "type": "note",
+      "tags": [
+        "graph",
+        "nodes",
+        "dashboard",
+        "debugging"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:22:30"
+    },
+    {
+      "id": "4kJIQRbh3Fq0",
+      "content": "Rule: workspace setting hybrid_graph=true is the full switch for always-on hybrid retrieval",
+      "type": "rule",
+      "tags": [
+        "hybrid_graph",
+        "workspace",
+        "rollout",
+        "settings"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:26:21"
+    },
+    {
+      "id": "tokZYg0H11hv",
+      "content": "Rule: if graph query fails, safe fallback must return baseline semantic recall and emit alarm event",
+      "type": "rule",
+      "tags": [
+        "graph",
+        "fallback",
+        "alarms",
+        "retrieval"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:25:52"
+    },
+    {
+      "id": "hdzzt3gsfPJM",
+      "content": "Rule: recall trace payload must include mode selected_sources latency_ms and fallback_reason for every retrieval",
+      "type": "rule",
+      "tags": [
+        "graph",
+        "recall",
+        "trace",
+        "retrieval"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:25:22"
+    },
+    {
+      "id": "zHlX-A5NPR8i",
+      "content": "Keep graph alarm text concise and actionable so on-call can decide between canary and shadow quickly.",
+      "type": "rule",
+      "tags": [
+        "graph",
+        "alarms",
+        "ops",
+        "rollout"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:22:50"
+    },
+    {
+      "id": "xpN6EsW3KqQf",
+      "content": "When fallback rate exceeds 15 percent over 24h, treat as critical and degrade to shadow mode.",
+      "type": "rule",
+      "tags": [
+        "graph",
+        "rollout",
+        "fallback",
+        "alarms"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:22:00"
+    },
+    {
+      "id": "kHOQYjUJ7LXe",
+      "content": "Memory graph dashboard should surface rollout mode, fallback rate, and alarm severity before node details.",
+      "type": "rule",
+      "tags": [
+        "graph",
+        "dashboard",
+        "rollout",
+        "observability"
+      ],
+      "scope": "project",
+      "created_at": "2026-02-12 01:21:27"
+    }
+  ]
+}

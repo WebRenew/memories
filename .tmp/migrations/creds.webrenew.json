@@ -1,0 +1,7 @@
+{
+  "url": "libsql://memories-mpki5ziq-webrenew.aws-us-east-2.turso.io",
+  "token": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NzA3NDI5NzksImlkIjoiMjZiM2EzYjctOWFkZS00ZDk2LWI2NjctN2I3MGRmNjNlZmVlIiwicmlkIjoiNmEwY2E2Y2QtZGZiMy00MGNjLThkODEtOTdjYTk4ODA0NDdkIn0.now1mBzPMHMsasfy_3EWfKp6HHgKC3yC1YoDYQo4I8ZKjShy08Vhsu5y8NOn1r2QQLl3QcSalyBHEth5hLWHCg",
+  "dbName": "memories-mpki5ziq",
+  "ownerType": "organization",
+  "orgId": "a0a444cc-870b-4b98-af29-1275492100fc"
+}

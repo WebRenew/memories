@@ -1,0 +1,7 @@
+{
+  "url": "libsql://memories-cetba2lp-webrenew.aws-us-east-2.turso.io",
+  "token": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3Njk4MTA3NjAsImlkIjoiZTViYjNiNmItMDI0Ni00MzhhLWEyYTEtZWU0YmMyZmIxYjZmIiwicmlkIjoiN2U5M2Y2MmMtODhkYS00Nzg0LThhM2ItZDFlNjYxMzgzN2E5In0.WyfP-L3cBgaqfTkqZ9IMjT6P-BsTUUX2v0EXdYirYgB0omvApyUMXvy04U8iwB2AEOLbkVaQ7uuYXJDlfBmTBw",
+  "dbName": "memories-cetba2lp",
+  "ownerType": "user",
+  "orgId": null
+}

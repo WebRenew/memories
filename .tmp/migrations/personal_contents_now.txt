@@ -1,0 +1,2 @@
+Rule: if graph query fails, safe fallback must return baseline semantic recall and emit alarm event
+Rule: workspace setting hybrid_graph=true is the full switch for always-on hybrid retrieval
