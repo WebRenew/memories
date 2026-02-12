@@ -1,0 +1,89 @@
+---
+title: Memory Graph Architecture
+description: How graph nodes and edges are extracted, stored, retrieved, and guarded in memories.sh.
+---
+
+This page describes the graph pipeline end-to-end: write path, storage model, hybrid retrieval, and rollout guardrails.
+
+## Why The Graph Exists
+
+Baseline retrieval ranks memories by text relevance. The graph layer adds relationship traversal so related memories can be recalled even when exact query terms differ.
+
+Examples:
+
+- Query mentions `rollout alarms`, but the best supporting memory is connected through `topic:dashboard`.
+- Query mentions `hybrid strategy`, and related `decision` or `rule` memories are reached through graph edges instead of keyword overlap.
+
+## Storage Model
+
+Graph storage is maintained in the workspace Turso database:
+
+- `graph_nodes`: canonical entities (`repo`, `topic`, `category`, `memory_type`, etc.)
+- `graph_edges`: typed, weighted directional relationships between nodes
+- `memory_node_links`: mapping between each memory and its extracted nodes
+
+Primary code paths:
+
+- `/Users/tradecraft/dev/memories/packages/web/src/lib/memory-service/graph/upsert.ts`
+- `/Users/tradecraft/dev/memories/packages/web/src/lib/memory-service/graph/retrieval.ts`
+- `/Users/tradecraft/dev/memories/packages/web/src/lib/memory-service/graph/status.ts`
+
+## Write Path
+
+1. A memory write/update enters memory mutation handlers.
+2. Graph extraction produces node and edge candidates from memory content and metadata.
+3. `upsert.ts` ensures schema, upserts nodes, writes memory-node links, writes evidence-backed edges, and prunes stale links for edited/forgotten memories.
+4. Cleanup removes orphan graph nodes with no links or edges.
+
+Behavior is best-effort: memory writes stay available even if graph indexing fails.
+
+## Read Path (Hybrid Retrieval)
+
+Hybrid retrieval runs in layered recall logic:
+
+1. Baseline candidates are gathered from rules, working memories, and long-term memories.
+2. If request strategy is `hybrid_graph` and rollout allows it, graph expansion traverses related nodes/edges from seed memories.
+3. Graph-expanded memories are appended with provenance metadata (`whyIncluded: graph_expansion`, linked node, edge type, hop count).
+4. If graph expansion errors or rollout disallows application, retrieval falls back safely to baseline.
+
+Fallback reasons include:
+
+- `feature_flag_disabled`
+- `rollout_off`
+- `shadow_mode`
+- `graph_expansion_error`
+- `rollout_guardrail`
+
+## Rollout And Safety Controls
+
+Workspace rollout mode controls whether hybrid expansion is applied:
+
+- `off`: baseline only
+- `shadow`: execute graph path for metrics, return baseline
+- `canary`: apply graph expansion for `strategy: hybrid_graph` requests
+
+Safety and observability are emitted through graph status and trace payloads:
+
+- `/api/sdk/v1/graph/status`
+- `/api/sdk/v1/graph/rollout`
+- `/api/sdk/v1/graph/trace`
+
+## Scope And Workspace Routing
+
+Graph data respects the same routing model as memories:
+
+- `tenantId`: tenant-isolated database routing
+- `userId`: per-user memory isolation
+- `projectId`: project/repo memory scope
+
+When workspace repo-routing mode is `auto`, org repos route to org workspace memory and personal repos route to personal workspace memory by default.
+
+## Dashboard Explorer Mapping
+
+The dashboard graph explorer (`Memory Graph` section) reads from `/api/graph/explore` and renders:
+
+- Relationship graph (interactive node/edge view)
+- Selected edge metadata (direction, weight, confidence, evidence, expiry)
+- Linked memories and evidence highlighting
+
+This view is designed for debugging retrieval quality and data linkage, not only for health checks.

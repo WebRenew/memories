@@ -320,17 +320,57 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [explorerError, setExplorerError] = useState<string | null>(null)
   const [isExplorerLoading, setIsExplorerLoading] = useState(false)
+  const [isFocusMode, setIsFocusMode] = useState(false)
+  const [urlHydrated, setUrlHydrated] = useState(false)
+  const [edgeTypeFilter, setEdgeTypeFilter] = useState<string[]>([])
+  const [nodeTypeFilter, setNodeTypeFilter] = useState<string[]>([])
+  const [minWeight, setMinWeight] = useState(0)
+  const [minConfidence, setMinConfidence] = useState(0)
+  const [onlyEvidenceEdges, setOnlyEvidenceEdges] = useState(false)
   const [graphViewport, setGraphViewport] = useState<GraphViewport>(DEFAULT_GRAPH_VIEWPORT)
   const [isPanning, setIsPanning] = useState(false)
   const [isPending, startTransition] = useTransition()
   const graphViewportRef = useRef<HTMLDivElement | null>(null)
   const panStartRef = useRef<{ pointerId: number; clientX: number; clientY: number } | null>(null)
+  const pendingEdgeIdFromUrlRef = useRef<string | null>(null)
 
   useEffect(() => {
     setLocalStatus(status)
   }, [status])
 
   useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const params = new URLSearchParams(window.location.search)
+    const urlNodeType = params.get("graph_node_type")
+    const urlNodeKey = params.get("graph_node_key")
+    const urlNodeLabel = params.get("graph_node_label")
+    const urlEdgeId = params.get("graph_edge_id")
+    const urlFocusMode = params.get("graph_focus")
+
+    if (urlNodeType && urlNodeKey) {
+      setSelectedNode({
+        nodeType: urlNodeType,
+        nodeKey: urlNodeKey,
+        label: urlNodeLabel || `${urlNodeType}:${urlNodeKey}`,
+      })
+    }
+
+    if (urlEdgeId) {
+      pendingEdgeIdFromUrlRef.current = urlEdgeId
+      setSelectedEdgeId(urlEdgeId)
+    }
+
+    if (urlFocusMode === "1") {
+      setIsFocusMode(true)
+    }
+
+    setUrlHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    if (!urlHydrated) return
+
     if (!localStatus || localStatus.topConnectedNodes.length === 0) {
       setSelectedNode(null)
       setExplorerData(null)
@@ -347,7 +387,7 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
         label: node.label,
       })
     }
-  }, [localStatus, selectedNode])
+  }, [localStatus, selectedNode, urlHydrated])
 
   useEffect(() => {
     if (!selectedNode) return
@@ -378,9 +418,17 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
 
         if (!cancelled) {
           setExplorerData(body)
-          setSelectedEdgeId((current) =>
-            body.edges.some((edge) => edge.id === current) ? current : (body.edges[0]?.id ?? null)
+          const preferredEdgeId = pendingEdgeIdFromUrlRef.current
+          const preferredExists = Boolean(
+            preferredEdgeId && body.edges.some((edge) => edge.id === preferredEdgeId)
           )
+          setSelectedEdgeId((current) => {
+            if (preferredExists) return preferredEdgeId
+            return body.edges.some((edge) => edge.id === current) ? current : (body.edges[0]?.id ?? null)
+          })
+          if (preferredExists) {
+            pendingEdgeIdFromUrlRef.current = null
+          }
         }
       } catch {
         if (!cancelled) {
@@ -413,13 +461,143 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
     () => buildGraphCanvasModel(selectedNode, explorerData),
     [selectedNode, explorerData]
   )
+  const edgeTypeOptions = useMemo(
+    () =>
+      graphCanvas
+        ? [...new Set(graphCanvas.edges.map((edge) => edge.edgeType))].sort()
+        : [],
+    [graphCanvas]
+  )
+  const nodeTypeOptions = useMemo(() => graphCanvas?.nodeTypes ?? [], [graphCanvas])
+  const filteredGraph = useMemo(() => {
+    if (!graphCanvas) return null
+
+    const allowedEdgeTypes =
+      edgeTypeFilter.length > 0 ? new Set(edgeTypeFilter) : new Set(edgeTypeOptions)
+    const allowedNodeTypes =
+      nodeTypeFilter.length > 0 ? new Set(nodeTypeFilter) : new Set(nodeTypeOptions)
+
+    const edges = graphCanvas.edges.filter((edge) => {
+      if (!allowedEdgeTypes.has(edge.edgeType)) return false
+      if (!allowedNodeTypes.has(edge.from.nodeType) || !allowedNodeTypes.has(edge.to.nodeType)) {
+        return false
+      }
+      if (edge.weight < minWeight) return false
+      if (edge.confidence < minConfidence) return false
+      if (onlyEvidenceEdges && !edge.evidenceMemoryId) return false
+      return true
+    })
+
+    const visibleNodeIds = new Set<string>()
+    for (const node of graphCanvas.nodes) {
+      if (node.isSelected) {
+        visibleNodeIds.add(node.id)
+      }
+    }
+    for (const edge of edges) {
+      visibleNodeIds.add(edge.fromId)
+      visibleNodeIds.add(edge.toId)
+    }
+
+    const nodes = graphCanvas.nodes.filter((node) => {
+      if (!node.isSelected && !allowedNodeTypes.has(node.nodeType)) return false
+      return visibleNodeIds.has(node.id)
+    })
+    const nodeTypes = [...new Set(nodes.map((node) => node.nodeType))].sort()
+    return { nodes, edges, nodeTypes }
+  }, [
+    edgeTypeFilter,
+    edgeTypeOptions,
+    graphCanvas,
+    minConfidence,
+    minWeight,
+    nodeTypeFilter,
+    nodeTypeOptions,
+    onlyEvidenceEdges,
+  ])
   const selectedEdge = useMemo(() => {
-    if (!explorerData || explorerData.edges.length === 0) return null
-    if (!selectedEdgeId) return explorerData.edges[0]
-    return explorerData.edges.find((edge) => edge.id === selectedEdgeId) ?? explorerData.edges[0]
-  }, [explorerData, selectedEdgeId])
+    if (!filteredGraph || filteredGraph.edges.length === 0) return null
+    if (!selectedEdgeId) return filteredGraph.edges[0]
+    return filteredGraph.edges.find((edge) => edge.id === selectedEdgeId) ?? filteredGraph.edges[0]
+  }, [filteredGraph, selectedEdgeId])
+
+  useEffect(() => {
+    if (!graphCanvas) {
+      setEdgeTypeFilter([])
+      setNodeTypeFilter([])
+      return
+    }
+
+    setEdgeTypeFilter((current) => {
+      if (current.length === 0) return edgeTypeOptions
+      const next = current.filter((edgeType) => edgeTypeOptions.includes(edgeType))
+      return next.length > 0 ? next : edgeTypeOptions
+    })
+
+    setNodeTypeFilter((current) => {
+      if (current.length === 0) return nodeTypeOptions
+      const next = current.filter((nodeType) => nodeTypeOptions.includes(nodeType))
+      return next.length > 0 ? next : nodeTypeOptions
+    })
+  }, [edgeTypeOptions, graphCanvas, nodeTypeOptions])
+
+  useEffect(() => {
+    if (!filteredGraph || filteredGraph.edges.length === 0) {
+      if (selectedEdgeId !== null) {
+        setSelectedEdgeId(null)
+      }
+      return
+    }
+
+    if (!filteredGraph.edges.some((edge) => edge.id === selectedEdgeId)) {
+      setSelectedEdgeId(filteredGraph.edges[0]?.id ?? null)
+    }
+  }, [filteredGraph, selectedEdgeId])
+
+  useEffect(() => {
+    if (!urlHydrated || typeof window === "undefined") return
+
+    const nextUrl = new URL(window.location.href)
+    if (selectedNode) {
+      nextUrl.searchParams.set("graph_node_type", selectedNode.nodeType)
+      nextUrl.searchParams.set("graph_node_key", selectedNode.nodeKey)
+      nextUrl.searchParams.set("graph_node_label", selectedNode.label)
+    } else {
+      nextUrl.searchParams.delete("graph_node_type")
+      nextUrl.searchParams.delete("graph_node_key")
+      nextUrl.searchParams.delete("graph_node_label")
+    }
+
+    if (selectedEdgeId) {
+      nextUrl.searchParams.set("graph_edge_id", selectedEdgeId)
+    } else {
+      nextUrl.searchParams.delete("graph_edge_id")
+    }
+
+    if (isFocusMode) {
+      nextUrl.searchParams.set("graph_focus", "1")
+    } else {
+      nextUrl.searchParams.delete("graph_focus")
+    }
+
+    const query = nextUrl.searchParams.toString()
+    const nextPath = query ? `${nextUrl.pathname}?${query}${nextUrl.hash}` : `${nextUrl.pathname}${nextUrl.hash}`
+    const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    if (nextPath !== currentPath) {
+      window.history.replaceState({}, "", nextPath)
+    }
+  }, [
+    isFocusMode,
+    selectedEdgeId,
+    selectedNode,
+    selectedNode?.label,
+    selectedNode?.nodeKey,
+    selectedNode?.nodeType,
+    urlHydrated,
+  ])
+
   const selectedNodeStats = useMemo(() => {
-    if (!explorerData) {
+    if (!filteredGraph) {
       return {
         outbound: 0,
         inbound: 0,
@@ -432,7 +610,7 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
     let inbound = 0
     let expiring = 0
     let withEvidence = 0
-    for (const edge of explorerData.edges) {
+    for (const edge of filteredGraph.edges) {
       if (edge.direction === "outbound") {
         outbound += 1
       } else {
@@ -452,7 +630,7 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
       expiring,
       withEvidence,
     }
-  }, [explorerData])
+  }, [filteredGraph])
 
   const applyScaleAtPoint = useCallback((nextScale: number, anchor: { x: number; y: number }) => {
     setGraphViewport((current) => {
@@ -492,6 +670,46 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
     setIsPanning(false)
     panStartRef.current = null
   }, [])
+
+  const fitGraphToView = useCallback(() => {
+    if (!filteredGraph || filteredGraph.nodes.length === 0) {
+      resetViewport()
+      return
+    }
+
+    let minX = Number.POSITIVE_INFINITY
+    let maxX = Number.NEGATIVE_INFINITY
+    let minY = Number.POSITIVE_INFINITY
+    let maxY = Number.NEGATIVE_INFINITY
+
+    for (const node of filteredGraph.nodes) {
+      minX = Math.min(minX, node.x)
+      maxX = Math.max(maxX, node.x)
+      minY = Math.min(minY, node.y)
+      maxY = Math.max(maxY, node.y)
+    }
+
+    const width = Math.max(1, maxX - minX)
+    const height = Math.max(1, maxY - minY)
+    const padding = 110
+    const scaleX = GRAPH_WIDTH / (width + padding * 2)
+    const scaleY = GRAPH_HEIGHT / (height + padding * 2)
+    const scale = clamp(Math.min(scaleX, scaleY), GRAPH_ZOOM_MIN, GRAPH_ZOOM_MAX)
+    const centerX = (minX + maxX) / 2
+    const centerY = (minY + maxY) / 2
+
+    setGraphViewport({
+      scale,
+      x: GRAPH_WIDTH / 2 - centerX * scale,
+      y: GRAPH_HEIGHT / 2 - centerY * scale,
+    })
+    setIsPanning(false)
+    panStartRef.current = null
+  }, [filteredGraph, resetViewport])
+
+  useEffect(() => {
+    fitGraphToView()
+  }, [fitGraphToView, selectedNode?.nodeKey, selectedNode?.nodeType])
 
   const handleGraphWheel = useCallback(
     (event: WheelEvent<HTMLDivElement>) => {
@@ -554,6 +772,65 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
       clientY: event.clientY,
     }
   }, [])
+
+  const toggleEdgeType = useCallback(
+    (edgeType: string) => {
+      setEdgeTypeFilter((current) => {
+        if (current.includes(edgeType)) {
+          if (current.length <= 1) return current
+          return current.filter((value) => value !== edgeType)
+        }
+        return [...current, edgeType]
+      })
+    },
+    []
+  )
+
+  const toggleNodeType = useCallback(
+    (nodeType: string) => {
+      setNodeTypeFilter((current) => {
+        if (current.includes(nodeType)) {
+          if (current.length <= 1) return current
+          return current.filter((value) => value !== nodeType)
+        }
+        return [...current, nodeType]
+      })
+    },
+    []
+  )
+
+  const clearGraphFilters = useCallback(() => {
+    setEdgeTypeFilter(edgeTypeOptions)
+    setNodeTypeFilter(nodeTypeOptions)
+    setMinWeight(0)
+    setMinConfidence(0)
+    setOnlyEvidenceEdges(false)
+  }, [edgeTypeOptions, nodeTypeOptions])
+
+  const miniMapViewport = useMemo(() => {
+    if (!filteredGraph || filteredGraph.nodes.length === 0) return null
+
+    const width = 172
+    const height = 98
+    const viewportWidth = GRAPH_WIDTH / graphViewport.scale
+    const viewportHeight = GRAPH_HEIGHT / graphViewport.scale
+    const rawViewportX = (-graphViewport.x) / graphViewport.scale
+    const rawViewportY = (-graphViewport.y) / graphViewport.scale
+    const maxViewportX = Math.max(0, GRAPH_WIDTH - viewportWidth)
+    const maxViewportY = Math.max(0, GRAPH_HEIGHT - viewportHeight)
+
+    const viewportX = clamp(rawViewportX, 0, maxViewportX)
+    const viewportY = clamp(rawViewportY, 0, maxViewportY)
+
+    return {
+      width,
+      height,
+      viewportX,
+      viewportY,
+      viewportWidth,
+      viewportHeight,
+    }
+  }, [filteredGraph, graphViewport.scale, graphViewport.x, graphViewport.y])
 
   const updateRolloutMode = (mode: GraphRolloutMode) => {
     if (!activeStatus || activeStatus.rollout.mode === mode) {
@@ -798,14 +1075,23 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
                   Traverse adjacent edges and linked memories for a selected node. Scroll to zoom and drag to pan.
                 </p>
               </div>
-              {selectedNode ? (
-                <div className="text-right">
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Selected Node</p>
-                  <p className="text-[11px] font-mono text-foreground mt-1">
-                    {selectedNode.nodeType}:{selectedNode.nodeKey}
-                  </p>
-                </div>
-              ) : null}
+              <div className="flex items-center gap-2">
+                {selectedNode ? (
+                  <div className="text-right mr-1">
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Selected Node</p>
+                    <p className="text-[11px] font-mono text-foreground mt-1">
+                      {selectedNode.nodeType}:{selectedNode.nodeKey}
+                    </p>
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setIsFocusMode((current) => !current)}
+                  className="h-8 px-2 rounded-md ring-1 ring-border/50 bg-card/40 text-[10px] uppercase tracking-[0.12em] font-bold hover:bg-card/70 transition-colors"
+                >
+                  {isFocusMode ? "Show Sidebar" : "Focus Graph"}
+                </button>
+              </div>
             </div>
 
             {!selectedNode ? (
@@ -816,10 +1102,10 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
               <p className="text-sm text-muted-foreground">Loading graph neighborhood...</p>
             ) : explorerError ? (
               <p className="text-sm text-red-500">{explorerError}</p>
-            ) : !explorerData || !graphCanvas ? (
+            ) : !explorerData || !graphCanvas || !filteredGraph ? (
               <p className="text-sm text-muted-foreground">No explorer data available.</p>
             ) : (
-              <div className="grid xl:grid-cols-[2fr_1fr] gap-4">
+              <div className={`grid gap-4 ${isFocusMode ? "grid-cols-1" : "xl:grid-cols-[2fr_1fr]"}`}>
                 <div className="rounded-xl bg-card/15 ring-1 ring-border/35 p-4 space-y-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -827,7 +1113,9 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
                         Relationship Graph
                       </h4>
                       <p className="text-[11px] font-mono text-muted-foreground mt-1">
-                        {graphCanvas.nodes.length} nodes • {graphCanvas.edges.length} edges • zoom {(graphViewport.scale * 100).toFixed(0)}%
+                        {filteredGraph.nodes.length}/{graphCanvas.nodes.length} nodes •{" "}
+                        {filteredGraph.edges.length}/{graphCanvas.edges.length} edges • zoom{" "}
+                        {(graphViewport.scale * 100).toFixed(0)}%
                       </p>
                     </div>
                     <div className="flex items-center gap-1">
@@ -854,7 +1142,120 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
                       >
                         Reset
                       </button>
+                      <button
+                        type="button"
+                        onClick={fitGraphToView}
+                        className="h-8 px-2 rounded-md ring-1 ring-border/50 bg-card/40 text-[10px] uppercase tracking-[0.12em] font-bold hover:bg-card/70 transition-colors"
+                      >
+                        Fit
+                      </button>
                     </div>
+                  </div>
+
+                  <div className="rounded-lg bg-card/20 ring-1 ring-border/30 p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] uppercase tracking-[0.16em] font-bold text-muted-foreground">
+                        Filters
+                      </p>
+                      <button
+                        type="button"
+                        onClick={clearGraphFilters}
+                        className="text-[10px] uppercase tracking-[0.12em] font-bold text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        reset filters
+                      </button>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-muted-foreground mb-2">
+                        Edge Type
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {edgeTypeOptions.map((edgeType) => {
+                          const active = edgeTypeFilter.includes(edgeType)
+                          return (
+                            <button
+                              key={edgeType}
+                              type="button"
+                              onClick={() => toggleEdgeType(edgeType)}
+                              className={`px-2 py-1 rounded-md ring-1 text-[10px] uppercase tracking-[0.12em] font-bold transition-colors ${
+                                active
+                                  ? "bg-primary/12 ring-primary/45 text-primary"
+                                  : "bg-card/30 ring-border/35 text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              {edgeType}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-muted-foreground mb-2">
+                        Node Type
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {nodeTypeOptions.map((nodeType) => {
+                          const active = nodeTypeFilter.includes(nodeType)
+                          return (
+                            <button
+                              key={nodeType}
+                              type="button"
+                              onClick={() => toggleNodeType(nodeType)}
+                              className={`px-2 py-1 rounded-md ring-1 text-[10px] uppercase tracking-[0.12em] font-bold transition-colors ${
+                                active
+                                  ? "bg-primary/12 ring-primary/45 text-primary"
+                                  : "bg-card/30 ring-border/35 text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              {nodeType}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <label className="space-y-1">
+                        <span className="text-[10px] uppercase tracking-[0.14em] font-bold text-muted-foreground">
+                          Min Weight {minWeight.toFixed(2)}
+                        </span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={minWeight}
+                          onChange={(event) => setMinWeight(Number(event.target.value))}
+                          className="w-full"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-[10px] uppercase tracking-[0.14em] font-bold text-muted-foreground">
+                          Min Confidence {minConfidence.toFixed(2)}
+                        </span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={minConfidence}
+                          onChange={(event) => setMinConfidence(Number(event.target.value))}
+                          className="w-full"
+                        />
+                      </label>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={onlyEvidenceEdges}
+                        onChange={(event) => setOnlyEvidenceEdges(event.target.checked)}
+                        className="h-3.5 w-3.5 rounded border-border bg-background"
+                      />
+                      Only show edges with evidence memory
+                    </label>
                   </div>
 
                   <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.14em] font-bold">
@@ -875,9 +1276,9 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
                     </span>
                   </div>
 
-                  {graphCanvas.edges.length === 0 ? (
+                  {filteredGraph.edges.length === 0 ? (
                     <p className="text-sm text-muted-foreground px-1 py-2">
-                      No active edges for this node yet.
+                      No relationships match the current filters.
                     </p>
                   ) : (
                     <div
@@ -908,7 +1309,7 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
                         </defs>
 
                         <g transform={`translate(${graphViewport.x} ${graphViewport.y}) scale(${graphViewport.scale})`}>
-                          {graphCanvas.edges.map((edge) => {
+                          {filteredGraph.edges.map((edge) => {
                             const isSelectedEdge = selectedEdge?.id === edge.id
                             const showEdgeLabel = isSelectedEdge || graphViewport.scale >= 0.92
                             return (
@@ -943,12 +1344,12 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
                             )
                           })}
 
-                          {graphCanvas.nodes.map((node) => {
+                          {filteredGraph.nodes.map((node) => {
                             const style = getNodeStyle(node.nodeType)
                             const radius = node.isSelected
                               ? 18
                               : Math.min(16, 10 + Math.log2((node.degree || 0) + 1) * 2.3)
-                            const showLabel = node.isSelected || graphCanvas.nodes.length <= 14 || node.degree > 1
+                            const showLabel = node.isSelected || filteredGraph.nodes.length <= 14 || node.degree > 1
 
                             return (
                               <g
@@ -1012,12 +1413,55 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
                           })}
                         </g>
                       </svg>
+
+                      {miniMapViewport ? (
+                        <div
+                          className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-background/70 backdrop-blur-sm ring-1 ring-border/45 p-1.5"
+                          style={{ width: miniMapViewport.width, height: miniMapViewport.height }}
+                        >
+                          <svg viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`} className="h-full w-full">
+                            {filteredGraph.edges.map((edge) => (
+                              <path
+                                key={`mini-${edge.id}`}
+                                d={edge.path}
+                                fill="none"
+                                stroke="#64748b"
+                                strokeOpacity={0.5}
+                                strokeWidth={2.2}
+                              />
+                            ))}
+                            {filteredGraph.nodes.map((node) => (
+                              <circle
+                                key={`mini-node-${node.id}`}
+                                cx={node.x}
+                                cy={node.y}
+                                r={node.isSelected ? 14 : 10}
+                                fill={node.isSelected ? "#6366f1" : "#94a3b8"}
+                                fillOpacity={node.isSelected ? 0.88 : 0.5}
+                                stroke={node.isSelected ? "#e0e7ff" : "transparent"}
+                                strokeWidth={node.isSelected ? 3.2 : 0}
+                              />
+                            ))}
+                            <rect
+                              x={miniMapViewport.viewportX}
+                              y={miniMapViewport.viewportY}
+                              width={miniMapViewport.viewportWidth}
+                              height={miniMapViewport.viewportHeight}
+                              fill="rgba(99,102,241,0.12)"
+                              stroke="#818cf8"
+                              strokeWidth={4}
+                              rx={6}
+                              ry={6}
+                            />
+                          </svg>
+                        </div>
+                      ) : null}
                     </div>
                   )}
 
-                  {graphCanvas.nodeTypes.length > 0 ? (
+                  {filteredGraph.nodeTypes.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                      {graphCanvas.nodeTypes.map((nodeType) => {
+                      {filteredGraph.nodeTypes.map((nodeType) => {
                         const style = getNodeStyle(nodeType)
                         return (
                           <span
@@ -1037,7 +1481,7 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
                   ) : null}
                 </div>
 
-                <div className="space-y-3">
+                {!isFocusMode ? <div className="space-y-3">
                   <div className="rounded-xl bg-card/15 ring-1 ring-border/35 p-4">
                     <h4 className="text-[11px] uppercase tracking-[0.18em] font-bold text-muted-foreground mb-3">
                       Selected Edge
@@ -1073,11 +1517,11 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
                     <h4 className="text-[11px] uppercase tracking-[0.18em] font-bold text-muted-foreground mb-3">
                       Relationships
                     </h4>
-                    {graphCanvas.edges.length === 0 ? (
+                    {filteredGraph.edges.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No relationships for this node.</p>
                     ) : (
                       <div className="space-y-2 max-h-[210px] overflow-y-auto overflow-x-hidden scrollbar-ghost pr-0">
-                        {graphCanvas.edges.map((edge) => {
+                        {filteredGraph.edges.map((edge) => {
                           const isActive = selectedEdge?.id === edge.id
                           return (
                             <button
@@ -1150,7 +1594,7 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
                       </div>
                     )}
                   </div>
-                </div>
+                </div> : null}
               </div>
             )}
           </div>

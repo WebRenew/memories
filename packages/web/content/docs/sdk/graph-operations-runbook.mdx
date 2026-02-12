@@ -1,0 +1,141 @@
+---
+title: Graph Operations Runbook
+description: Operating, troubleshooting, and rolling out hybrid graph retrieval safely.
+---
+
+This runbook is for production operation of graph indexing and hybrid retrieval.
+
+## Quick Health Checks
+
+Check graph status:
+
+```bash
+curl -s -H "Authorization: Bearer $MEMORIES_API_KEY" \
+  "https://memories.sh/api/sdk/v1/graph/status" | jq
+```
+
+Review trace behavior for a representative query:
+
+```bash
+curl -s -X POST \
+  -H "Authorization: Bearer $MEMORIES_API_KEY" \
+  -H "Content-Type: application/json" \
+  "https://memories.sh/api/sdk/v1/graph/trace" \
+  -d '{
+    "query": "why did fallback alarms increase",
+    "strategy": "hybrid_graph",
+    "graphDepth": 1,
+    "graphLimit": 8,
+    "scope": { "projectId": "github.com/acme/platform" }
+  }' | jq
+```
+
+Inspect rollout mode and shadow metrics:
+
+```bash
+curl -s -H "Authorization: Bearer $MEMORIES_API_KEY" \
+  "https://memories.sh/api/sdk/v1/graph/rollout" | jq
+```
+
+## Recommended Rollout Sequence
+
+1. Start in `off` after deployment validation.
+2. Move to `shadow` and observe at least 24h of representative traffic.
+3. Promote to `canary` when fallback rate and graph error fallbacks are stable.
+4. Stay in `canary` while monitoring alarms and trace fallback reasons.
+
+Patch mode via SDK endpoint:
+
+```bash
+curl -s -X PATCH \
+  -H "Authorization: Bearer $MEMORIES_API_KEY" \
+  -H "Content-Type: application/json" \
+  "https://memories.sh/api/sdk/v1/graph/rollout" \
+  -d '{"mode":"shadow"}' | jq
+```
+
+## Alert Interpretation
+
+Current built-in alarms include:
+
+- `HIGH_FALLBACK_RATE`
+- `GRAPH_EXPANSION_ERRORS`
+
+Current threshold logic in status payload generation:
+
+- Critical fallback alarm at fallback rate `>= 15%` with at least `20` requests in window.
+- Warning fallback alarm at fallback rate `>= 5%` with at least `10` requests in window.
+- Expansion error alarm when graph expansion errors are observed.
+
+See implementation in:
+
+- `/Users/tradecraft/dev/memories/packages/web/src/lib/memory-service/graph/status.ts`
+
+## Common Failure Modes
+
+### 1) `schema_missing` in graph status
+
+Symptoms:
+
+- Graph dashboard shows schema missing
+- Graph node/edge counts are zero while memories exist
+
+Actions:
+
+1. Confirm workspace Turso credentials are valid.
+2. Execute a memory write to trigger best-effort schema/init path.
+3. Recheck `/api/sdk/v1/graph/status`.
+4. If still missing, inspect server logs for Turso DDL/write errors.
+
+### 2) Zero nodes/edges despite new memories
+
+Symptoms:
+
+- Memory count increases, graph counts do not
+
+Actions:
+
+1. Validate writes are not bypassing standard memory mutation paths.
+2. Confirm extraction/upsert code paths are enabled.
+3. Verify graph tables exist and are writable.
+4. Use trace endpoint to confirm fallback reason and graph candidate counts.
+
+### 3) High fallback rate in `canary`
+
+Symptoms:
+
+- Rising fallback rate or repeated `fallbackReason`
+
+Actions:
+
+1. Inspect `trace.fallbackReason` distribution.
+2. If `graph_expansion_error` dominates, roll back to `shadow` and investigate graph retrieval query errors.
+3. If `rollout_guardrail`/`shadow_mode` dominates, verify requested strategy and rollout settings.
+4. Re-promote to `canary` only after stable shadow metrics.
+
+### 4) Empty graph explorer but status healthy
+
+Symptoms:
+
+- Dashboard graph explorer panel has no edges for selected nodes
+
+Actions:
+
+1. Confirm selected node has linked edges via `/api/graph/explore`.
+2. Clear explorer filters (edge type, node type, min confidence/weight, evidence-only).
+3. Verify selected workspace contains the expected repo/project scope.
+
+## Operational Guardrails
+
+- Keep read paths available even when graph indexing fails.
+- Treat `shadow` as the default safe state during incidents.
+- Use trace payloads for every rollout decision, not only aggregate metrics.
+- Use project-scoped checks for repo-specific incidents.
+
+## Incident Checklist
+
+1. Capture `graph/status`, `graph/rollout`, and `graph/trace` payloads.
+2. Record rollout mode and active alarms.
+3. Capture top fallback reasons and request volume.
+4. Set temporary mode to `shadow` if user impact is visible.
+5. Validate recovery before returning to `canary`.

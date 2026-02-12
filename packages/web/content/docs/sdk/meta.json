@@ -1,4 +1,12 @@
 {
   "title": "SDK",
-  "pages": ["index", "middleware", "tools", "client", "endpoint-contract"]
+  "pages": [
+    "index",
+    "middleware",
+    "tools",
+    "client",
+    "endpoint-contract",
+    "graph-architecture",
+    "graph-operations-runbook"
+  ]
 }
