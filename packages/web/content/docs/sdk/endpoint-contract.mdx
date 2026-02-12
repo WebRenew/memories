@@ -123,6 +123,9 @@ Hybrid retrieval is controlled by per-request strategy fields and workspace roll
     "strategy": "baseline",
     "rolloutMode": "shadow",
     "shadowExecuted": true,
+    "qualityGateStatus": "pass",
+    "qualityGateBlocked": false,
+    "qualityGateReasonCodes": [],
     "fallbackTriggered": true,
     "fallbackReason": "shadow_mode"
   }
@@ -133,7 +136,13 @@ Hybrid retrieval is controlled by per-request strategy fields and workspace roll
 
 - `rollout`: current mode, `updatedAt`, `updatedBy`
 - `shadowMetrics`: request volume, fallback rate, graph error fallbacks, and averages
+- `qualityGate`: current/previous window eval snapshot with `status`, `canaryBlocked`, and detailed `reasons`
 - `alarms`: generated safety alarms such as `HIGH_FALLBACK_RATE` and `GRAPH_EXPANSION_ERRORS`
+
+`/api/sdk/v1/graph/rollout` now enforces a hard canary safety gate:
+
+- `POST/PATCH mode=canary` returns `409` + `CANARY_ROLLOUT_BLOCKED` when quality regressions exceed thresholds.
+- Successful rollout responses include `qualityGate` so clients can render gate state without calling status separately.
 
 ## Compatibility Notes
 

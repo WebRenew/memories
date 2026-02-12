@@ -22,9 +22,11 @@ import {
 } from "./scope"
 import { expandMemoryGraph } from "./graph/retrieval"
 import {
+  evaluateGraphRolloutQuality,
   getGraphRolloutConfig,
   recordGraphRolloutMetric,
   type GraphRolloutConfig,
+  type GraphRolloutQualitySummary,
 } from "./graph/rollout"
 
 function dedupeMemories(rows: MemoryRow[]): MemoryRow[] {
@@ -320,13 +322,27 @@ export async function getContextPayload(params: {
     updatedAt: nowIso,
     updatedBy: null,
   }
+  let qualityGate: GraphRolloutQualitySummary | null = null
   try {
     rolloutConfig = await getGraphRolloutConfig(turso, nowIso)
   } catch (err) {
     console.error("Failed to load graph rollout config; using safe defaults:", err)
   }
 
+  try {
+    qualityGate = await evaluateGraphRolloutQuality(turso, {
+      nowIso,
+      windowHours: 24,
+    })
+  } catch (err) {
+    console.error("Failed to evaluate graph rollout quality gate; proceeding with safe fallback behavior:", err)
+  }
+
   const requestedHybrid = resolvedStrategy === "hybrid_graph"
+  const canaryGateBlocked =
+    requestedHybrid &&
+    rolloutConfig.mode === "canary" &&
+    qualityGate?.canaryBlocked === true
   const graphExecutionEligible =
     GRAPH_RETRIEVAL_ENABLED &&
     resolvedGraphDepth > 0 &&
@@ -334,7 +350,11 @@ export async function getContextPayload(params: {
     relevantMemories.length > 0 &&
     rolloutConfig.mode !== "off"
   const runGraphTraversal = graphExecutionEligible && (requestedHybrid || rolloutConfig.mode === "shadow")
-  const applyGraphExpansion = runGraphTraversal && rolloutConfig.mode === "canary" && requestedHybrid
+  const applyGraphExpansion =
+    runGraphTraversal &&
+    rolloutConfig.mode === "canary" &&
+    requestedHybrid &&
+    !canaryGateBlocked
 
   const graphExplainabilityByMemoryId = new Map<string, GraphExplainability>()
   let graphCandidates = 0
@@ -348,6 +368,8 @@ export async function getContextPayload(params: {
       fallbackReason = "feature_flag_disabled"
     } else if (rolloutConfig.mode === "off") {
       fallbackReason = "rollout_off"
+    } else if (canaryGateBlocked) {
+      fallbackReason = "quality_gate_blocked"
     } else if (rolloutConfig.mode === "shadow") {
       fallbackReason = "shadow_mode"
     }
@@ -433,6 +455,9 @@ export async function getContextPayload(params: {
     graphLimit: runGraphTraversal ? resolvedGraphLimit : 0,
     rolloutMode: rolloutConfig.mode,
     shadowExecuted,
+    qualityGateStatus: qualityGate?.status ?? "unavailable",
+    qualityGateBlocked: canaryGateBlocked,
+    qualityGateReasonCodes: qualityGate?.reasons.map((reason) => reason.code) ?? [],
     baselineCandidates,
     graphCandidates,
     graphExpandedCount,

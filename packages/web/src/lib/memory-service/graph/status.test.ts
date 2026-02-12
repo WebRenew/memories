@@ -43,6 +43,8 @@ describe("getGraphStatusPayload", () => {
     expect(payload.counts.nodes).toBe(0)
     expect(payload.counts.edges).toBe(0)
     expect(payload.counts.memoryLinks).toBe(0)
+    expect(payload.qualityGate.status).toBe("insufficient_data")
+    expect(payload.qualityGate.canaryBlocked).toBe(false)
     expect(payload.topConnectedNodes).toEqual([])
     expect(payload.recentErrors).toEqual(
       expect.arrayContaining([
@@ -332,10 +334,24 @@ describe("getGraphStatusPayload", () => {
     expect(payload.rollout.mode).toBe("canary")
     expect(payload.shadowMetrics.totalRequests).toBe(20)
     expect(payload.shadowMetrics.fallbackRate).toBe(0.2)
+    expect(payload.qualityGate.status).toBe("fail")
+    expect(payload.qualityGate.canaryBlocked).toBe(true)
+    expect(payload.qualityGate.reasons).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "FALLBACK_RATE_ABOVE_LIMIT",
+          blocking: true,
+        }),
+      ])
+    )
     expect(payload.alarms).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: "HIGH_FALLBACK_RATE",
+          severity: "critical",
+        }),
+        expect.objectContaining({
+          code: "CANARY_QUALITY_GATE_BLOCKED",
           severity: "critical",
         }),
         expect.objectContaining({

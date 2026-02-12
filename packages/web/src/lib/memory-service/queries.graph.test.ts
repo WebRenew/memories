@@ -209,6 +209,9 @@ describe("getContextPayload graph retrieval integration", () => {
     expect(payload.data.trace.requestedStrategy).toBe("hybrid_graph")
     expect(payload.data.trace.rolloutMode).toBe("canary")
     expect(payload.data.trace.shadowExecuted).toBe(false)
+    expect(payload.data.trace.qualityGateStatus).toBe("insufficient_data")
+    expect(payload.data.trace.qualityGateBlocked).toBe(false)
+    expect(payload.data.trace.qualityGateReasonCodes).toEqual([])
     expect(payload.data.trace.graphExpandedCount).toBe(1)
     expect(payload.data.trace.fallbackTriggered).toBe(false)
     expect(payload.data.trace.fallbackReason).toBeNull()
@@ -236,6 +239,9 @@ describe("getContextPayload graph retrieval integration", () => {
     expect(payload.data.trace.requestedStrategy).toBe("hybrid_graph")
     expect(payload.data.trace.rolloutMode).toBe("off")
     expect(payload.data.trace.shadowExecuted).toBe(false)
+    expect(payload.data.trace.qualityGateStatus).toBe("insufficient_data")
+    expect(payload.data.trace.qualityGateBlocked).toBe(false)
+    expect(payload.data.trace.qualityGateReasonCodes).toEqual([])
     expect(payload.data.trace.graphExpandedCount).toBe(0)
     expect(payload.data.trace.fallbackTriggered).toBe(true)
     expect(payload.data.trace.fallbackReason).toBe("feature_flag_disabled")
@@ -270,9 +276,63 @@ describe("getContextPayload graph retrieval integration", () => {
     expect(payload.data.trace.requestedStrategy).toBe("hybrid_graph")
     expect(payload.data.trace.rolloutMode).toBe("shadow")
     expect(payload.data.trace.shadowExecuted).toBe(true)
+    expect(payload.data.trace.qualityGateStatus).toBe("insufficient_data")
+    expect(payload.data.trace.qualityGateBlocked).toBe(false)
+    expect(payload.data.trace.qualityGateReasonCodes).toEqual([])
     expect(payload.data.trace.graphCandidates).toBeGreaterThanOrEqual(1)
     expect(payload.data.trace.graphExpandedCount).toBe(0)
     expect(payload.data.trace.fallbackTriggered).toBe(true)
     expect(payload.data.trace.fallbackReason).toBe("shadow_mode")
+  })
+
+  it("blocks canary application when retrieval quality gate fails", async () => {
+    const db = await setupDb("memories-queries-graph-canary-gate")
+    await seedGraphRetrievalFixture(db)
+    const { getContextPayload } = await loadQueriesModule(true)
+    const { recordGraphRolloutMetric, setGraphRolloutConfig } = await import("./graph/rollout")
+
+    await setGraphRolloutConfig(db, {
+      mode: "canary",
+      nowIso: "2026-02-11T10:30:00.000Z",
+      updatedBy: "test-user",
+    })
+
+    for (let index = 0; index < 20; index += 1) {
+      const fallbackTriggered = index < 4
+      await recordGraphRolloutMetric(db, {
+        nowIso: `2026-02-11T10:${index.toString().padStart(2, "0")}:00.000Z`,
+        mode: "canary",
+        requestedStrategy: "hybrid_graph",
+        appliedStrategy: fallbackTriggered ? "baseline" : "hybrid_graph",
+        shadowExecuted: false,
+        baselineCandidates: 3,
+        graphCandidates: 2,
+        graphExpandedCount: fallbackTriggered ? 0 : 1,
+        totalCandidates: fallbackTriggered ? 3 : 4,
+        fallbackTriggered,
+        fallbackReason: fallbackTriggered ? "graph_expansion_error" : null,
+      })
+    }
+
+    const payload = await getContextPayload({
+      turso: db,
+      userId: null,
+      nowIso: "2026-02-11T11:00:00.000Z",
+      query: "",
+      limit: 2,
+      retrievalStrategy: "hybrid_graph",
+      graphDepth: 1,
+      graphLimit: 2,
+    })
+
+    expect(payload.data.memories.map((memory) => memory.id)).toEqual(["w1", "l-base"])
+    expect(payload.data.trace.strategy).toBe("baseline")
+    expect(payload.data.trace.rolloutMode).toBe("canary")
+    expect(payload.data.trace.shadowExecuted).toBe(true)
+    expect(payload.data.trace.qualityGateStatus).toBe("fail")
+    expect(payload.data.trace.qualityGateBlocked).toBe(true)
+    expect(payload.data.trace.qualityGateReasonCodes).toContain("FALLBACK_RATE_ABOVE_LIMIT")
+    expect(payload.data.trace.fallbackTriggered).toBe(true)
+    expect(payload.data.trace.fallbackReason).toBe("quality_gate_blocked")
   })
 })

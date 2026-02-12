@@ -101,6 +101,9 @@ export interface ContextTrace {
   graphLimit: number
   rolloutMode: "off" | "shadow" | "canary"
   shadowExecuted: boolean
+  qualityGateStatus: "pass" | "warn" | "fail" | "insufficient_data" | "unavailable"
+  qualityGateBlocked: boolean
+  qualityGateReasonCodes: string[]
   baselineCandidates: number
   graphCandidates: number
   graphExpandedCount: number

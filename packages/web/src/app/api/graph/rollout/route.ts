@@ -1,7 +1,7 @@
 import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 import { ensureMemoryUserIdSchema } from "@/lib/memory-service/scope"
 import { getGraphStatusPayload } from "@/lib/memory-service/graph/status"
-import { setGraphRolloutConfig } from "@/lib/memory-service/graph/rollout"
+import { evaluateGraphRolloutQuality, setGraphRolloutConfig } from "@/lib/memory-service/graph/rollout"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createTurso } from "@libsql/client"
 import { NextRequest, NextResponse } from "next/server"
@@ -85,9 +85,27 @@ async function updateRolloutMode(request: NextRequest) {
       return resolved
     }
 
+    const nowIso = new Date().toISOString()
+    if (parsed.mode === "canary") {
+      const qualityGate = await evaluateGraphRolloutQuality(resolved.turso, {
+        nowIso,
+        windowHours: 24,
+      })
+      if (qualityGate.canaryBlocked) {
+        return NextResponse.json(
+          {
+            error:
+              "Canary rollout is blocked by retrieval quality gate. Resolve fallback/relevance regressions or keep shadow mode.",
+            gate: qualityGate,
+          },
+          { status: 409 }
+        )
+      }
+    }
+
     await setGraphRolloutConfig(resolved.turso, {
       mode: parsed.mode,
-      nowIso: new Date().toISOString(),
+      nowIso,
       updatedBy: resolved.userId,
     })
 

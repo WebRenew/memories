@@ -43,6 +43,7 @@ curl -s -H "Authorization: Bearer $MEMORIES_API_KEY" \
 2. Move to `shadow` and observe at least 24h of representative traffic.
 3. Promote to `canary` when fallback rate and graph error fallbacks are stable.
 4. Stay in `canary` while monitoring alarms and trace fallback reasons.
+5. If quality gate blocks canary (`CANARY_ROLLOUT_BLOCKED`), remain in `shadow` until regressions clear.
 
 Patch mode via SDK endpoint:
 
@@ -60,12 +61,14 @@ Current built-in alarms include:
 
 - `HIGH_FALLBACK_RATE`
 - `GRAPH_EXPANSION_ERRORS`
+- `CANARY_QUALITY_GATE_BLOCKED` (hard canary block)
 
 Current threshold logic in status payload generation:
 
 - Critical fallback alarm at fallback rate `>= 15%` with at least `20` requests in window.
 - Warning fallback alarm at fallback rate `>= 5%` with at least `10` requests in window.
 - Expansion error alarm when graph expansion errors are observed.
+- Quality gate block when fallback/relevance regressions exceed rollout thresholds.
 
 See implementation in:
 
@@ -111,7 +114,8 @@ Actions:
 1. Inspect `trace.fallbackReason` distribution.
 2. If `graph_expansion_error` dominates, roll back to `shadow` and investigate graph retrieval query errors.
 3. If `rollout_guardrail`/`shadow_mode` dominates, verify requested strategy and rollout settings.
-4. Re-promote to `canary` only after stable shadow metrics.
+4. If `quality_gate_blocked` appears, inspect `graph/rollout` `qualityGate.reasons` and fix regressions.
+5. Re-promote to `canary` only after stable shadow metrics and a passing quality gate.
 
 ### 4) Empty graph explorer but status healthy
 

@@ -131,6 +131,18 @@ function severityClass(severity: "info" | "warning" | "critical"): string {
   return "text-sky-500"
 }
 
+function qualityStatusLabel(status: GraphStatusPayload["qualityGate"]["status"]): string {
+  if (status === "insufficient_data") return "Insufficient Data"
+  return status.toUpperCase()
+}
+
+function qualityStatusClass(status: GraphStatusPayload["qualityGate"]["status"], blocked: boolean): string {
+  if (blocked || status === "fail") return "text-red-500"
+  if (status === "warn") return "text-amber-500"
+  if (status === "pass") return "text-emerald-500"
+  return "text-muted-foreground"
+}
+
 function truncateText(value: string, max = 180): string {
   if (value.length <= max) return value
   return `${value.slice(0, max).trim()}...`
@@ -837,6 +849,17 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
       return
     }
 
+    if (mode === "canary" && activeStatus.qualityGate.canaryBlocked) {
+      const blockingCodes = activeStatus.qualityGate.reasons
+        .filter((reason) => reason.blocking)
+        .map((reason) => reason.code)
+      const message = blockingCodes.length > 0
+        ? `Canary blocked by retrieval quality gate: ${blockingCodes.join(", ")}`
+        : "Canary blocked by retrieval quality gate."
+      setModeError(message)
+      return
+    }
+
     setModeError(null)
     startTransition(() => {
       void (async () => {
@@ -923,23 +946,63 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
             <div className="grid gap-2 sm:grid-cols-3">
               {ROLLOUT_MODES.map((mode) => {
                 const isActive = activeStatus.rollout.mode === mode.value
+                const isCanaryBlocked =
+                  mode.value === "canary" && activeStatus.qualityGate.canaryBlocked && !isActive
                 return (
                   <button
                     key={mode.value}
                     type="button"
                     onClick={() => updateRolloutMode(mode.value)}
-                    disabled={isPending || isActive}
+                    disabled={isPending || isActive || isCanaryBlocked}
                     className={`border p-3 text-left transition-colors ${
                       isActive
                         ? "border-primary/40 bg-primary/10"
                         : "border-border bg-card/10 hover:bg-card/30"
-                    } ${isPending ? "cursor-not-allowed opacity-70" : ""}`}
+                    } ${(isPending || isCanaryBlocked) ? "cursor-not-allowed opacity-70" : ""}`}
                   >
                     <p className="text-xs font-bold uppercase tracking-[0.18em]">{mode.label}</p>
                     <p className="text-xs text-muted-foreground mt-2">{mode.description}</p>
+                    {isCanaryBlocked ? (
+                      <p className="mt-2 text-[11px] font-mono text-red-500">Blocked by quality gate</p>
+                    ) : null}
                   </button>
                 )
               })}
+            </div>
+
+            <div className="border border-border bg-card/10 p-3 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] uppercase tracking-[0.16em] font-bold text-muted-foreground">
+                  Retrieval Quality Gate
+                </p>
+                <p
+                  className={`text-[11px] font-mono font-bold ${qualityStatusClass(
+                    activeStatus.qualityGate.status,
+                    activeStatus.qualityGate.canaryBlocked
+                  )}`}
+                >
+                  {activeStatus.qualityGate.canaryBlocked ? "BLOCKED" : qualityStatusLabel(activeStatus.qualityGate.status)}
+                </p>
+              </div>
+              <p className="text-[11px] text-muted-foreground font-mono">
+                Window {activeStatus.qualityGate.windowHours}h • hybrid {activeStatus.qualityGate.current.hybridRequested} •
+                canary {activeStatus.qualityGate.current.canaryApplied} • fallback{" "}
+                {(activeStatus.qualityGate.current.fallbackRate * 100).toFixed(1)}%
+              </p>
+              {activeStatus.qualityGate.reasons.length > 0 ? (
+                <div className="space-y-1">
+                  {activeStatus.qualityGate.reasons.slice(0, 3).map((reason) => (
+                    <p key={reason.code} className="text-[11px] text-muted-foreground">
+                      <span className={`font-mono ${reason.blocking ? "text-red-500" : "text-amber-500"}`}>
+                        {reason.code}
+                      </span>{" "}
+                      {reason.message}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">No active quality regressions.</p>
+              )}
             </div>
 
             {isPending ? (

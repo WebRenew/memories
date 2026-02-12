@@ -7,6 +7,7 @@ description: Product and documentation updates.
 
 - Added workspace-level graph rollout controls with `off`, `shadow`, and `canary` modes.
 - Added shadow rollout metrics and fallback safety alarms (`HIGH_FALLBACK_RATE`, `GRAPH_EXPANSION_ERRORS`) to graph status reporting.
+- Added retrieval quality evals (current vs previous window) and hard canary gate enforcement (`CANARY_ROLLOUT_BLOCKED`) when fallback/relevance metrics regress.
 - Added SDK HTTP rollout endpoint docs and hybrid retrieval trace guidance, including applied strategy + fallback diagnostics.
 - Added dedicated SDK graph documentation: architecture overview and graph operations runbook.
 - Upgraded dashboard graph explorer with focus mode, filter controls, fit view, mini-map, and deep-linkable node/edge state.

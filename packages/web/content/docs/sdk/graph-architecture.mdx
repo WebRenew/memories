@@ -51,6 +51,7 @@ Fallback reasons include:
 - `feature_flag_disabled`
 - `rollout_off`
 - `shadow_mode`
+- `quality_gate_blocked`
 - `graph_expansion_error`
 - `rollout_guardrail`
 
@@ -67,6 +68,8 @@ Safety and observability are emitted through graph status and trace payloads:
 - `/api/sdk/v1/graph/status`
 - `/api/sdk/v1/graph/rollout`
 - `/api/sdk/v1/graph/trace`
+
+Canary mode is also protected by a quality gate that evaluates fallback and relevance regressions over rolling windows before allowing canary application.
 
 ## Scope And Workspace Routing
 

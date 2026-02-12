@@ -112,6 +112,9 @@ console.log(ctx.trace)
 //   strategy: "baseline" | "hybrid_graph",
 //   rolloutMode: "off" | "shadow" | "canary",
 //   shadowExecuted: boolean,
+//   qualityGateStatus: "pass" | "warn" | "fail" | "insufficient_data" | "unavailable",
+//   qualityGateBlocked: boolean,
+//   qualityGateReasonCodes: string[],
 //   fallbackTriggered: boolean,
 //   fallbackReason: string | null
 // }
@@ -121,8 +124,8 @@ console.log(ctx.trace)
 
 Workspace rollout and safety signals are available from SDK HTTP graph endpoints:
 
-- `GET /api/sdk/v1/graph/rollout` for mode + shadow metrics
-- `GET /api/sdk/v1/graph/status` for counts + alarms (`HIGH_FALLBACK_RATE`, `GRAPH_EXPANSION_ERRORS`)
+- `GET /api/sdk/v1/graph/rollout` for mode + shadow metrics + quality gate snapshot
+- `GET /api/sdk/v1/graph/status` for counts + alarms (`HIGH_FALLBACK_RATE`, `GRAPH_EXPANSION_ERRORS`, `CANARY_QUALITY_GATE_BLOCKED`)
 
 ### `client.memories.add(input)`
 

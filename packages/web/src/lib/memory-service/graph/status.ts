@@ -7,10 +7,13 @@ import {
   type TursoClient,
 } from "../types"
 import {
+  emptyGraphRolloutQualitySummary,
+  evaluateGraphRolloutQuality,
   getGraphRolloutConfig,
   getGraphRolloutMetricsSummary,
   type GraphRolloutConfig,
   type GraphRolloutMetricsSummary,
+  type GraphRolloutQualitySummary,
 } from "./rollout"
 import { removeMemoryGraphMapping, syncMemoryGraphMapping } from "./upsert"
 
@@ -96,6 +99,7 @@ export interface GraphStatusPayload {
   }
   rollout: GraphRolloutConfig
   shadowMetrics: GraphStatusShadowMetrics
+  qualityGate: GraphRolloutQualitySummary
   alarms: GraphStatusAlarm[]
   topConnectedNodes: GraphStatusTopNode[]
   recentErrors: GraphStatusError[]
@@ -327,6 +331,10 @@ export async function getGraphStatusPayload(input: GraphStatusInput): Promise<Gr
     lastFallbackAt: null,
     lastFallbackReason: null,
   }
+  let qualityGate = emptyGraphRolloutQualitySummary({
+    nowIso,
+    windowHours: 24,
+  })
   const alarms: GraphStatusAlarm[] = []
 
   try {
@@ -335,10 +343,14 @@ export async function getGraphStatusPayload(input: GraphStatusInput): Promise<Gr
       nowIso,
       windowHours: 24,
     })
+    qualityGate = await evaluateGraphRolloutQuality(turso, {
+      nowIso,
+      windowHours: 24,
+    })
   } catch (err) {
     recentErrors.push({
       code: "GRAPH_ROLLOUT_STATE_UNAVAILABLE",
-      message: "Could not load graph rollout controls or metrics.",
+      message: "Could not load graph rollout controls, metrics, or quality gate.",
       source: "rollout",
       timestamp: nowIso,
     })
@@ -370,6 +382,29 @@ export async function getGraphStatusPayload(input: GraphStatusInput): Promise<Gr
     })
   }
 
+  if (qualityGate.canaryBlocked) {
+    const reasonSummary = qualityGate.reasons
+      .filter((reason) => reason.blocking)
+      .map((reason) => reason.code)
+      .slice(0, 3)
+      .join(", ")
+    alarms.push({
+      code: "CANARY_QUALITY_GATE_BLOCKED",
+      severity: "critical",
+      message: reasonSummary
+        ? `Canary rollout blocked by retrieval quality gate (${reasonSummary}).`
+        : "Canary rollout blocked by retrieval quality gate.",
+      triggeredAt: nowIso,
+    })
+  } else if (qualityGate.status === "warn") {
+    alarms.push({
+      code: "CANARY_QUALITY_GATE_WARNING",
+      severity: "warning",
+      message: "Retrieval quality gate detected warning-level drift; monitor before enabling canary.",
+      triggeredAt: nowIso,
+    })
+  }
+
   const hasSchema = tables.graphNodes && tables.graphEdges && tables.memoryNodeLinks
 
   if (!hasSchema) {
@@ -394,6 +429,7 @@ export async function getGraphStatusPayload(input: GraphStatusInput): Promise<Gr
       },
       rollout,
       shadowMetrics,
+      qualityGate,
       alarms,
       topConnectedNodes: [],
       recentErrors,
@@ -512,6 +548,7 @@ export async function getGraphStatusPayload(input: GraphStatusInput): Promise<Gr
     },
     rollout,
     shadowMetrics,
+    qualityGate,
     alarms,
     topConnectedNodes,
     recentErrors,

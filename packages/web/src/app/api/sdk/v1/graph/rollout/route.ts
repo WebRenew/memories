@@ -1,4 +1,5 @@
 import {
+  evaluateGraphRolloutQuality,
   getGraphRolloutConfig,
   getGraphRolloutMetricsSummary,
   setGraphRolloutConfig,
@@ -121,10 +122,15 @@ async function buildRolloutResponse(params: {
     nowIso,
     windowHours: 24,
   })
+  const qualityGate = await evaluateGraphRolloutQuality(turso, {
+    nowIso,
+    windowHours: 24,
+  })
 
   return successResponse(ENDPOINT, requestId, {
     rollout,
     shadowMetrics,
+    qualityGate,
     scope,
   })
 }
@@ -177,6 +183,32 @@ export async function POST(request: NextRequest) {
     const resolved = await withAuthenticatedTurso(request, requestId, parsedRequest)
     if (resolved instanceof NextResponse) {
       return resolved
+    }
+
+    if (parsedRequest.mode === "canary") {
+      const qualityGate = await evaluateGraphRolloutQuality(resolved.turso, {
+        nowIso: new Date().toISOString(),
+        windowHours: 24,
+      })
+      if (qualityGate.canaryBlocked) {
+        return errorResponse(
+          ENDPOINT,
+          resolved.requestId,
+          apiError({
+            type: "validation_error",
+            code: "CANARY_ROLLOUT_BLOCKED",
+            message:
+              "Canary rollout blocked by retrieval quality gate. Resolve regressions or keep shadow mode.",
+            status: 409,
+            retryable: false,
+            details: {
+              reasonCodes: qualityGate.reasons.filter((reason) => reason.blocking).map((reason) => reason.code),
+              qualityStatus: qualityGate.status,
+              windowHours: qualityGate.windowHours,
+            },
+          })
+        )
+      }
     }
 
     return buildRolloutResponse({
