@@ -39,7 +39,11 @@ async function resolveWorkspaceTurso() {
 
 async function readGraphStatus(turso: ReturnType<typeof createTurso>) {
   const nowIso = new Date().toISOString()
-  await ensureMemoryUserIdSchema(turso)
+  try {
+    await ensureMemoryUserIdSchema(turso)
+  } catch (error) {
+    console.warn("Graph rollout status schema init skipped:", error)
+  }
   return getGraphStatusPayload({
     turso,
     nowIso,

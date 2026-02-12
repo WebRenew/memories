@@ -231,6 +231,10 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
                 <p className="text-xs text-muted-foreground mt-1">
                   Workspace-level gating for hybrid graph retrieval.
                 </p>
+                <p className="text-[11px] text-muted-foreground mt-2">
+                  Full hybrid switch = request <span className="font-mono text-foreground">strategy: hybrid_graph</span> and
+                  rollout mode <span className="font-mono text-foreground">canary</span>.
+                </p>
               </div>
               <div className="text-xs text-muted-foreground">
                 Updated:{" "}

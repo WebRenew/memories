@@ -7,10 +7,27 @@ import { NextRequest, NextResponse } from "next/server"
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 100
 
+const EMPTY_EXPLORER_PAYLOAD = {
+  node: null,
+  nodes: [],
+  edges: [],
+  memories: [],
+}
+
 function parseLimit(value: string | null): number {
   const parsed = Number.parseInt(value ?? "", 10)
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_LIMIT
   return Math.min(parsed, MAX_LIMIT)
+}
+
+async function graphSchemaExists(turso: ReturnType<typeof createTurso>): Promise<boolean> {
+  const result = await turso.execute(
+    `SELECT COUNT(*) as count
+     FROM sqlite_master
+     WHERE type = 'table'
+       AND name IN ('graph_nodes', 'graph_edges', 'memory_node_links')`
+  )
+  return Number(result.rows[0]?.count ?? 0) === 3
 }
 
 async function resolveWorkspaceTurso() {
@@ -39,7 +56,15 @@ export async function GET(request: NextRequest) {
     const turso = await resolveWorkspaceTurso()
     if (turso instanceof NextResponse) return turso
 
-    await ensureMemoryUserIdSchema(turso)
+    try {
+      await ensureMemoryUserIdSchema(turso)
+    } catch (error) {
+      console.warn("Graph explorer schema init skipped:", error)
+    }
+
+    if (!(await graphSchemaExists(turso))) {
+      return NextResponse.json(EMPTY_EXPLORER_PAYLOAD)
+    }
 
     const url = new URL(request.url)
     const nodeType = url.searchParams.get("nodeType")?.trim() ?? ""
@@ -83,12 +108,7 @@ export async function GET(request: NextRequest) {
     })
     const nodeRow = nodeResult.rows[0]
     if (!nodeRow) {
-      return NextResponse.json({
-        node: null,
-        nodes: [],
-        edges: [],
-        memories: [],
-      })
+      return NextResponse.json(EMPTY_EXPLORER_PAYLOAD)
     }
 
     const nodeId = nodeRow.id as string

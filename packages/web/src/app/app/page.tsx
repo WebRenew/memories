@@ -8,6 +8,27 @@ import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 import { getGraphStatusPayload, type GraphStatusPayload } from "@/lib/memory-service/graph/status"
 import { ensureMemoryUserIdSchema } from "@/lib/memory-service/scope"
 
+function isMissingDeletedAtColumnError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : ""
+  return message.includes("no such column") && message.includes("deleted_at")
+}
+
+async function listMemories(turso: ReturnType<typeof createTurso>) {
+  try {
+    return await turso.execute(
+      "SELECT id, content, tags, type, scope, project_id, paths, category, metadata, created_at, updated_at FROM memories WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 200"
+    )
+  } catch (error) {
+    if (!isMissingDeletedAtColumnError(error)) {
+      throw error
+    }
+
+    return turso.execute(
+      "SELECT id, content, tags, type, scope, project_id, paths, category, metadata, created_at, updated_at FROM memories ORDER BY created_at DESC LIMIT 200"
+    )
+  }
+}
+
 export default async function MemoriesPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -27,32 +48,46 @@ export default async function MemoriesPage() {
 
   try {
     const turso = createTurso({ url: context.turso_db_url!, authToken: context.turso_db_token! })
-    await ensureMemoryUserIdSchema(turso)
 
-    const [result, graphStatusResult] = await Promise.all([
-      turso.execute(
-        "SELECT id, content, tags, type, scope, project_id, paths, category, metadata, created_at, updated_at FROM memories WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 200"
-      ),
+    try {
+      await ensureMemoryUserIdSchema(turso)
+    } catch (schemaError) {
+      console.warn("Dashboard schema init skipped; continuing with read-only queries:", schemaError)
+    }
+
+    const [memoriesResult, graphStatusResult] = await Promise.allSettled([
+      listMemories(turso),
       getGraphStatusPayload({
         turso,
         nowIso: new Date().toISOString(),
         topNodesLimit: 10,
       }),
     ])
-    memories = result.rows.map(row => ({
-      id: row.id as string,
-      content: row.content as string,
-      tags: row.tags as string | null,
-      type: (row.type as Memory["type"]) ?? "note",
-      scope: (row.scope as Memory["scope"]) ?? "global",
-      project_id: row.project_id as string | null,
-      paths: row.paths as string | null,
-      category: row.category as string | null,
-      metadata: row.metadata as string | null,
-      created_at: row.created_at as string,
-      updated_at: (row.updated_at as string) ?? (row.created_at as string),
-    }))
-    graphStatus = graphStatusResult
+
+    if (memoriesResult.status === "fulfilled") {
+      memories = memoriesResult.value.rows.map(row => ({
+        id: row.id as string,
+        content: row.content as string,
+        tags: row.tags as string | null,
+        type: (row.type as Memory["type"]) ?? "note",
+        scope: (row.scope as Memory["scope"]) ?? "global",
+        project_id: row.project_id as string | null,
+        paths: row.paths as string | null,
+        category: row.category as string | null,
+        metadata: row.metadata as string | null,
+        created_at: row.created_at as string,
+        updated_at: (row.updated_at as string) ?? (row.created_at as string),
+      }))
+    } else {
+      throw memoriesResult.reason
+    }
+
+    if (graphStatusResult.status === "fulfilled") {
+      graphStatus = graphStatusResult.value
+    } else {
+      console.warn("Graph status unavailable for dashboard:", graphStatusResult.reason)
+      graphStatus = null
+    }
   } catch (err) {
     console.error("Turso connection error:", err)
     connectError = true
