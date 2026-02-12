@@ -1,8 +1,36 @@
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { removeTeamSeat } from "@/lib/stripe/teams"
 import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 import { parseBody, updateMemberRoleSchema } from "@/lib/validations"
+
+interface OrgMemberRow {
+  id: string
+  user_id: string
+  role: string
+  created_at?: string | null
+}
+
+interface UserRow {
+  id: string
+  email: string | null
+  name: string | null
+  avatar_url: string | null
+}
+
+function isMissingColumnError(error: unknown, columnName: string): boolean {
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message ?? "").toLowerCase()
+      : ""
+
+  return (
+    message.includes("column") &&
+    message.includes(columnName.toLowerCase()) &&
+    message.includes("does not exist")
+  )
+}
 
 // GET /api/orgs/[orgId]/members - List organization members
 export async function GET(
@@ -11,6 +39,7 @@ export async function GET(
 ) {
   const { orgId } = await params
   const supabase = await createClient()
+  const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
@@ -21,7 +50,7 @@ export async function GET(
   if (rateLimited) return rateLimited
 
   // Check user is member
-  const { data: membership } = await supabase
+  const { data: membership } = await admin
     .from("org_members")
     .select("role")
     .eq("org_id", orgId)
@@ -32,22 +61,67 @@ export async function GET(
     return NextResponse.json({ error: "Not a member of this organization" }, { status: 403 })
   }
 
-  const { data: members, error } = await supabase
+  const primaryMembersQuery = await admin
     .from("org_members")
-    .select(`
-      id,
-      role,
-      joined_at,
-      user:users(id, email, name, avatar_url)
-    `)
+    .select("id, user_id, role, created_at")
     .eq("org_id", orgId)
-    .order("joined_at", { ascending: true })
+    .order("created_at", { ascending: true })
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  let members = primaryMembersQuery.data as OrgMemberRow[] | null
+  let membersError = primaryMembersQuery.error
+
+  // Backward compatibility for older org_members schemas without created_at.
+  if (membersError && isMissingColumnError(membersError, "created_at")) {
+    const fallbackMembersQuery = await admin
+      .from("org_members")
+      .select("id, user_id, role")
+      .eq("org_id", orgId)
+      .order("user_id", { ascending: true })
+    members = fallbackMembersQuery.data as OrgMemberRow[] | null
+    membersError = fallbackMembersQuery.error
   }
 
-  return NextResponse.json({ members })
+  if (membersError) {
+    return NextResponse.json({ error: membersError.message }, { status: 500 })
+  }
+
+  const memberRows = members ?? []
+  if (memberRows.length === 0) {
+    return NextResponse.json({ members: [] })
+  }
+
+  const userIds = [...new Set(memberRows.map((row) => row.user_id).filter(Boolean))]
+  let usersById = new Map<string, UserRow>()
+
+  if (userIds.length > 0) {
+    const { data: users, error: usersError } = await admin
+      .from("users")
+      .select("id, email, name, avatar_url")
+      .in("id", userIds)
+
+    if (usersError) {
+      return NextResponse.json({ error: usersError.message }, { status: 500 })
+    }
+
+    usersById = new Map((users as UserRow[] | null | undefined)?.map((row) => [row.id, row]) ?? [])
+  }
+
+  const normalizedMembers = memberRows.map((member) => {
+    const foundUser = usersById.get(member.user_id)
+    return {
+      id: member.id,
+      role: member.role,
+      joined_at: member.created_at ?? null,
+      user: {
+        id: foundUser?.id ?? member.user_id,
+        email: foundUser?.email ?? `${member.user_id}@unknown.local`,
+        name: foundUser?.name ?? null,
+        avatar_url: foundUser?.avatar_url ?? null,
+      },
+    }
+  })
+
+  return NextResponse.json({ members: normalizedMembers })
 }
 
 // DELETE /api/orgs/[orgId]/members?userId=xxx - Remove member
