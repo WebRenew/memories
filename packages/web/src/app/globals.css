@@ -185,6 +185,23 @@
     }
   }
 
+  /* ── Docs: subtler heading sizes & inline code in headings ── */
+  #nd-docs-layout h2 {
+    font-size: 1.35rem;
+    line-height: 1.4;
+  }
+
+  #nd-docs-layout h3 {
+    font-size: 1.1rem;
+    line-height: 1.45;
+  }
+
+  /* Inline code inside any heading: shrink to match surrounding text */
+  #nd-docs-layout :is(h1, h2, h3, h4, h5, h6) code {
+    font-size: 0.85em;
+    padding: 0.15em 0.4em;
+  }
+
 
   .memory-lattice {
     position: fixed;

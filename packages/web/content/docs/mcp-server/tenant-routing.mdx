@@ -20,20 +20,28 @@ If `tenant_id` is omitted, requests use the API key's default workspace database
 
 ## Manage Tenant Mappings
 
-### `GET /api/sdk/v1/management/tenants` (legacy: `/api/mcp/tenants`)
+### List Tenants
 
-List all tenant mappings for your active MCP API key.
+`GET /api/sdk/v1/management/tenants`
 
-### `POST /api/sdk/v1/management/tenants` (legacy: `/api/mcp/tenants`)
+Legacy alias: `/api/mcp/tenants`
 
-Create or update a tenant mapping.
+Returns all tenant mappings for your active MCP API key.
 
-`mode: "provision"`:
+### Create or Update Tenant
+
+`POST /api/sdk/v1/management/tenants`
+
+Legacy alias: `/api/mcp/tenants`
+
+Create or update a tenant mapping. Two modes are available:
+
+**Provision** — `mode: "provision"`
 - Creates a new Turso database
 - Initializes schema
 - Stores mapping as `status: "ready"`
 
-`mode: "attach"`:
+**Attach** — `mode: "attach"`
 - Validates existing Turso credentials (`SELECT 1`)
 - Stores mapping as `status: "ready"`
 
@@ -61,7 +69,11 @@ Example (`attach`):
 }
 ```
 
-### `DELETE /api/sdk/v1/management/tenants?tenantId=...` (legacy: `/api/mcp/tenants`)
+### Delete Tenant
+
+`DELETE /api/sdk/v1/management/tenants?tenantId=...`
+
+Legacy alias: `/api/mcp/tenants`
 
 Soft-disables a mapping (`status: "disabled"`).
 
