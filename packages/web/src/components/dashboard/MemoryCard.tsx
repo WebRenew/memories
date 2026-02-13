@@ -62,7 +62,10 @@ export function MemoryCard({
   }
 
   return (
-    <div className="group border border-border bg-card/20 p-5 hover:border-primary/30 transition-all duration-300">
+    <div
+      id={`memory-${memory.id}`}
+      className="group border border-border bg-card/20 p-5 hover:border-primary/30 transition-all duration-300"
+    >
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="flex items-center gap-2">
           {memory.type ? (

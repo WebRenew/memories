@@ -5,12 +5,14 @@ import { MemoriesSection } from "@/components/dashboard/MemoriesSection"
 import { MemoryGraphSection } from "@/components/dashboard/MemoryGraphSection"
 import { IntegrationHealthSection } from "@/components/dashboard/IntegrationHealthSection"
 import { GithubCaptureQueueSection } from "@/components/dashboard/GithubCaptureQueueSection"
+import { ActionableIntelligenceSection } from "@/components/dashboard/ActionableIntelligenceSection"
 import type { Memory } from "@/types/memory"
 import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 import { getGraphStatusPayload, type GraphStatusPayload } from "@/lib/memory-service/graph/status"
 import { ensureMemoryUserIdSchema } from "@/lib/memory-service/scope"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { buildIntegrationHealthPayload, type IntegrationHealthPayload } from "@/lib/integration-health"
+import { buildMemoryInsights, type MemoryInsights } from "@/lib/memory-insights"
 
 function isMissingDeletedAtColumnError(error: unknown): boolean {
   const message = error instanceof Error ? error.message.toLowerCase() : ""
@@ -49,6 +51,7 @@ export default async function MemoriesPage() {
   let memories: Memory[] = []
   let graphStatus: GraphStatusPayload | null = null
   let integrationHealth: IntegrationHealthPayload | null = null
+  let memoryInsights: MemoryInsights | null = null
   let connectError = false
 
   try {
@@ -86,6 +89,7 @@ export default async function MemoriesPage() {
         created_at: row.created_at as string,
         updated_at: (row.updated_at as string) ?? (row.created_at as string),
       }))
+      memoryInsights = buildMemoryInsights(memories)
     } else {
       throw memoriesResult.reason
     }
@@ -120,6 +124,8 @@ export default async function MemoriesPage() {
       <IntegrationHealthSection initialHealth={integrationHealth} />
 
       <GithubCaptureQueueSection />
+
+      <ActionableIntelligenceSection insights={connectError ? null : memoryInsights} />
 
       {/* Memory Graph Section */}
       <MemoryGraphSection status={connectError ? null : graphStatus} />
