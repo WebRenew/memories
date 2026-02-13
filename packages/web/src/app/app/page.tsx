@@ -2,13 +2,11 @@ import { createClient } from "@/lib/supabase/server"
 import { createClient as createTurso } from "@libsql/client"
 import { ProvisioningScreen } from "@/components/dashboard/ProvisioningScreen"
 import { MemoriesSection } from "@/components/dashboard/MemoriesSection"
-import { MemoryGraphSection } from "@/components/dashboard/MemoryGraphSection"
 import { IntegrationHealthSection } from "@/components/dashboard/IntegrationHealthSection"
 import { GithubCaptureQueueSection } from "@/components/dashboard/GithubCaptureQueueSection"
 import { ActionableIntelligenceSection } from "@/components/dashboard/ActionableIntelligenceSection"
 import type { Memory } from "@/types/memory"
 import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
-import { getGraphStatusPayload, type GraphStatusPayload } from "@/lib/memory-service/graph/status"
 import { ensureMemoryUserIdSchema } from "@/lib/memory-service/scope"
 import { buildMemoryInsights, type MemoryInsights } from "@/lib/memory-insights"
 
@@ -47,7 +45,6 @@ export default async function MemoriesPage() {
   }
 
   let memories: Memory[] = []
-  let graphStatus: GraphStatusPayload | null = null
   let memoryInsights: MemoryInsights | null = null
   let connectError = false
 
@@ -62,41 +59,22 @@ export default async function MemoriesPage() {
       console.warn("Dashboard schema init skipped; continuing with read-only queries:", schemaError)
     }
 
-    const [memoriesResult, graphStatusResult] = await Promise.allSettled([
-      listMemories(turso),
-      getGraphStatusPayload({
-        turso,
-        nowIso: new Date().toISOString(),
-        topNodesLimit: 10,
-        syncMappings: false,
-      }),
-    ])
+    const memoriesResult = await listMemories(turso)
 
-    if (memoriesResult.status === "fulfilled") {
-      memories = memoriesResult.value.rows.map(row => ({
-        id: row.id as string,
-        content: row.content as string,
-        tags: row.tags as string | null,
-        type: (row.type as Memory["type"]) ?? "note",
-        scope: (row.scope as Memory["scope"]) ?? "global",
-        project_id: row.project_id as string | null,
-        paths: row.paths as string | null,
-        category: row.category as string | null,
-        metadata: row.metadata as string | null,
-        created_at: row.created_at as string,
-        updated_at: (row.updated_at as string) ?? (row.created_at as string),
-      }))
-      memoryInsights = buildMemoryInsights(memories)
-    } else {
-      throw memoriesResult.reason
-    }
-
-    if (graphStatusResult.status === "fulfilled") {
-      graphStatus = graphStatusResult.value
-    } else {
-      console.warn("Graph status unavailable for dashboard:", graphStatusResult.reason)
-      graphStatus = null
-    }
+    memories = memoriesResult.rows.map(row => ({
+      id: row.id as string,
+      content: row.content as string,
+      tags: row.tags as string | null,
+      type: (row.type as Memory["type"]) ?? "note",
+      scope: (row.scope as Memory["scope"]) ?? "global",
+      project_id: row.project_id as string | null,
+      paths: row.paths as string | null,
+      category: row.category as string | null,
+      metadata: row.metadata as string | null,
+      created_at: row.created_at as string,
+      updated_at: (row.updated_at as string) ?? (row.created_at as string),
+    }))
+    memoryInsights = buildMemoryInsights(memories)
   } catch (err) {
     console.error("Turso connection error:", err)
     connectError = true
@@ -112,9 +90,6 @@ export default async function MemoriesPage() {
       <GithubCaptureQueueSection />
 
       <ActionableIntelligenceSection insights={connectError ? null : memoryInsights} />
-
-      {/* Memory Graph Section */}
-      <MemoryGraphSection status={connectError ? null : graphStatus} />
 
       {/* Memories Section with filters */}
       {connectError ? (

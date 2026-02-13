@@ -4,7 +4,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import type { User } from "@supabase/supabase-js"
-import { KeyRound } from "lucide-react"
+import { KeyRound, Network } from "lucide-react"
 import { Database, BarChart3, Settings, Sparkles, LogOut, AlertTriangle, CreditCard, Users } from "@/components/icons/app"
 import { WorkspaceSwitcher, type OrgMembership } from "./WorkspaceSwitcher"
 
@@ -25,6 +25,7 @@ const navItems = [
   { href: "/app", label: "Memories", icon: Database },
   { href: "/app/api-keys", label: "API Keys", icon: KeyRound },
   { href: "/app/stats", label: "Stats", icon: BarChart3 },
+  { href: "/app/graph-explorer", label: "Graph", icon: Network },
   { href: "/app/team", label: "Team", icon: Users },
   { href: "/app/billing", label: "Billing", icon: CreditCard },
   { href: "/app/settings", label: "Settings", icon: Settings },
