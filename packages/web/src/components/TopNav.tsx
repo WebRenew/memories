@@ -12,6 +12,7 @@ import { useUser } from "@/hooks/use-user";
 const navItems = [
   { href: "#how-it-works", label: "How" },
   { href: "#features", label: "Features" },
+  { href: "#api", label: "API" },
   { href: "#integrations", label: "Apps" },
   { href: "/docs", label: "Docs" },
   { href: "#faq", label: "FAQ" },

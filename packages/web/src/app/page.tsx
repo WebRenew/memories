@@ -3,6 +3,7 @@ import { Hero } from "@/components/Hero";
 import { HowItWorks } from "@/components/HowItWorks";
 import { FeaturesGrid } from "@/components/FeaturesGrid";
 import { SDKSection } from "@/components/SDKSection";
+import { ApiSection } from "@/components/ApiSection";
 import { Integrations } from "@/components/Integrations";
 import { Pricing } from "@/components/Pricing";
 import { FAQ } from "@/components/FAQ";
@@ -19,6 +20,7 @@ export default function Home() {
         <HowItWorks />
         <FeaturesGrid />
         <SDKSection />
+        <ApiSection />
         <Integrations />
         <Pricing />
         <FAQ />
