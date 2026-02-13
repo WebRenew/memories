@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { extractErrorMessage } from "@/lib/client-errors"
 
 type QueueStatus = "pending" | "approved" | "rejected"
 type QueueEvent = "all" | "pull_request" | "issues" | "push" | "release"
@@ -99,7 +100,7 @@ export function GithubCaptureQueueSection() {
       })
       const body = await response.json().catch(() => null)
       if (!response.ok) {
-        throw new Error(body?.error ?? `HTTP ${response.status}`)
+        throw new Error(extractErrorMessage(body, `Failed to load capture queue (HTTP ${response.status})`))
       }
 
       if (shouldIgnore()) {
@@ -160,7 +161,7 @@ export function GithubCaptureQueueSection() {
 
       const body = await response.json().catch(() => null)
       if (!response.ok) {
-        throw new Error(body?.error ?? `HTTP ${response.status}`)
+        throw new Error(extractErrorMessage(body, `Failed to ${action} item (HTTP ${response.status})`))
       }
 
       if (status === "pending") {

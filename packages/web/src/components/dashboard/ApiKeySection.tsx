@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react"
 import { Copy, RefreshCw, Trash2, Key, Eye, EyeOff, Check } from "lucide-react"
 import { TenantDatabaseMappingsSection } from "@/components/dashboard/TenantDatabaseMappingsSection"
+import { extractErrorMessage } from "@/lib/client-errors"
+import { recordClientWorkflowEvent } from "@/lib/client-workflow-debug"
 
 const MCP_ENDPOINT = "https://memories.sh/api/mcp"
 const DEFAULT_EXPIRY_DAYS = 30
@@ -63,7 +65,12 @@ export function ApiKeySection() {
     try {
       setError(null)
       const res = await fetch("/api/mcp/key")
-      const data = (await res.json()) as KeyMetadataResponse
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(extractErrorMessage(payload, `Failed to fetch API key metadata (HTTP ${res.status})`))
+      }
+
+      const data = (payload ?? {}) as KeyMetadataResponse
       setHasKey(Boolean(data.hasKey))
       setKeyPreview(data.keyPreview || null)
       setCreatedAt(data.createdAt || null)
@@ -97,6 +104,14 @@ export function ApiKeySection() {
     }
 
     setLoading(true)
+    const startedAt = performance.now()
+    recordClientWorkflowEvent({
+      workflow: "api_key_generate",
+      phase: "start",
+      details: {
+        expiresAtInput: parsedExpiry.toISOString(),
+      },
+    })
     try {
       setError(null)
       const res = await fetch("/api/mcp/key", {
@@ -104,11 +119,21 @@ export function ApiKeySection() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ expiresAt: parsedExpiry.toISOString() }),
       })
-      const data = await res.json()
+      const payload = await res.json().catch(() => null)
 
       if (!res.ok) {
-        throw new Error(data.error || "Failed to generate API key")
+        throw new Error(extractErrorMessage(payload, `Failed to generate API key (HTTP ${res.status})`))
       }
+
+      const data =
+        payload && typeof payload === "object"
+          ? (payload as {
+              apiKey?: string
+              keyPreview?: string | null
+              createdAt?: string | null
+              expiresAt?: string | null
+            })
+          : {}
 
       if (data.apiKey) {
         setApiKey(data.apiKey)
@@ -119,9 +144,21 @@ export function ApiKeySection() {
         setExpiresAt(data.expiresAt || parsedExpiry.toISOString())
         setIsExpired(false)
       }
+      recordClientWorkflowEvent({
+        workflow: "api_key_generate",
+        phase: "success",
+        durationMs: performance.now() - startedAt,
+      })
     } catch (err) {
       console.error("Failed to generate API key:", err)
-      setError(err instanceof Error ? err.message : "Failed to generate API key")
+      const message = err instanceof Error ? err.message : "Failed to generate API key"
+      setError(message)
+      recordClientWorkflowEvent({
+        workflow: "api_key_generate",
+        phase: "failure",
+        durationMs: performance.now() - startedAt,
+        message,
+      })
     } finally {
       setLoading(false)
     }
@@ -132,9 +169,18 @@ export function ApiKeySection() {
       return
     }
     setLoading(true)
+    const startedAt = performance.now()
+    recordClientWorkflowEvent({
+      workflow: "api_key_revoke",
+      phase: "start",
+    })
     try {
       setError(null)
-      await fetch("/api/mcp/key", { method: "DELETE" })
+      const res = await fetch("/api/mcp/key", { method: "DELETE" })
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null)
+        throw new Error(extractErrorMessage(payload, `Failed to revoke API key (HTTP ${res.status})`))
+      }
       setApiKey(null)
       setHasKey(false)
       setKeyPreview(null)
@@ -143,9 +189,21 @@ export function ApiKeySection() {
       setIsExpired(false)
       setShowKey(false)
       setExpiryInput(defaultExpiryInputValue())
+      recordClientWorkflowEvent({
+        workflow: "api_key_revoke",
+        phase: "success",
+        durationMs: performance.now() - startedAt,
+      })
     } catch (err) {
       console.error("Failed to revoke API key:", err)
-      setError("Failed to revoke API key")
+      const message = err instanceof Error ? err.message : "Failed to revoke API key"
+      setError(message)
+      recordClientWorkflowEvent({
+        workflow: "api_key_revoke",
+        phase: "failure",
+        durationMs: performance.now() - startedAt,
+        message,
+      })
     } finally {
       setLoading(false)
     }
@@ -206,7 +264,7 @@ export function ApiKeySection() {
             <Key className="h-4 w-4 text-primary" />
             <h3 className="font-semibold">Step 1: API Key</h3>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Generate a `mem_` key for SDK runtime calls and MCP clients.
           </p>
         </div>
@@ -221,7 +279,7 @@ export function ApiKeySection() {
               onChange={(e) => setExpiryInput(e.target.value)}
               className="w-full bg-muted/30 px-3 py-2 rounded text-sm border border-border focus:outline-none focus:border-primary/50"
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Choose exactly when this key should expire. Non-expiring keys are not allowed.
             </p>
           </div>
@@ -258,7 +316,7 @@ export function ApiKeySection() {
                   </button>
                 </div>
                 {!apiKey && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     Keys are stored as hashes only. Regenerate to get a new copyable key.
                   </p>
                 )}
@@ -293,7 +351,7 @@ export function ApiKeySection() {
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   If your SaaS only calls SDK endpoints (`/api/sdk/v1/*`), you can ignore this MCP endpoint.
                 </p>
               </div>

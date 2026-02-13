@@ -767,6 +767,9 @@ export function TeamContent({
                     <button
                       type="button"
                       onClick={() => setDomainAutoJoinEnabled((prev) => !prev)}
+                      aria-label="Toggle domain auto-join"
+                      role="switch"
+                      aria-checked={domainAutoJoinEnabled}
                       className={`relative inline-flex h-6 w-11 items-center border transition-colors ${
                         domainAutoJoinEnabled
                           ? "bg-primary/20 border-primary/40"
@@ -877,6 +880,9 @@ export function TeamContent({
                     <button
                       type="button"
                       onClick={() => setIncludePrerelease((previous) => !previous)}
+                      aria-label="Toggle prerelease handling"
+                      role="switch"
+                      aria-checked={includePrerelease}
                       className={`relative inline-flex h-6 w-11 items-center border transition-colors ${
                         includePrerelease
                           ? "bg-primary/20 border-primary/40"

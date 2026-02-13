@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { IntegrationHealthPayload } from "@/lib/integration-health"
+import { extractErrorMessage } from "@/lib/client-errors"
 
 interface IntegrationHealthSectionProps {
   initialHealth: IntegrationHealthPayload | null
@@ -71,7 +72,7 @@ export function IntegrationHealthSection({ initialHealth }: IntegrationHealthSec
       })
       const body = await response.json().catch(() => null)
       if (!response.ok) {
-        throw new Error(body?.error ?? `HTTP ${response.status}`)
+        throw new Error(extractErrorMessage(body, `Failed to load integration health (HTTP ${response.status})`))
       }
       if (shouldIgnore()) {
         return

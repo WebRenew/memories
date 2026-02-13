@@ -15,7 +15,7 @@ export default function Home() {
       
       <TopNav />
       
-      <main className="relative">
+      <main className="relative text-[15px] leading-7">
         <Hero />
         <HowItWorks />
         <FeaturesGrid />

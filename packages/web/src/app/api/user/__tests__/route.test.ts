@@ -87,6 +87,7 @@ describe("/api/user", () => {
 
     it("returns 403 when switching to an org the user is not a member of", async () => {
       mockAuthenticateRequest.mockResolvedValue({ userId: "user-1", email: "u@example.com" })
+      const mockInsertSwitchEvent = vi.fn().mockResolvedValue({ error: null })
 
       mockAdminFrom.mockImplementation((table: string) => {
         if (table === "org_members") {
@@ -115,9 +116,7 @@ describe("/api/user", () => {
         }
 
         if (table === "workspace_switch_events") {
-          return {
-            insert: vi.fn().mockResolvedValue({ error: null }),
-          }
+          return { insert: mockInsertSwitchEvent }
         }
 
         return {}
@@ -125,6 +124,16 @@ describe("/api/user", () => {
 
       const response = await PATCH(makePatchRequest({ current_org_id: "org-1" }))
       expect(response.status).toBe(403)
+      expect(mockInsertSwitchEvent).toHaveBeenCalledTimes(1)
+      expect(mockInsertSwitchEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: "user-1",
+          from_org_id: null,
+          to_org_id: "org-1",
+          success: false,
+          error_code: "membership_denied",
+        }),
+      )
     })
 
     it("updates current_org_id when membership is valid", async () => {

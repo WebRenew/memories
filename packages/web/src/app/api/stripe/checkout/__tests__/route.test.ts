@@ -134,6 +134,8 @@ describe("/api/stripe/checkout", () => {
     expect(mockCheckoutSessionCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         customer: "cus_org_123",
+        success_url: "https://example.com/app?upgraded=true",
+        cancel_url: "https://example.com/app/upgrade",
         metadata: expect.objectContaining({
           workspace_owner_type: "organization",
           workspace_org_id: "org-1",
@@ -193,6 +195,8 @@ describe("/api/stripe/checkout", () => {
     expect(mockCheckoutSessionCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         customer: "cus_user_123",
+        success_url: "https://example.com/app?upgraded=true",
+        cancel_url: "https://example.com/app/upgrade",
         metadata: expect.objectContaining({
           workspace_owner_type: "user",
           supabase_user_id: "user-1",

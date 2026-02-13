@@ -23,22 +23,19 @@ export default async function AppLayout({
   }
 
   if (process.env.SUPABASE_SERVICE_ROLE_KEY && user.email) {
-    try {
-      await autoJoinOrganizationsForEmails({
-        userId: user.id,
-        emails: [user.email],
+    void autoJoinOrganizationsForEmails({
+      userId: user.id,
+      emails: [user.email],
+    })
+      .catch((error) => {
+        // Do not block dashboard render when background auto-join fails.
+        console.error("Dashboard auto-join failed:", error)
       })
-    } catch (error) {
-      // Do not block dashboard render when background auto-join fails.
-      console.error("Dashboard auto-join failed:", error)
-    }
 
-    try {
-      await syncGithubAccountLink(user)
-    } catch (error) {
+    void syncGithubAccountLink(user).catch((error) => {
       // Keep dashboard available when account link sync fails.
       console.error("Dashboard github account link sync failed:", error)
-    }
+    })
   }
 
   const [workspace, profile, membershipRows] = await Promise.all([

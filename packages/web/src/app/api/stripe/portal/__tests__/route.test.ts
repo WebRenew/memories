@@ -116,7 +116,10 @@ describe("/api/stripe/portal", () => {
     expect(response.status).toBe(200)
     expect(body.url).toBe("https://stripe.test/portal")
     expect(mockPortalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ customer: "cus_org_123" })
+      expect.objectContaining({
+        customer: "cus_org_123",
+        return_url: "https://example.com/app/billing",
+      })
     )
   })
 
@@ -158,7 +161,10 @@ describe("/api/stripe/portal", () => {
     expect(response.status).toBe(200)
     expect(body.url).toBe("https://stripe.test/portal")
     expect(mockPortalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ customer: "cus_user_123" })
+      expect.objectContaining({
+        customer: "cus_user_123",
+        return_url: "https://example.com/app/billing",
+      })
     )
   })
 })

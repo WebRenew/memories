@@ -2,12 +2,15 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { usePathname } from "next/navigation"
+import { useCallback, useEffect, useMemo } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import type { User } from "@supabase/supabase-js"
 import { BookOpen, KeyRound, Network } from "lucide-react"
 import { Database, BarChart3, Settings, Sparkles, LogOut, AlertTriangle, CreditCard, Users } from "@/components/icons/app"
 import { WorkspaceSwitcher, type OrgMembership } from "./WorkspaceSwitcher"
+import { ClientWorkflowDebugPanel } from "./ClientWorkflowDebugPanel"
 import { ThemeSwitcher } from "@/components/ThemeSwitcher"
+import { extractErrorMessage } from "@/lib/client-errors"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +60,7 @@ export function DashboardShell({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const displayName = profile?.name ?? user.email?.split("@")[0] ?? "User"
   const plan = workspace.plan
   const canManageBilling =
@@ -65,6 +69,20 @@ export function DashboardShell({
     plan === "past_due"
       ? "top-[6.25rem] h-[calc(100vh-6.25rem)]"
       : "top-16 h-[calc(100vh-4rem)]"
+  const internalNavItems = useMemo(() => navItems.filter((item) => !item.external), [])
+
+  const prefetchRoute = useCallback(
+    (href: string) => {
+      router.prefetch(href)
+    },
+    [router],
+  )
+
+  useEffect(() => {
+    for (const item of internalNavItems) {
+      prefetchRoute(item.href)
+    }
+  }, [internalNavItems, prefetchRoute])
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
@@ -81,18 +99,23 @@ export function DashboardShell({
             {canManageBilling ? (
               <>
                 <span className="text-xs text-destructive/80 mx-1">—</span>
-                <a
-                  href="#"
-                  onClick={async (e) => {
-                    e.preventDefault()
+                <button
+                  type="button"
+                  onClick={async () => {
                     const res = await fetch("/api/stripe/portal", { method: "POST" })
-                    const data = await res.json().catch(() => ({}))
-                    if (data.url) window.location.href = data.url
+                    const data = await res.json().catch(() => null)
+                    if (!res.ok) {
+                      console.error(extractErrorMessage(data, `Failed to open billing portal (HTTP ${res.status})`))
+                      return
+                    }
+                    if (data && typeof data === "object" && "url" in data && typeof data.url === "string") {
+                      window.location.href = data.url
+                    }
                   }}
                   className="text-xs font-bold uppercase tracking-wider text-destructive underline underline-offset-2 hover:text-destructive/80"
                 >
                   Update payment method
-                </a>
+                </button>
               </>
             ) : (
               <>
@@ -233,6 +256,10 @@ export function DashboardShell({
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch
+                  onMouseEnter={() => prefetchRoute(item.href)}
+                  onFocus={() => prefetchRoute(item.href)}
+                  aria-current={isActive ? "page" : undefined}
                   className={`flex items-center gap-3 px-4 py-3 text-xs uppercase tracking-[0.15em] font-bold transition-all duration-200 ${
                     isActive
                       ? "bg-primary/10 text-primary border border-primary/20"
@@ -283,6 +310,10 @@ export function DashboardShell({
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch
+                  onMouseEnter={() => prefetchRoute(item.href)}
+                  onFocus={() => prefetchRoute(item.href)}
+                  aria-current={isActive ? "page" : undefined}
                   className={`flex flex-col items-center gap-1 px-4 py-2 ${
                     isActive ? "text-primary" : "text-muted-foreground"
                   }`}
@@ -298,10 +329,11 @@ export function DashboardShell({
         </nav>
 
         {/* Main content */}
-        <main className="flex-1 min-w-0 w-full min-h-[calc(100vh-4rem)] p-6 md:p-8 pb-20 md:pb-8">
+        <main className="flex-1 min-w-0 w-full min-h-[calc(100vh-4rem)] p-6 md:p-8 pb-20 md:pb-8 text-[15px] leading-7">
           {children}
         </main>
       </div>
+      <ClientWorkflowDebugPanel />
     </div>
   )
 }

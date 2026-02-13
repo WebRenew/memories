@@ -10,6 +10,8 @@ import {
   useState,
   useTransition,
 } from "react"
+import { extractErrorMessage } from "@/lib/client-errors"
+import { applyGraphUrlState, graphUrlToRelativePath, parseGraphUrlState } from "@/lib/graph-url-state"
 import type { GraphStatusPayload } from "@/lib/memory-service/graph/status"
 
 interface MemoryGraphSectionProps {
@@ -353,29 +355,18 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
   useEffect(() => {
     if (typeof window === "undefined") return
 
-    const params = new URLSearchParams(window.location.search)
-    const urlNodeType = params.get("graph_node_type")
-    const urlNodeKey = params.get("graph_node_key")
-    const urlNodeLabel = params.get("graph_node_label")
-    const urlEdgeId = params.get("graph_edge_id")
-    const urlFocusMode = params.get("graph_focus")
+    const urlState = parseGraphUrlState(window.location.search)
 
-    if (urlNodeType && urlNodeKey) {
-      setSelectedNode({
-        nodeType: urlNodeType,
-        nodeKey: urlNodeKey,
-        label: urlNodeLabel || `${urlNodeType}:${urlNodeKey}`,
-      })
+    if (urlState.selectedNode) {
+      setSelectedNode(urlState.selectedNode)
     }
 
-    if (urlEdgeId) {
-      pendingEdgeIdFromUrlRef.current = urlEdgeId
-      setSelectedEdgeId(urlEdgeId)
+    if (urlState.selectedEdgeId) {
+      pendingEdgeIdFromUrlRef.current = urlState.selectedEdgeId
+      setSelectedEdgeId(urlState.selectedEdgeId)
     }
 
-    if (urlFocusMode === "1") {
-      setIsFocusMode(true)
-    }
+    setIsFocusMode(urlState.isFocusMode)
 
     setUrlHydrated(true)
   }, [])
@@ -421,7 +412,9 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
         }
         if (!response.ok) {
           if (!cancelled) {
-            setExplorerError(body.error ?? "Failed to load graph explorer data.")
+            setExplorerError(
+              extractErrorMessage(body, `Failed to load graph explorer data (HTTP ${response.status})`),
+            )
             setExplorerData(null)
             setSelectedEdgeId(null)
           }
@@ -570,30 +563,13 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
     if (!urlHydrated || typeof window === "undefined") return
 
     const nextUrl = new URL(window.location.href)
-    if (selectedNode) {
-      nextUrl.searchParams.set("graph_node_type", selectedNode.nodeType)
-      nextUrl.searchParams.set("graph_node_key", selectedNode.nodeKey)
-      nextUrl.searchParams.set("graph_node_label", selectedNode.label)
-    } else {
-      nextUrl.searchParams.delete("graph_node_type")
-      nextUrl.searchParams.delete("graph_node_key")
-      nextUrl.searchParams.delete("graph_node_label")
-    }
+    applyGraphUrlState(nextUrl, {
+      selectedNode,
+      selectedEdgeId,
+      isFocusMode,
+    })
 
-    if (selectedEdgeId) {
-      nextUrl.searchParams.set("graph_edge_id", selectedEdgeId)
-    } else {
-      nextUrl.searchParams.delete("graph_edge_id")
-    }
-
-    if (isFocusMode) {
-      nextUrl.searchParams.set("graph_focus", "1")
-    } else {
-      nextUrl.searchParams.delete("graph_focus")
-    }
-
-    const query = nextUrl.searchParams.toString()
-    const nextPath = query ? `${nextUrl.pathname}?${query}${nextUrl.hash}` : `${nextUrl.pathname}${nextUrl.hash}`
+    const nextPath = graphUrlToRelativePath(nextUrl)
     const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`
     if (nextPath !== currentPath) {
       window.history.replaceState({}, "", nextPath)
@@ -869,13 +845,18 @@ export function MemoryGraphSection({ status }: MemoryGraphSectionProps) {
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ mode }),
           })
-          const body = await response.json().catch(() => ({} as { error?: string }))
+          const body = await response.json().catch(() => null)
           if (!response.ok) {
-            setModeError(body.error ?? "Failed to update graph rollout mode.")
+            setModeError(
+              extractErrorMessage(body, `Failed to update graph rollout mode (HTTP ${response.status})`),
+            )
             return
           }
 
-          const nextStatus = body.status as GraphStatusPayload | undefined
+          const nextStatus =
+            body && typeof body === "object"
+              ? ((body as { status?: GraphStatusPayload }).status ?? undefined)
+              : undefined
           if (nextStatus) {
             setLocalStatus(nextStatus)
           } else {

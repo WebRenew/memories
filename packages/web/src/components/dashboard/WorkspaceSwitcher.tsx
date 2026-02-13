@@ -1,8 +1,10 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useId } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronDown, Check, Crown, Shield, User, Loader2 } from "lucide-react"
+import { extractErrorMessage } from "@/lib/client-errors"
+import { recordClientWorkflowEvent } from "@/lib/client-workflow-debug"
 
 export interface OrgMembership {
   role: "owner" | "admin" | "member"
@@ -77,6 +79,7 @@ const roleIcon = (role: string) => {
 
 export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitcherProps) {
   const router = useRouter()
+  const menuId = useId()
   const [isOpen, setIsOpen] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -105,6 +108,19 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
       document.addEventListener("mousedown", handleClickOutside)
     }
     return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener("keydown", handleEscape)
+    return () => {
+      document.removeEventListener("keydown", handleEscape)
+    }
   }, [isOpen])
 
   async function prefetchWorkspaceSummaries(options?: {
@@ -235,6 +251,14 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
     setIsSwitching(true)
     setError(null)
     const switchStartedAt = performance.now()
+    recordClientWorkflowEvent({
+      workflow: "workspace_switch",
+      phase: "start",
+      details: {
+        fromOrgId: currentOrgId,
+        toOrgId: nextOrgId,
+      },
+    })
     let userPatchMs: number | null = null
     let workspacePrefetchMs: number | null = null
     let integrationHealthPrefetchMs: number | null = null
@@ -248,14 +272,17 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
       })
       userPatchMs = Math.max(0, Math.round(performance.now() - userPatchStartedAt))
 
-      const data = await res.json().catch(() => ({}))
+      const data = await res.json().catch(() => null)
 
       if (!res.ok) {
-        throw new Error(data.error || "Failed to switch workspace")
+        throw new Error(extractErrorMessage(data, `Failed to switch workspace (HTTP ${res.status})`))
       }
 
       const cacheBustKey =
-        typeof data?.workspace_cache_bust_key === "string"
+        data &&
+        typeof data === "object" &&
+        "workspace_cache_bust_key" in data &&
+        typeof data.workspace_cache_bust_key === "string"
           ? data.workspace_cache_bust_key
           : null
 
@@ -299,6 +326,18 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
 
       setIsOpen(false)
       router.refresh()
+      recordClientWorkflowEvent({
+        workflow: "workspace_switch",
+        phase: "success",
+        durationMs: performance.now() - switchStartedAt,
+        details: {
+          fromOrgId: currentOrgId,
+          toOrgId: nextOrgId,
+          userPatchMs,
+          workspacePrefetchMs,
+          integrationHealthPrefetchMs,
+        },
+      })
     } catch (err) {
       console.error("Workspace switch failed:", err)
       const message = err instanceof Error ? err.message : "Failed to switch workspace"
@@ -319,6 +358,17 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
         workspacePrefetchMs: workspacePrefetchMs ?? undefined,
         integrationHealthPrefetchMs: integrationHealthPrefetchMs ?? undefined,
       })
+      recordClientWorkflowEvent({
+        workflow: "workspace_switch",
+        phase: "failure",
+        durationMs: performance.now() - switchStartedAt,
+        message,
+        details: {
+          fromOrgId: currentOrgId,
+          toOrgId: nextOrgId,
+          errorCode: normalizedErrorCode,
+        },
+      })
     } finally {
       isSwitchingRef.current = false
       setIsSwitching(false)
@@ -328,11 +378,14 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
   return (
     <div className="relative" ref={dropdownRef}>
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         disabled={isSwitching}
         className="flex items-center gap-2 px-3 py-1.5 border border-border bg-muted/30 hover:bg-muted/50 transition-colors disabled:opacity-60"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
+        aria-controls={menuId}
+        aria-label="Switch workspace"
       >
         {isSwitching ? (
           <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
@@ -349,8 +402,13 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
 
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute top-full left-0 mt-1.5 z-50 min-w-[220px] bg-background border border-border shadow-lg">
+          <div className="fixed inset-0 z-40" aria-hidden onClick={() => setIsOpen(false)} />
+          <div
+            id={menuId}
+            role="listbox"
+            aria-label="Workspace options"
+            className="absolute top-full left-0 mt-1.5 z-50 min-w-[220px] bg-background border border-border shadow-lg"
+          >
             <div className="px-3 py-2 border-b border-border">
               <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-muted-foreground flex items-center gap-2">
                 Workspace
@@ -362,8 +420,11 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
 
             {/* Personal workspace */}
             <button
+              type="button"
               onClick={() => switchWorkspace(null)}
               disabled={isSwitching}
+              role="option"
+              aria-selected={currentOrgId === null}
               className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors disabled:opacity-60"
             >
               <User className="h-3.5 w-3.5 text-primary shrink-0" />
@@ -396,9 +457,12 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
                 </div>
                 {memberships.map((m) => (
                   <button
+                    type="button"
                     key={m.organization.id}
                     onClick={() => switchWorkspace(m.organization.id)}
                     disabled={isSwitching}
+                    role="option"
+                    aria-selected={currentOrgId === m.organization.id}
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors disabled:opacity-60"
                   >
                     <div className="w-5 h-5 bg-primary/10 border border-primary/20 flex items-center justify-center text-[9px] font-bold text-primary shrink-0">

@@ -183,6 +183,20 @@
       position: relative;
       cursor: default;
     }
+
+    :where(
+      a,
+      button,
+      input,
+      select,
+      textarea,
+      [role="button"],
+      [role="switch"],
+      [tabindex]:not([tabindex="-1"])
+    ):focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
   }
 
   /* ── Docs: subtler heading sizes & inline code in headings ── */
@@ -296,7 +310,22 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-marquee] { animation-play-state: paused !important; }
+  html {
+    scroll-behavior: auto;
+  }
+
+  .animate-pulse,
+  [data-marquee] {
+    animation: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @layer utilities {

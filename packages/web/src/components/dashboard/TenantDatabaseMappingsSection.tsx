@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { AlertTriangle, Database, Link2, RefreshCw, Server, Trash2 } from "lucide-react"
+import { extractErrorMessage } from "@/lib/client-errors"
+import { recordClientWorkflowEvent } from "@/lib/client-workflow-debug"
 
 type ProvisionMode = "provision" | "attach"
 type SpendControlMode = "attach_only" | "allow_provision"
@@ -103,14 +105,13 @@ export function TenantDatabaseMappingsSection({
       try {
         setError(null)
         const res = await fetch("/api/mcp/tenants")
-        const data = (await res.json().catch(() => ({}))) as TenantListResponse & {
-          error?: string
-        }
+        const payload = await res.json().catch(() => null)
 
         if (!res.ok) {
-          throw new Error(data.error || "Failed to load AI SDK projects")
+          throw new Error(extractErrorMessage(payload, `Failed to load AI SDK projects (HTTP ${res.status})`))
         }
 
+        const data = (payload ?? {}) as TenantListResponse
         setMappings(Array.isArray(data.tenantDatabases) ? data.tenantDatabases : [])
       } catch (err) {
         console.error("Failed to fetch tenant mappings:", err)
@@ -189,6 +190,15 @@ export function TenantDatabaseMappingsSection({
 
     setSaving(true)
     setStatusMessage(null)
+    const startedAt = performance.now()
+    recordClientWorkflowEvent({
+      workflow: "tenant_mapping_create",
+      phase: "start",
+      details: {
+        tenantId: trimmedTenantId,
+        mode,
+      },
+    })
     try {
       setError(null)
 
@@ -220,9 +230,9 @@ export function TenantDatabaseMappingsSection({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       })
-      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      const data = await res.json().catch(() => null)
       if (!res.ok) {
-        throw new Error(data.error || "Failed to save AI SDK project")
+        throw new Error(extractErrorMessage(data, `Failed to save AI SDK project (HTTP ${res.status})`))
       }
 
       setStatusMessage(mode === "provision" ? "Project database provisioned" : "Project database attached")
@@ -234,9 +244,29 @@ export function TenantDatabaseMappingsSection({
       }
       setMetadataInput("")
       await fetchMappings({ silent: true })
+      recordClientWorkflowEvent({
+        workflow: "tenant_mapping_create",
+        phase: "success",
+        durationMs: performance.now() - startedAt,
+        details: {
+          tenantId: trimmedTenantId,
+          mode,
+        },
+      })
     } catch (err) {
       console.error("Failed to create tenant mapping:", err)
-      setError(err instanceof Error ? err.message : "Failed to save AI SDK project")
+      const message = err instanceof Error ? err.message : "Failed to save AI SDK project"
+      setError(message)
+      recordClientWorkflowEvent({
+        workflow: "tenant_mapping_create",
+        phase: "failure",
+        durationMs: performance.now() - startedAt,
+        message,
+        details: {
+          tenantId: trimmedTenantId,
+          mode,
+        },
+      })
     } finally {
       setSaving(false)
     }
@@ -249,21 +279,47 @@ export function TenantDatabaseMappingsSection({
 
     setDisablingTenantId(tenantToDisable)
     setStatusMessage(null)
+    const startedAt = performance.now()
+    recordClientWorkflowEvent({
+      workflow: "tenant_mapping_disable",
+      phase: "start",
+      details: {
+        tenantId: tenantToDisable,
+      },
+    })
     try {
       setError(null)
       const res = await fetch(`/api/mcp/tenants?tenantId=${encodeURIComponent(tenantToDisable)}`, {
         method: "DELETE",
       })
-      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      const data = await res.json().catch(() => null)
       if (!res.ok) {
-        throw new Error(data.error || "Failed to disable AI SDK project")
+        throw new Error(extractErrorMessage(data, `Failed to disable AI SDK project (HTTP ${res.status})`))
       }
 
       setStatusMessage(`Disabled project ${tenantToDisable}`)
       await fetchMappings({ silent: true })
+      recordClientWorkflowEvent({
+        workflow: "tenant_mapping_disable",
+        phase: "success",
+        durationMs: performance.now() - startedAt,
+        details: {
+          tenantId: tenantToDisable,
+        },
+      })
     } catch (err) {
       console.error("Failed to disable tenant mapping:", err)
-      setError(err instanceof Error ? err.message : "Failed to disable AI SDK project")
+      const message = err instanceof Error ? err.message : "Failed to disable AI SDK project"
+      setError(message)
+      recordClientWorkflowEvent({
+        workflow: "tenant_mapping_disable",
+        phase: "failure",
+        durationMs: performance.now() - startedAt,
+        message,
+        details: {
+          tenantId: tenantToDisable,
+        },
+      })
     } finally {
       setDisablingTenantId(null)
     }
@@ -276,7 +332,7 @@ export function TenantDatabaseMappingsSection({
           <Database className="h-4 w-4 text-primary" />
           <h3 className="font-semibold">Step 2: AI SDK Projects</h3>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="text-sm text-muted-foreground mt-1">
           Map `tenantId` to isolated Turso databases for SaaS customer workspaces.
         </p>
       </div>
@@ -304,7 +360,7 @@ export function TenantDatabaseMappingsSection({
                 <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-amber-200">Project provisioning can increase infrastructure spend</p>
-                  <p className="text-xs text-amber-100/80 mt-1">
+                  <p className="text-sm text-amber-100/80 mt-1">
                     Provisioning creates a new Turso database per project. Use spend controls to prevent accidental database creation.
                   </p>
                 </div>
@@ -342,7 +398,7 @@ export function TenantDatabaseMappingsSection({
                 </button>
               </div>
 
-              <label className="flex items-start gap-2 text-xs text-muted-foreground">
+              <label className="flex items-start gap-2 text-sm text-muted-foreground">
                 <input
                   type="checkbox"
                   checked={provisionAcknowledged}
@@ -383,7 +439,7 @@ export function TenantDatabaseMappingsSection({
               </div>
 
               {spendControl === "attach_only" && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Spend control is set to Attach Existing DBs. Switch to Allow One-Click Provisioning to create project databases from this page.
                 </p>
               )}
@@ -460,7 +516,7 @@ export function TenantDatabaseMappingsSection({
                     : "Attach Project Database"}
               </button>
 
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Existing project mappings move automatically when you rotate your API key.
               </p>
             </div>

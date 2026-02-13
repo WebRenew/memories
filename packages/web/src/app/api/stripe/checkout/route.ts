@@ -6,6 +6,10 @@ import { parseBody, checkoutSchema } from "@/lib/validations"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { resolveWorkspaceContext } from "@/lib/workspace"
 
+function jsonError(message: string, status: number, code: string) {
+  return NextResponse.json({ error: message, code }, { status })
+}
+
 async function getOrCreateUserCustomerId(
   admin: ReturnType<typeof createAdminClient>,
   userId: string,
@@ -99,7 +103,7 @@ export async function POST(request: Request) {
   const auth = await authenticateRequest(request)
 
   if (!auth) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return jsonError("Unauthorized", 401, "UNAUTHORIZED")
   }
 
   const rateLimited = await checkRateLimit(strictRateLimit, auth.userId)
@@ -108,18 +112,15 @@ export async function POST(request: Request) {
   const admin = createAdminClient()
   const workspace = await resolveWorkspaceContext(admin, auth.userId)
   if (!workspace) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return jsonError("Unauthorized", 401, "WORKSPACE_UNAVAILABLE")
   }
 
   if (!workspace.canManageBilling) {
-    return NextResponse.json(
-      { error: "Only organization owners can manage billing" },
-      { status: 403 }
-    )
+    return jsonError("Only organization owners can manage billing", 403, "BILLING_PERMISSION_DENIED")
   }
 
   if (workspace.plan === "pro") {
-    return NextResponse.json({ error: "Workspace is already on Pro" }, { status: 400 })
+    return jsonError("Workspace is already on Pro", 400, "ALREADY_ON_PRO")
   }
 
   const parsed = parseBody(checkoutSchema, await request.json().catch(() => ({})))
@@ -134,7 +135,7 @@ export async function POST(request: Request) {
   let customerId: string | null = null
   if (workspace.ownerType === "organization") {
     if (!workspace.orgId) {
-      return NextResponse.json({ error: "Failed to resolve organization workspace" }, { status: 500 })
+      return jsonError("Failed to resolve organization workspace", 500, "ORG_WORKSPACE_RESOLUTION_FAILED")
     }
     customerId = await getOrCreateOrganizationCustomerId(admin, workspace.orgId)
   } else {
@@ -142,7 +143,7 @@ export async function POST(request: Request) {
   }
 
   if (!customerId) {
-    return NextResponse.json({ error: "Failed to create billing account" }, { status: 500 })
+    return jsonError("Failed to create billing account", 500, "BILLING_CUSTOMER_CREATE_FAILED")
   }
 
   try {
@@ -185,7 +186,8 @@ export async function POST(request: Request) {
     const session = await getStripe().checkout.sessions.create(sessionPayload)
 
     return NextResponse.json({ url: session.url })
-  } catch {
-    return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 })
+  } catch (error) {
+    console.error("Failed to create checkout session:", error)
+    return jsonError("Failed to create checkout session", 500, "CHECKOUT_SESSION_CREATE_FAILED")
   }
 }

@@ -48,7 +48,7 @@ export function ThemeSwitcher() {
   const indicatorConfig = getIndicatorConfig();
 
   return (
-    <div className="border-border bg-muted relative flex rounded-lg border p-1 min-w-max">
+    <div className="border-border bg-muted relative flex rounded-lg border p-1 min-w-max" role="radiogroup" aria-label="Theme selection">
       <motion.div
         className="theme-selector-indicator bg-background absolute top-1 left-1 rounded-sm ease-out h-6 shadow-sm"
         initial={false}
@@ -65,12 +65,15 @@ export function ThemeSwitcher() {
       
       {/* Dark Button */}
       <motion.button
+        type="button"
         onClick={() => setTheme("dark")}
         className={`theme-selector-button relative z-10 flex cursor-pointer items-center justify-center rounded-sm h-6 gap-1 px-2 transition-colors duration-200 ${
           theme === "dark" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
         }`}
         title="Dark"
         aria-label="Switch to Dark theme"
+        role="radio"
+        aria-checked={theme === "dark"}
         animate={{ width: getDarkWidth() }}
         transition={{ type: "spring", stiffness: 400, damping: 30 }}
       >
@@ -96,12 +99,15 @@ export function ThemeSwitcher() {
 
       {/* Light Button */}
       <motion.button
+        type="button"
         onClick={() => setTheme("light")}
         className={`theme-selector-button relative z-10 flex cursor-pointer items-center justify-center rounded-sm h-6 gap-1 px-2 transition-colors duration-200 ${
           theme === "light" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
         }`}
         title="Light"
         aria-label="Switch to Light theme"
+        role="radio"
+        aria-checked={theme === "light"}
         animate={{ width: getLightWidth() }}
         transition={{ type: "spring", stiffness: 400, damping: 30 }}
       >
@@ -124,12 +130,15 @@ export function ThemeSwitcher() {
 
       {/* System Button */}
       <motion.button
+        type="button"
         onClick={() => setTheme("system")}
         className={`theme-selector-button relative z-10 flex cursor-pointer items-center justify-center rounded-sm h-6 gap-1 px-2 transition-colors duration-200 ${
           theme === "system" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
         }`}
         title="System"
         aria-label="Switch to System theme"
+        role="radio"
+        aria-checked={theme === "system"}
         animate={{ width: getSystemWidth() }}
         transition={{ type: "spring", stiffness: 400, damping: 30 }}
       >

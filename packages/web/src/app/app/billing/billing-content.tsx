@@ -16,6 +16,8 @@ import {
   AlertTriangle,
   Trash2
 } from "lucide-react"
+import { extractErrorMessage } from "@/lib/client-errors"
+import { recordClientWorkflowEvent } from "@/lib/client-workflow-debug"
 
 interface UsageStats {
   totalMemories: number
@@ -76,6 +78,7 @@ export function BillingContent({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [deleting, setDeleting] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const isPro = plan === "pro"
   const isOrgWorkspace = ownerType === "organization"
 
@@ -83,17 +86,42 @@ export function BillingContent({
     if (!canManageBilling) return
 
     setLoading(true)
+    setActionError(null)
+    const startedAt = performance.now()
+    recordClientWorkflowEvent({
+      workflow: "billing_portal",
+      phase: "start",
+    })
     try {
       const res = await fetch("/api/stripe/portal", { method: "POST" })
-      const data = await res.json().catch(() => ({}))
+      const data = await res.json().catch(() => null)
       if (!res.ok) {
-        throw new Error(data.error || "Failed to open billing portal")
+        throw new Error(extractErrorMessage(data, `Failed to open billing portal (HTTP ${res.status})`))
       }
-      if (data.url) {
-        window.location.href = data.url
+      const redirectUrl =
+        data && typeof data === "object" && "url" in data && typeof data.url === "string"
+          ? data.url
+          : null
+      if (redirectUrl) {
+        recordClientWorkflowEvent({
+          workflow: "billing_portal",
+          phase: "success",
+          durationMs: performance.now() - startedAt,
+          details: {
+            redirected: true,
+          },
+        })
+        window.location.href = redirectUrl
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Failed to open billing portal")
+      const message = error instanceof Error ? error.message : "Failed to open billing portal"
+      setActionError(message)
+      recordClientWorkflowEvent({
+        workflow: "billing_portal",
+        phase: "failure",
+        durationMs: performance.now() - startedAt,
+        message,
+      })
     } finally {
       setLoading(false)
     }
@@ -103,21 +131,49 @@ export function BillingContent({
     if (!canManageBilling) return
 
     setLoading(true)
+    setActionError(null)
+    const startedAt = performance.now()
+    recordClientWorkflowEvent({
+      workflow: "billing_checkout",
+      phase: "start",
+      details: { billing },
+    })
     try {
       const res = await fetch("/api/stripe/checkout", { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ billing }),
       })
-      const data = await res.json().catch(() => ({}))
+      const data = await res.json().catch(() => null)
       if (!res.ok) {
-        throw new Error(data.error || "Failed to start checkout")
+        throw new Error(extractErrorMessage(data, `Failed to start checkout (HTTP ${res.status})`))
       }
-      if (data.url) {
-        window.location.href = data.url
+      const redirectUrl =
+        data && typeof data === "object" && "url" in data && typeof data.url === "string"
+          ? data.url
+          : null
+      if (redirectUrl) {
+        recordClientWorkflowEvent({
+          workflow: "billing_checkout",
+          phase: "success",
+          durationMs: performance.now() - startedAt,
+          details: {
+            billing,
+            redirected: true,
+          },
+        })
+        window.location.href = redirectUrl
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Failed to start checkout")
+      const message = error instanceof Error ? error.message : "Failed to start checkout"
+      setActionError(message)
+      recordClientWorkflowEvent({
+        workflow: "billing_checkout",
+        phase: "failure",
+        durationMs: performance.now() - startedAt,
+        message,
+        details: { billing },
+      })
     } finally {
       setLoading(false)
     }
@@ -127,13 +183,31 @@ export function BillingContent({
     if (deleteConfirmText !== "DELETE") return
     
     setDeleting(true)
+    setActionError(null)
+    const startedAt = performance.now()
+    recordClientWorkflowEvent({
+      workflow: "account_delete",
+      phase: "start",
+    })
     try {
       const res = await fetch("/api/account", { method: "DELETE" })
       if (res.ok) {
+        recordClientWorkflowEvent({
+          workflow: "account_delete",
+          phase: "success",
+          durationMs: performance.now() - startedAt,
+        })
         router.push("/")
       } else {
-        const data = await res.json()
-        alert(data.error || "Failed to delete account")
+        const data = await res.json().catch(() => null)
+        const message = extractErrorMessage(data, `Failed to delete account (HTTP ${res.status})`)
+        setActionError(message)
+        recordClientWorkflowEvent({
+          workflow: "account_delete",
+          phase: "failure",
+          durationMs: performance.now() - startedAt,
+          message,
+        })
       }
     } finally {
       setDeleting(false)
@@ -150,6 +224,11 @@ export function BillingContent({
             ? "Manage organization billing and view usage"
             : "Manage your subscription and view usage"}
         </p>
+        {actionError ? (
+          <p className="mt-2 text-sm text-red-400" role="alert">
+            {actionError}
+          </p>
+        ) : null}
       </div>
 
       {isOrgWorkspace && !canManageBilling && (

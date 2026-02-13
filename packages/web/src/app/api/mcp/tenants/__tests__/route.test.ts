@@ -312,6 +312,100 @@ describe("/api/mcp/tenants", () => {
     expect(mockCreateDatabase).not.toHaveBeenCalled()
   })
 
+  it("retries provisioning when an existing mapping is not ready", async () => {
+    let sdkCalls = 0
+    const upsertMock = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: {
+            tenant_id: "tenant-retry",
+            turso_db_url: "libsql://tenant-a.turso.io",
+            turso_db_name: "memories-tenant-a",
+            status: "ready",
+            metadata: { attempt: 2 },
+            created_at: "2026-02-10T00:00:00.000Z",
+            updated_at: "2026-02-10T00:00:00.000Z",
+            last_verified_at: "2026-02-10T00:00:00.000Z",
+          },
+          error: null,
+        }),
+      }),
+    })
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "users") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: {
+                  mcp_api_key_hash: "hash_123",
+                  mcp_api_key_expires_at: "2099-01-01T00:00:00.000Z",
+                },
+                error: null,
+              }),
+            }),
+          }),
+        }
+      }
+
+      if (table === "sdk_tenant_databases") {
+        sdkCalls += 1
+        if (sdkCalls === 1) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: {
+                      tenant_id: "tenant-retry",
+                      turso_db_url: "libsql://old-tenant.turso.io",
+                      turso_db_name: "old-db",
+                      status: "error",
+                      metadata: { attempt: 1 },
+                      created_at: "2026-02-09T00:00:00.000Z",
+                      updated_at: "2026-02-09T00:00:00.000Z",
+                      last_verified_at: "2026-02-09T00:00:00.000Z",
+                    },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          }
+        }
+
+        return {
+          upsert: upsertMock,
+        }
+      }
+
+      return {}
+    })
+
+    const response = await POST(
+      new Request("http://localhost/api/mcp/tenants", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tenantId: "tenant-retry", mode: "provision", metadata: { attempt: 2 } }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.provisioned).toBe(true)
+    expect(mockCreateDatabase).toHaveBeenCalledOnce()
+    expect(mockCreateDatabaseToken).toHaveBeenCalledOnce()
+    expect(mockInitSchema).toHaveBeenCalledOnce()
+    expect(upsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenant_id: "tenant-retry",
+        status: "ready",
+      }),
+      { onConflict: "api_key_hash,tenant_id" },
+    )
+  })
+
   it("rejects attach mode without libsql url", async () => {
     mockAdminFrom.mockImplementation((table: string) => {
       if (table === "users") {
