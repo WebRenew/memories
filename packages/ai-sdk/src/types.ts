@@ -14,6 +14,10 @@ import type {
   MemoriesClient,
   MemoriesClientOptions,
   MemoryAddInput,
+  SkillFileDeleteInput,
+  SkillFileListOptions,
+  SkillFileRecord,
+  SkillFileUpsertInput,
   MemoryEditInput,
   MemoryListOptions,
   MemoryRecord,
@@ -56,6 +60,9 @@ export interface MemoriesTools {
   listMemories: (input?: MemoryListOptions) => Promise<MemoryRecord[]>
   forgetMemory: (input: { id: string }) => Promise<MutationResult>
   editMemory: (input: { id: string; updates: MemoryEditInput }) => Promise<MutationResult>
+  upsertSkillFile: (input: SkillFileUpsertInput) => Promise<MutationResult>
+  listSkillFiles: (input?: SkillFileListOptions) => Promise<SkillFileRecord[]>
+  deleteSkillFile: (input: SkillFileDeleteInput) => Promise<MutationResult>
 }
 
 export interface MemoriesManagement {

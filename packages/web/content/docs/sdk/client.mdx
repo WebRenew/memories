@@ -212,6 +212,8 @@ Use all three scopes together:
 
 If `tenantId` is omitted, requests route to the API key's default workspace database.
 
+If `tenantId` is provided and no mapping exists yet, the runtime can auto-provision a tenant Turso database (when server provisioning credentials are configured). This lets SaaS apps avoid manual tenant DB setup during first use.
+
 ```typescript
 const client = new MemoriesClient({
   apiKey: "mem_xxx",
@@ -282,6 +284,33 @@ const client = new MemoriesClient({
 await client.memories.add({ content: "User prefers dark mode", type: "note" })
 const { memories } = await client.context.get({ query: "user preferences" })
 // Only returns memories for user_123
+```
+
+## Skill Files (Scoped)
+
+Skill files are first-class scoped records in the SDK (`tenantId` + `userId` + `projectId`), separate from memory `type: "skill"` labels.
+
+```typescript
+await client.skills.upsertFile({
+  path: ".agents/skills/review/SKILL.md",
+  content: "---\nname: review\n---\nUse strict checks.",
+  tenantId: "acme-prod",
+  userId: "user_123",
+  projectId: "github.com/acme/platform",
+})
+
+const skillFiles = await client.skills.listFiles({
+  tenantId: "acme-prod",
+  userId: "user_123",
+  projectId: "github.com/acme/platform",
+})
+
+await client.skills.deleteFile({
+  path: ".agents/skills/review/SKILL.md",
+  tenantId: "acme-prod",
+  userId: "user_123",
+  projectId: "github.com/acme/platform",
+})
 ```
 
 ## Edge Runtime

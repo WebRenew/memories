@@ -38,7 +38,7 @@ function mergeSystemPrompt(existingSystem: unknown, memoryBlock: string): string
 }
 
 function emptyContext(): ContextResult {
-  return { rules: [], memories: [], raw: "" }
+  return { rules: [], memories: [], skillFiles: [], raw: "" }
 }
 
 export function memoriesMiddleware(options: MemoriesMiddlewareOptions = {}) {
@@ -73,6 +73,7 @@ export function memoriesMiddleware(options: MemoriesMiddlewareOptions = {}) {
       const memoryBlock = client.buildSystemPrompt({
         rules: includeRules ? context.rules : [],
         memories: context.memories,
+        skillFiles: context.skillFiles ?? [],
       })
 
       if (!memoryBlock) {

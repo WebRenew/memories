@@ -18,6 +18,8 @@ If you are integrating through the SDK HTTP surface, use `/api/sdk/v1/management
 
 If `tenant_id` is omitted, requests use the API key's default workspace database.
 
+When tenant auto-provisioning is enabled on the server, unknown `tenant_id` values can be provisioned on first use (new Turso DB + schema + mapping) without a separate management call.
+
 ## Manage Tenant Mappings
 
 ### List Tenants

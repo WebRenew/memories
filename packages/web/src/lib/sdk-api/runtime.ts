@@ -192,7 +192,10 @@ export async function resolveTursoForScope(params: {
 
   if (tenantId) {
     try {
-      return await resolveTenantTurso(apiKeyHash, tenantId)
+      return await resolveTenantTurso(apiKeyHash, tenantId, {
+        ownerUserId,
+        autoProvision: true,
+      })
     } catch (error) {
       const detail =
         (error as { detail?: ApiErrorDetail } | null)?.detail ??

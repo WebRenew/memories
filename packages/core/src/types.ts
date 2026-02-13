@@ -55,6 +55,7 @@ export interface MemoryRecord {
 export interface ContextResult {
   rules: MemoryRecord[]
   memories: MemoryRecord[]
+  skillFiles?: SkillFileRecord[]
   trace?: {
     requestedStrategy?: ContextStrategy
     strategy: ContextStrategy
@@ -77,6 +78,7 @@ export type ContextMode = "all" | "working" | "long_term" | "rules_only"
 export interface ContextGetOptions {
   limit?: number
   includeRules?: boolean
+  includeSkillFiles?: boolean
   projectId?: string
   userId?: string
   tenantId?: string
@@ -88,6 +90,36 @@ export interface ContextGetOptions {
 
 export interface ContextGetInput extends ContextGetOptions {
   query?: string
+}
+
+export interface SkillFileRecord {
+  id: string
+  path: string
+  content: string
+  scope: MemoryScope
+  projectId: string | null
+  userId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SkillFileScopeOptions {
+  projectId?: string
+  userId?: string
+  tenantId?: string
+}
+
+export interface SkillFileUpsertInput extends SkillFileScopeOptions {
+  path: string
+  content: string
+}
+
+export interface SkillFileListOptions extends SkillFileScopeOptions {
+  limit?: number
+}
+
+export interface SkillFileDeleteInput extends SkillFileScopeOptions {
+  path: string
 }
 
 export interface MemoryAddInput {
@@ -200,4 +232,5 @@ export interface ManagementTenantDisableResult {
 export interface BuildSystemPromptInput {
   rules?: MemoryRecord[]
   memories?: MemoryRecord[]
+  skillFiles?: SkillFileRecord[]
 }

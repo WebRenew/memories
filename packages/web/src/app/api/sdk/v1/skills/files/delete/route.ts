@@ -1,5 +1,4 @@
-import { getContextPayload } from "@/lib/memory-service/queries"
-import { listSkillFilesPayload } from "@/lib/memory-service/skill-files"
+import { deleteSkillFilePayload } from "@/lib/memory-service/skill-files"
 import { apiError, ensureMemoryUserIdSchema, parseTenantId, parseUserId, ToolExecutionError } from "@/lib/memory-service/tools"
 import {
   authenticateApiKey,
@@ -13,32 +12,12 @@ import { scopeSchema } from "@/lib/sdk-api/schemas"
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 
-const ENDPOINT = "/api/sdk/v1/context/get"
-
-const contextModeSchema = z.enum(["all", "working", "long_term", "rules_only"])
-const contextStrategySchema = z.enum(["baseline", "hybrid_graph"])
+const ENDPOINT = "/api/sdk/v1/skills/files/delete"
 
 const requestSchema = z.object({
-  query: z.string().trim().max(500).optional(),
-  limit: z.number().int().positive().max(50).optional(),
-  includeRules: z.boolean().optional(),
-  includeSkillFiles: z.boolean().optional(),
-  mode: contextModeSchema.optional(),
-  strategy: contextStrategySchema.optional(),
-  graphDepth: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
-  graphLimit: z.number().int().positive().max(50).optional(),
+  path: z.string().trim().min(1).max(400),
   scope: scopeSchema,
 })
-
-function modeMemories(
-  mode: z.infer<typeof contextModeSchema>,
-  data: { memories: unknown[]; workingMemories: unknown[]; longTermMemories: unknown[] }
-): unknown[] {
-  if (mode === "rules_only") return []
-  if (mode === "working") return data.workingMemories
-  if (mode === "long_term") return data.longTermMemories
-  return data.memories
-}
 
 export async function POST(request: NextRequest) {
   const requestId = crypto.randomUUID()
@@ -90,42 +69,15 @@ export async function POST(request: NextRequest) {
 
     await ensureMemoryUserIdSchema(turso)
 
-    const mode = parsedRequest.mode ?? "all"
-    const includeRules = parsedRequest.includeRules ?? true
-    const includeSkillFiles = parsedRequest.includeSkillFiles ?? true
-    const payload = await getContextPayload({
+    const payload = await deleteSkillFilePayload({
       turso,
+      path: parsedRequest.path,
       projectId,
       userId,
       nowIso: new Date().toISOString(),
-      query: parsedRequest.query ?? "",
-      limit: parsedRequest.limit ?? 5,
-      retrievalStrategy: parsedRequest.strategy ?? "baseline",
-      graphDepth: parsedRequest.graphDepth ?? 1,
-      graphLimit: parsedRequest.graphLimit ?? 8,
     })
 
-    const rules = includeRules ? payload.data.rules : []
-    const memories = modeMemories(mode, payload.data)
-    const skillFilesPayload = includeSkillFiles
-      ? await listSkillFilesPayload({
-          turso,
-          projectId,
-          userId,
-          limit: 100,
-        })
-      : { data: { skillFiles: [], count: 0 } }
-
-    return successResponse(ENDPOINT, requestId, {
-      mode,
-      query: parsedRequest.query ?? "",
-      rules,
-      memories,
-      skillFiles: skillFilesPayload.data.skillFiles,
-      workingMemories: payload.data.workingMemories,
-      longTermMemories: payload.data.longTermMemories,
-      trace: payload.data.trace,
-    })
+    return successResponse(ENDPOINT, requestId, payload.data)
   } catch (error) {
     const detail =
       error instanceof ToolExecutionError

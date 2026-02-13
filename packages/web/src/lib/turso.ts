@@ -192,6 +192,29 @@ export async function initSchema(url: string, token: string): Promise<void> {
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_memories_user_scope_project ON memories(user_id, scope, project_id)`)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_memories_layer_scope_project ON memories(memory_layer, scope, project_id)`)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_memories_layer_expires ON memories(memory_layer, expires_at)`)
+
+  await db.execute(
+    `CREATE TABLE IF NOT EXISTS skill_files (
+      id TEXT PRIMARY KEY,
+      path TEXT NOT NULL,
+      content TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'global',
+      project_id TEXT,
+      user_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      deleted_at TEXT
+    )`
+  )
+  await db.execute(
+    `CREATE INDEX IF NOT EXISTS idx_skill_files_scope_project_path
+     ON skill_files(scope, project_id, path)`
+  )
+  await db.execute(
+    `CREATE INDEX IF NOT EXISTS idx_skill_files_user_scope_project
+     ON skill_files(user_id, scope, project_id)`
+  )
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_skill_files_updated_at ON skill_files(updated_at)`)
   await ensureGraphSchema(db)
 }
 

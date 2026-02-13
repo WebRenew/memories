@@ -74,6 +74,39 @@ export function editMemory(options: MemoriesBaseOptions = {}) {
     client.memories.edit(input.id, input.updates)
 }
 
+export function upsertSkillFile(options: MemoriesBaseOptions = {}) {
+  const client = resolveClient(options)
+  return async (input: { path: string; content: string; projectId?: string; userId?: string; tenantId?: string }) =>
+    client.skills.upsertFile({
+      ...input,
+      projectId: input.projectId ?? options.projectId,
+      userId: input.userId ?? options.userId,
+      tenantId: input.tenantId ?? options.tenantId,
+    })
+}
+
+export function listSkillFiles(options: MemoriesBaseOptions = {}) {
+  const client = resolveClient(options)
+  return async (input: { limit?: number; projectId?: string; userId?: string; tenantId?: string } = {}) =>
+    client.skills.listFiles({
+      limit: input.limit,
+      projectId: input.projectId ?? options.projectId,
+      userId: input.userId ?? options.userId,
+      tenantId: input.tenantId ?? options.tenantId,
+    })
+}
+
+export function deleteSkillFile(options: MemoriesBaseOptions = {}) {
+  const client = resolveClient(options)
+  return async (input: { path: string; projectId?: string; userId?: string; tenantId?: string }) =>
+    client.skills.deleteFile({
+      ...input,
+      projectId: input.projectId ?? options.projectId,
+      userId: input.userId ?? options.userId,
+      tenantId: input.tenantId ?? options.tenantId,
+    })
+}
+
 export function memoriesTools(options: MemoriesBaseOptions = {}): MemoriesTools {
   return {
     getContext: getContext(options),
@@ -82,5 +115,8 @@ export function memoriesTools(options: MemoriesBaseOptions = {}): MemoriesTools 
     listMemories: listMemories(options),
     forgetMemory: forgetMemory(options),
     editMemory: editMemory(options),
+    upsertSkillFile: upsertSkillFile(options),
+    listSkillFiles: listSkillFiles(options),
+    deleteSkillFile: deleteSkillFile(options),
   }
 }

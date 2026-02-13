@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import { createDatabase, createDatabaseToken, initSchema } from "@/lib/turso"
 import { createClient as createTurso } from "@libsql/client"
 import {
   apiError,
@@ -8,6 +9,8 @@ import {
   ToolExecutionError,
   VALID_LAYERS,
 } from "./types"
+
+const TURSO_ORG = process.env.TURSO_ORG_SLUG ?? "webrenew"
 
 function addHours(iso: string, hours: number): string {
   return new Date(new Date(iso).getTime() + hours * 60 * 60 * 1000).toISOString()
@@ -143,16 +146,150 @@ export function buildUserScopeFilter(
   }
 }
 
-export async function resolveTenantTurso(apiKeyHash: string, tenantId: string): Promise<TursoClient> {
+function shouldAutoProvisionTenantDatabases(): boolean {
+  const flag = process.env.SDK_AUTO_PROVISION_TENANTS
+  if (!flag) return true
+  const normalized = flag.trim().toLowerCase()
+  return !(normalized === "0" || normalized === "false" || normalized === "off" || normalized === "no")
+}
+
+async function readTenantMapping(
+  apiKeyHash: string,
+  tenantId: string
+): Promise<{
+  turso_db_url: string | null
+  turso_db_token: string | null
+  status: string
+  metadata: Record<string, unknown> | null
+} | null> {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from("sdk_tenant_databases")
-    .select("turso_db_url, turso_db_token, status")
+    .select("turso_db_url, turso_db_token, status, metadata")
     .eq("api_key_hash", apiKeyHash)
     .eq("tenant_id", tenantId)
-    .single()
+    .maybeSingle()
 
-  if (error || !data) {
+  if (error) {
+    throw new ToolExecutionError(
+      apiError({
+        type: "internal_error",
+        code: "TENANT_MAPPING_LOOKUP_FAILED",
+        message: "Failed to lookup tenant database mapping",
+        status: 500,
+        retryable: true,
+        details: { tenant_id: tenantId, error: error.message },
+      }),
+      { rpcCode: -32000 }
+    )
+  }
+
+  if (!data) {
+    return null
+  }
+
+  return {
+    turso_db_url: data.turso_db_url,
+    turso_db_token: data.turso_db_token,
+    status: data.status,
+    metadata:
+      data.metadata && typeof data.metadata === "object"
+        ? (data.metadata as Record<string, unknown>)
+        : {},
+  }
+}
+
+async function autoProvisionTenantDatabase(params: {
+  apiKeyHash: string
+  tenantId: string
+  ownerUserId?: string | null
+  existingMetadata?: Record<string, unknown> | null
+}): Promise<void> {
+  const { apiKeyHash, tenantId, ownerUserId, existingMetadata } = params
+
+  if (!process.env.TURSO_PLATFORM_API_TOKEN) {
+    return
+  }
+
+  const db = await createDatabase(TURSO_ORG)
+  const token = await createDatabaseToken(TURSO_ORG, db.name)
+  const url = `libsql://${db.hostname}`
+
+  await new Promise((resolve) => setTimeout(resolve, 3000))
+  await initSchema(url, token)
+
+  const now = new Date().toISOString()
+  const metadata = {
+    ...(existingMetadata ?? {}),
+    provisionedBy: "sdk_auto",
+    provisionedAt: now,
+  }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from("sdk_tenant_databases")
+    .upsert(
+      {
+        api_key_hash: apiKeyHash,
+        tenant_id: tenantId,
+        turso_db_url: url,
+        turso_db_token: token,
+        turso_db_name: db.name,
+        status: "ready",
+        metadata,
+        created_by_user_id: ownerUserId ?? null,
+        updated_at: now,
+        last_verified_at: now,
+      },
+      { onConflict: "api_key_hash,tenant_id" }
+    )
+
+  if (error) {
+    throw new ToolExecutionError(
+      apiError({
+        type: "internal_error",
+        code: "TENANT_AUTO_PROVISION_FAILED",
+        message: "Failed to save auto-provisioned tenant database mapping",
+        status: 500,
+        retryable: true,
+        details: { tenant_id: tenantId, error: error.message },
+      }),
+      { rpcCode: -32000 }
+    )
+  }
+}
+
+export async function resolveTenantTurso(
+  apiKeyHash: string,
+  tenantId: string,
+  options: { ownerUserId?: string | null; autoProvision?: boolean } = {}
+): Promise<TursoClient> {
+  let mapping = await readTenantMapping(apiKeyHash, tenantId)
+
+  const canAutoProvision =
+    (options.autoProvision ?? true) &&
+    shouldAutoProvisionTenantDatabases() &&
+    Boolean(process.env.TURSO_PLATFORM_API_TOKEN)
+
+  if (
+    canAutoProvision &&
+    (!mapping || mapping.status === "disabled" || mapping.status === "error" || !mapping.turso_db_url || !mapping.turso_db_token)
+  ) {
+    try {
+      await autoProvisionTenantDatabase({
+        apiKeyHash,
+        tenantId,
+        ownerUserId: options.ownerUserId,
+        existingMetadata: mapping?.metadata ?? null,
+      })
+      mapping = await readTenantMapping(apiKeyHash, tenantId)
+      console.info(`[SDK_AUTO_PROVISION] Tenant database ready for tenant_id=${tenantId}`)
+    } catch (error) {
+      console.error("[SDK_AUTO_PROVISION] Failed to auto-provision tenant database:", error)
+    }
+  }
+
+  if (!mapping) {
     throw new ToolExecutionError(
       apiError({
         type: "not_found_error",
@@ -166,21 +303,21 @@ export async function resolveTenantTurso(apiKeyHash: string, tenantId: string): 
     )
   }
 
-  if (data.status !== "ready") {
+  if (mapping.status !== "ready") {
     throw new ToolExecutionError(
       apiError({
         type: "tool_error",
         code: "TENANT_DATABASE_NOT_READY",
-        message: `Tenant database is not ready (status: ${data.status})`,
+        message: `Tenant database is not ready (status: ${mapping.status})`,
         status: 409,
         retryable: true,
-        details: { tenant_id: tenantId, status: data.status },
+        details: { tenant_id: tenantId, status: mapping.status },
       }),
       { rpcCode: -32009 }
     )
   }
 
-  if (!data.turso_db_url || !data.turso_db_token) {
+  if (!mapping.turso_db_url || !mapping.turso_db_token) {
     throw new ToolExecutionError(
       apiError({
         type: "not_found_error",
@@ -195,8 +332,8 @@ export async function resolveTenantTurso(apiKeyHash: string, tenantId: string): 
   }
 
   return createTurso({
-    url: data.turso_db_url,
-    authToken: data.turso_db_token,
+    url: mapping.turso_db_url,
+    authToken: mapping.turso_db_token,
   })
 }
 
@@ -290,6 +427,31 @@ async function ensureGraphSchema(turso: TursoClient): Promise<void> {
   )
 }
 
+async function ensureSkillFileSchema(turso: TursoClient): Promise<void> {
+  await turso.execute(
+    `CREATE TABLE IF NOT EXISTS skill_files (
+      id TEXT PRIMARY KEY,
+      path TEXT NOT NULL,
+      content TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'global',
+      project_id TEXT,
+      user_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      deleted_at TEXT
+    )`
+  )
+  await turso.execute(
+    "CREATE INDEX IF NOT EXISTS idx_skill_files_scope_project_path ON skill_files(scope, project_id, path)"
+  )
+  await turso.execute(
+    "CREATE INDEX IF NOT EXISTS idx_skill_files_user_scope_project ON skill_files(user_id, scope, project_id)"
+  )
+  await turso.execute(
+    "CREATE INDEX IF NOT EXISTS idx_skill_files_updated_at ON skill_files(updated_at)"
+  )
+}
+
 async function ensureSchemaStateTable(turso: TursoClient): Promise<void> {
   await turso.execute(
     `CREATE TABLE IF NOT EXISTS ${MEMORY_SCHEMA_STATE_TABLE} (
@@ -356,6 +518,7 @@ export async function ensureMemoryUserIdSchema(
 
   await ensureSchemaStateTable(turso)
   if (await isMemorySchemaMarked(turso)) {
+    await ensureSkillFileSchema(turso)
     userIdSchemaEnsuredClients.add(turso)
     if (normalizedCacheKey) {
       userIdSchemaEnsuredKeys.add(normalizedCacheKey)
@@ -393,6 +556,7 @@ export async function ensureMemoryUserIdSchema(
   )
   await turso.execute("CREATE INDEX IF NOT EXISTS idx_memories_layer_expires ON memories(memory_layer, expires_at)")
   await ensureGraphSchema(turso)
+  await ensureSkillFileSchema(turso)
   await markMemorySchemaApplied(turso)
   userIdSchemaEnsuredClients.add(turso)
   if (normalizedCacheKey) {

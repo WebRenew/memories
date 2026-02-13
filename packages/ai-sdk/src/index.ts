@@ -1,5 +1,16 @@
 export { memoriesMiddleware } from "./middleware"
-export { memoriesTools, getContext, storeMemory, searchMemories, listMemories, forgetMemory, editMemory } from "./tools"
+export {
+  memoriesTools,
+  getContext,
+  storeMemory,
+  searchMemories,
+  listMemories,
+  forgetMemory,
+  editMemory,
+  upsertSkillFile,
+  listSkillFiles,
+  deleteSkillFile,
+} from "./tools"
 export { memoriesManagement, managementKeys, managementTenants } from "./management"
 export { memoriesSystemPrompt } from "./system-prompt"
 export { createMemoriesOnFinish } from "./on-finish"

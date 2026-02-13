@@ -19,6 +19,10 @@ import type {
   MemoriesErrorData,
   MemoriesResponseEnvelope,
   MemoryAddInput,
+  SkillFileDeleteInput,
+  SkillFileListOptions,
+  SkillFileRecord,
+  SkillFileUpsertInput,
   MemoryEditInput,
   MemoryListOptions,
   MemoryRecord,
@@ -91,9 +95,21 @@ const structuredMemorySchema = z.object({
     .optional(),
 })
 
+const structuredSkillFileSchema = z.object({
+  id: z.string(),
+  path: z.string(),
+  content: z.string(),
+  scope: z.string(),
+  projectId: z.string().nullable().optional(),
+  userId: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
 const contextStructuredSchema = z.object({
   rules: z.array(structuredMemorySchema).optional().default([]),
   memories: z.array(structuredMemorySchema).optional().default([]),
+  skillFiles: z.array(structuredSkillFileSchema).optional().default([]),
   workingMemories: z.array(structuredMemorySchema).optional().default([]),
   longTermMemories: z.array(structuredMemorySchema).optional().default([]),
   trace: z
@@ -116,6 +132,11 @@ const contextStructuredSchema = z.object({
 
 const memoriesStructuredSchema = z.object({
   memories: z.array(structuredMemorySchema).optional().default([]),
+})
+
+const skillFilesStructuredSchema = z.object({
+  skillFiles: z.array(structuredSkillFileSchema).optional().default([]),
+  count: z.number().int().nonnegative().optional(),
 })
 
 const mutationEnvelopeDataSchema = z.object({
@@ -297,6 +318,19 @@ function toMemoryRecord(memory: z.infer<typeof structuredMemorySchema>): MemoryR
     projectId: memory.projectId ?? null,
     tags: memory.tags ?? [],
     graph: memory.graph ?? null,
+  }
+}
+
+function toSkillFileRecord(skillFile: z.infer<typeof structuredSkillFileSchema>): SkillFileRecord {
+  return {
+    id: skillFile.id,
+    path: skillFile.path,
+    content: skillFile.content,
+    scope: normalizeMemoryScope(skillFile.scope),
+    projectId: skillFile.projectId ?? null,
+    userId: skillFile.userId ?? null,
+    createdAt: skillFile.createdAt,
+    updatedAt: skillFile.updatedAt,
   }
 }
 
@@ -586,6 +620,7 @@ export class MemoriesClient {
             query: input.query,
             limit: input.limit,
             includeRules: input.includeRules,
+            includeSkillFiles: input.includeSkillFiles,
             mode: input.mode,
             strategy: input.strategy,
             graphDepth: input.graphDepth,
@@ -609,6 +644,7 @@ export class MemoriesClient {
         const parsedFromStructured: ContextResult = {
           rules: structured.data.rules.map(toMemoryRecord),
           memories: orderedMemories.map(toMemoryRecord),
+          skillFiles: structured.data.skillFiles.map(toSkillFileRecord),
           trace: structured.data.trace,
           raw: result.raw,
         }
@@ -757,6 +793,71 @@ export class MemoriesClient {
         ? await this.callSdkEndpoint("/api/sdk/v1/memories/forget", { id, scope: sdkScope })
         : await this.callTool("forget_memory", { id })
       const message = (messageFromEnvelope(result.envelope) ?? result.raw) || `Deleted memory ${id}`
+      return {
+        ok: true,
+        message,
+        raw: result.raw,
+        envelope: result.envelope ?? undefined,
+      }
+    },
+  }
+
+  readonly skills = {
+    upsertFile: async (input: SkillFileUpsertInput): Promise<MutationResult> => {
+      const rawScope = this.withDefaultScopeSdk({
+        projectId: input.projectId,
+        userId: input.userId,
+        tenantId: input.tenantId,
+      })
+      const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
+      const result = await this.callSdkEndpoint("/api/sdk/v1/skills/files/upsert", {
+        path: input.path,
+        content: input.content,
+        scope: sdkScope,
+      })
+
+      const message = (messageFromEnvelope(result.envelope) ?? result.raw) || `Upserted skill file ${input.path}`
+      return {
+        ok: true,
+        message,
+        raw: result.raw,
+        envelope: result.envelope ?? undefined,
+      }
+    },
+
+    listFiles: async (options: SkillFileListOptions = {}): Promise<SkillFileRecord[]> => {
+      const rawScope = this.withDefaultScopeSdk({
+        projectId: options.projectId,
+        userId: options.userId,
+        tenantId: options.tenantId,
+      })
+      const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
+      const result = await this.callSdkEndpoint("/api/sdk/v1/skills/files/list", {
+        limit: options.limit,
+        scope: sdkScope,
+      })
+
+      const structured = skillFilesStructuredSchema.safeParse(result.structured)
+      if (!structured.success) {
+        return []
+      }
+
+      return structured.data.skillFiles.map(toSkillFileRecord)
+    },
+
+    deleteFile: async (input: SkillFileDeleteInput): Promise<MutationResult> => {
+      const rawScope = this.withDefaultScopeSdk({
+        projectId: input.projectId,
+        userId: input.userId,
+        tenantId: input.tenantId,
+      })
+      const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
+      const result = await this.callSdkEndpoint("/api/sdk/v1/skills/files/delete", {
+        path: input.path,
+        scope: sdkScope,
+      })
+
+      const message = (messageFromEnvelope(result.envelope) ?? result.raw) || `Deleted skill file ${input.path}`
       return {
         ok: true,
         message,

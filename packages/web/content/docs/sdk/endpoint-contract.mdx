@@ -30,6 +30,9 @@ https://memories.sh
 | Runtime | `/api/sdk/v1/memories/list` | `POST` | Bearer API key (`mem_...`) |
 | Runtime | `/api/sdk/v1/memories/edit` | `POST` | Bearer API key (`mem_...`) |
 | Runtime | `/api/sdk/v1/memories/forget` | `POST` | Bearer API key (`mem_...`) |
+| Runtime | `/api/sdk/v1/skills/files/upsert` | `POST` | Bearer API key (`mem_...`) |
+| Runtime | `/api/sdk/v1/skills/files/list` | `POST` | Bearer API key (`mem_...`) |
+| Runtime | `/api/sdk/v1/skills/files/delete` | `POST` | Bearer API key (`mem_...`) |
 | Graph | `/api/sdk/v1/graph/status` | `GET`, `POST` | Bearer API key (`mem_...`) |
 | Graph | `/api/sdk/v1/graph/trace` | `POST` | Bearer API key (`mem_...`) |
 | Graph | `/api/sdk/v1/graph/rollout` | `GET`, `POST`, `PATCH` | Bearer API key (`mem_...`) |
@@ -128,7 +131,7 @@ Failure:
 | `TENANT_ID_INVALID` | `400` | Invalid `scope.tenantId` |
 | `USER_ID_INVALID` | `400` | Invalid `scope.userId` |
 | `DATABASE_NOT_CONFIGURED` | `400` | No active workspace DB for API key owner |
-| `TENANT_DATABASE_NOT_CONFIGURED` | `404` | Unknown tenant mapping |
+| `TENANT_DATABASE_NOT_CONFIGURED` | `404` | Unknown tenant mapping (auto-provision may create this mapping when enabled) |
 | `TENANT_DATABASE_NOT_READY` | `409` | Tenant DB mapping exists but not ready |
 | `TENANT_DATABASE_CREDENTIALS_MISSING` | `404` | Tenant mapping missing credentials |
 | `CANARY_ROLLOUT_BLOCKED` | `409` | Quality gate blocked canary rollout |
@@ -169,6 +172,8 @@ If `tenantId` is omitted, the request uses the API key owner's active workspace 
 | `tags[]` | max `50` tags, each `1..120` chars |
 | `paths[]` | max `100` paths, each `1..300` chars |
 | `category` | `1..120` chars |
+| `path` (`skills/files/*`) | `1..400` chars |
+| `content` (`skills/files/upsert`) | `1..120000` chars |
 
 ## Runtime Endpoint Contracts
 
@@ -183,6 +188,7 @@ Request:
   "query": "deployment process",
   "limit": 5,
   "includeRules": true,
+  "includeSkillFiles": true,
   "mode": "all",
   "strategy": "baseline",
   "graphDepth": 1,
@@ -199,6 +205,7 @@ Defaults:
 
 - `limit`: `5`
 - `includeRules`: `true`
+- `includeSkillFiles`: `true`
 - `mode`: `all`
 - `strategy`: `baseline`
 - `graphDepth`: `1`
@@ -209,6 +216,7 @@ Response `data`:
 - `mode`, `query`
 - `rules[]`
 - `memories[]`
+- `skillFiles[]`
 - `workingMemories[]`
 - `longTermMemories[]`
 - `trace` (strategy, rollout mode, fallback details, candidate counts)
@@ -335,6 +343,75 @@ Request:
 Response `data`:
 
 - `id`
+- `deleted: true`
+- `message`
+
+### `POST /api/sdk/v1/skills/files/upsert`
+
+Create or update a scoped skill file.
+
+Request:
+
+```json
+{
+  "path": ".agents/skills/review/SKILL.md",
+  "content": "---\nname: review\n---\nUse strict checks.",
+  "scope": {
+    "tenantId": "acme-prod",
+    "userId": "user_123",
+    "projectId": "github.com/acme/platform"
+  }
+}
+```
+
+Response `data`:
+
+- `skillFile`
+- `created`
+- `message`
+
+### `POST /api/sdk/v1/skills/files/list`
+
+List scoped skill files.
+
+Request:
+
+```json
+{
+  "limit": 100,
+  "scope": {
+    "tenantId": "acme-prod",
+    "userId": "user_123",
+    "projectId": "github.com/acme/platform"
+  }
+}
+```
+
+Response `data`:
+
+- `skillFiles[]`
+- `count`
+
+### `POST /api/sdk/v1/skills/files/delete`
+
+Soft-delete a scoped skill file.
+
+Request:
+
+```json
+{
+  "path": ".agents/skills/review/SKILL.md",
+  "scope": {
+    "tenantId": "acme-prod",
+    "userId": "user_123",
+    "projectId": "github.com/acme/platform"
+  }
+}
+```
+
+Response `data`:
+
+- `path`
 - `deleted: true`
 - `message`
 
