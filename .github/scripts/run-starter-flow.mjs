@@ -4,6 +4,7 @@ const baseUrl = process.env.STARTER_BASE_URL;
 const addPath = process.env.STARTER_ADD_PATH;
 const searchPath = process.env.STARTER_SEARCH_PATH;
 const contextPath = process.env.STARTER_CONTEXT_PATH;
+const authToken = process.env.STARTER_AUTH_TOKEN?.trim();
 
 if (!baseUrl || !addPath || !searchPath || !contextPath) {
   console.error("Missing STARTER_* env vars for flow test.");
@@ -11,6 +12,17 @@ if (!baseUrl || !addPath || !searchPath || !contextPath) {
 }
 
 const marker = `ci-starter-flow-${Date.now()}`;
+
+function requestHeaders(includeJsonContentType = false) {
+  const headers = {};
+  if (includeJsonContentType) {
+    headers["content-type"] = "application/json";
+  }
+  if (authToken) {
+    headers.authorization = `Bearer ${authToken}`;
+  }
+  return headers;
+}
 
 async function requestJson(url, init) {
   const response = await fetch(url, init);
@@ -42,7 +54,7 @@ async function run() {
 
   const addBody = await requestJson(addUrl, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: requestHeaders(true),
     body: JSON.stringify({
       content: `Starter flow memory ${marker}`,
       type: "rule",
@@ -51,12 +63,18 @@ async function run() {
   });
   assert(addBody?.ok === true, "Add response did not return ok=true", addBody);
 
-  const searchBody = await requestJson(searchUrl, { method: "GET" });
+  const searchBody = await requestJson(searchUrl, {
+    method: "GET",
+    headers: requestHeaders(),
+  });
   assert(searchBody?.ok === true, "Search response did not return ok=true", searchBody);
   assert(Array.isArray(searchBody?.memories), "Search response is missing memories[]", searchBody);
   assert(searchBody.memories.length > 0, "Search returned no memories", searchBody);
 
-  const contextBody = await requestJson(contextUrl, { method: "GET" });
+  const contextBody = await requestJson(contextUrl, {
+    method: "GET",
+    headers: requestHeaders(),
+  });
   assert(contextBody?.ok === true, "Context response did not return ok=true", contextBody);
   assert(Array.isArray(contextBody?.memories), "Context response missing memories[]", contextBody);
 
