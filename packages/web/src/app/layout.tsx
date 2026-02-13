@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Toaster } from "sonner";
+import { RuntimeErrorRecovery } from "@/components/RuntimeErrorRecovery";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -122,6 +123,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <RuntimeErrorRecovery />
           {children}
           <Toaster />
           <VisualEditsMessenger />
