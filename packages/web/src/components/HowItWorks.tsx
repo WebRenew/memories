@@ -4,6 +4,7 @@ import { motion, useInView } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import { Check, Copy } from "lucide-react";
 import { ScrambleText } from "./animations/ScrambleText";
+import { getSyntaxTokenClass, type SyntaxLine } from "./ui/syntax";
 
 // ── Module-level constants (stable references for effects) ──────────────────
 
@@ -43,7 +44,7 @@ const mcpSteps = [
   },
 ];
 
-const sdkCodeLines = [
+const sdkCodeLines: SyntaxLine[] = [
   { tokens: [{ text: "import", style: "keyword" }, { text: " { wrapLanguageModel } ", style: "default" }, { text: "from", style: "keyword" }, { text: ' "ai"', style: "string" }] },
   { tokens: [{ text: "import", style: "keyword" }, { text: " { memoriesMiddleware } ", style: "default" }, { text: "from", style: "keyword" }, { text: ' "@memories.sh/ai-sdk"', style: "string" }] },
   { tokens: [] },
@@ -53,7 +54,7 @@ const sdkCodeLines = [
   { tokens: [{ text: "})", style: "default" }] },
   { tokens: [] },
   { tokens: [{ text: "// Rules + memories auto-injected into every prompt", style: "comment" }] },
-] as const;
+];
 
 // ── Component ───────────────────────────────────────────────────────────────
 
@@ -430,17 +431,7 @@ export function HowItWorks() {
                             line.tokens.map((token, j) => (
                               <span
                                 key={j}
-                                className={
-                                  token.style === "keyword"
-                                    ? "text-purple-400"
-                                    : token.style === "string"
-                                    ? "text-green-400"
-                                    : token.style === "fn"
-                                    ? "text-primary"
-                                    : token.style === "comment"
-                                    ? "text-muted-foreground/60 italic"
-                                    : "text-foreground/80"
-                                }
+                                className={getSyntaxTokenClass(token.style)}
                               >
                                 {token.text}
                               </span>

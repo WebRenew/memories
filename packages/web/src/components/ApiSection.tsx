@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ScrambleText } from "./animations/ScrambleText";
+import { getSyntaxTokenClass, tokenizeJson } from "./ui/syntax";
 
 interface ApiShowcaseItem {
   id: string;
@@ -136,6 +137,8 @@ export function ApiSection() {
     () => apiShowcase.find((item) => item.id === selected) ?? apiShowcase[0],
     [selected],
   );
+  const requestLines = useMemo(() => tokenizeJson(active?.request ?? ""), [active?.request]);
+  const responseLines = useMemo(() => tokenizeJson(active?.response ?? ""), [active?.response]);
 
   if (!active) return null;
 
@@ -208,16 +211,50 @@ export function ApiSection() {
             <div className="grid xl:grid-cols-2 gap-0">
               <div className="p-5 border-b xl:border-b-0 xl:border-r border-border">
                 <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-3">Request</p>
-                <pre className="overflow-x-auto rounded-lg border border-border bg-background px-4 py-3 text-[11px] leading-relaxed text-foreground/85">
-                  <code>{active.request}</code>
+                <pre className="overflow-hidden rounded-lg border border-border bg-background px-4 py-3 text-[11px] leading-relaxed">
+                  <code className="block whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                    {requestLines.map((line, lineIndex) => (
+                      <span key={`request-line-${lineIndex}`} className="block">
+                        {line.tokens.length === 0 ? (
+                          <span>&nbsp;</span>
+                        ) : (
+                          line.tokens.map((token, tokenIndex) => (
+                            <span
+                              key={`request-line-${lineIndex}-token-${tokenIndex}`}
+                              className={getSyntaxTokenClass(token.style)}
+                            >
+                              {token.text}
+                            </span>
+                          ))
+                        )}
+                      </span>
+                    ))}
+                  </code>
                 </pre>
               </div>
               <div className="p-5">
                 <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-3">
                   Response
                 </p>
-                <pre className="overflow-x-auto rounded-lg border border-border bg-background px-4 py-3 text-[11px] leading-relaxed text-foreground/85">
-                  <code>{active.response}</code>
+                <pre className="overflow-hidden rounded-lg border border-border bg-background px-4 py-3 text-[11px] leading-relaxed">
+                  <code className="block whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                    {responseLines.map((line, lineIndex) => (
+                      <span key={`response-line-${lineIndex}`} className="block">
+                        {line.tokens.length === 0 ? (
+                          <span>&nbsp;</span>
+                        ) : (
+                          line.tokens.map((token, tokenIndex) => (
+                            <span
+                              key={`response-line-${lineIndex}-token-${tokenIndex}`}
+                              className={getSyntaxTokenClass(token.style)}
+                            >
+                              {token.text}
+                            </span>
+                          ))
+                        )}
+                      </span>
+                    ))}
+                  </code>
                 </pre>
               </div>
             </div>
