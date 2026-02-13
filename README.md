@@ -6,8 +6,8 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@memories.sh/cli"><img src="https://img.shields.io/npm/v/@memories.sh/cli?color=000&label=npm&labelColor=1a1a2e" alt="npm version"></a>
-  <a href="https://github.com/WebRenew/memories/actions/workflows/ci.yml"><img src="https://github.com/WebRenew/memories/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
-  <a href="https://github.com/WebRenew/memories/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-000?labelColor=1a1a2e" alt="License"></a>
+  <a href="https://github.com/webrenew/memories/actions/workflows/ci.yml"><img src="https://github.com/webrenew/memories/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/webrenew/memories/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-000?labelColor=1a1a2e" alt="License"></a>
   <a href="https://memories.sh/docs"><img src="https://img.shields.io/badge/docs-memories.sh-000?labelColor=1a1a2e" alt="Documentation"></a>
 </p>
 
@@ -272,5 +272,5 @@ CI runs lint, typecheck, tests, and build on every PR. All checks must pass befo
   <a href="https://memories.sh">memories.sh</a> ·
   <a href="https://memories.sh/docs">Docs</a> ·
   <a href="https://www.npmjs.com/package/@memories.sh/cli">npm</a> ·
-  <a href="https://github.com/WebRenew/memories">GitHub</a>
+  <a href="https://github.com/webrenew/memories">GitHub</a>
 </p>

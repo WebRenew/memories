@@ -13,7 +13,7 @@ Thanks for your interest in contributing! This guide will help you get started.
 
 ```bash
 # Clone the repo
-git clone https://github.com/WebRenew/memories.git
+git clone https://github.com/webrenew/memories.git
 cd memories
 
 # Install dependencies
@@ -89,4 +89,4 @@ pnpm --filter @memories.sh/cli build
 
 ## Questions?
 
-Open an [issue](https://github.com/WebRenew/memories/issues) or start a [discussion](https://github.com/WebRenew/memories/discussions).
+Open an [issue](https://github.com/webrenew/memories/issues) or start a [discussion](https://github.com/webrenew/memories/discussions).

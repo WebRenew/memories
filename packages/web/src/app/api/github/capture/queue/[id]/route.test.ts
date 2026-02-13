@@ -90,7 +90,7 @@ describe("/api/github/capture/queue/[id] PATCH", () => {
                   source_id: "issue:1:2",
                   title: "Issue",
                   content: "Issue content",
-                  source_url: "https://github.com/WebRenew/memories/issues/2",
+                  source_url: "https://github.com/webrenew/memories/issues/2",
                   metadata: {},
                 },
                 error: null,

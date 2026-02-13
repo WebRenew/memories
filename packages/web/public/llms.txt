@@ -289,7 +289,7 @@ Documentation root: https://memories.sh/docs
 
 - Website: https://memories.sh
 - Docs: https://memories.sh/docs
-- GitHub: https://github.com/WebRenew/memories
+- GitHub: https://github.com/webrenew/memories
 - npm CLI: https://www.npmjs.com/package/@memories.sh/cli
 - npm Core SDK: https://www.npmjs.com/package/@memories.sh/core
 - npm AI SDK: https://www.npmjs.com/package/@memories.sh/ai-sdk

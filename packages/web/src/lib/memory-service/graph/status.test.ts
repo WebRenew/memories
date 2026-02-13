@@ -207,7 +207,7 @@ describe("getGraphStatusPayload", () => {
         "rule",
         null,
         null,
-        "github.com/WebRenew/memories",
+        "github.com/webrenew/memories",
         null,
         "graph,rollout,hybrid_graph",
         "graph-ui",
@@ -231,7 +231,7 @@ describe("getGraphStatusPayload", () => {
       expect.arrayContaining([
         expect.objectContaining({
           nodeType: "repo",
-          nodeKey: "github.com/WebRenew/memories",
+          nodeKey: "github.com/webrenew/memories",
         }),
       ])
     )
@@ -272,7 +272,7 @@ describe("getGraphStatusPayload", () => {
         "rule",
         null,
         null,
-        "github.com/WebRenew/memories",
+        "github.com/webrenew/memories",
         null,
         "graph,rollout,hybrid_graph",
         "graph-ui",

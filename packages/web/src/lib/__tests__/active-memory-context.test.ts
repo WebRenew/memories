@@ -283,7 +283,7 @@ describe("resolveActiveMemoryContext", () => {
     })
 
     const context = await resolveActiveMemoryContext(client, "user-1", {
-      projectId: "github.com/WebRenew/memories",
+      projectId: "github.com/webrenew/memories",
     })
 
     expect(context?.ownerType).toBe("organization")

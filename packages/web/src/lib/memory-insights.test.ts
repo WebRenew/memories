@@ -57,7 +57,7 @@ describe("buildMemoryInsights", () => {
       buildMemory("r1", {
         type: "rule",
         scope: "project",
-        project_id: "github.com/WebRenew/memories",
+        project_id: "github.com/webrenew/memories",
         tags: "auth,mfa",
         content: "Always require MFA for production deploy approvals.",
         created_at: "2026-02-10T12:00:00.000Z",
@@ -66,7 +66,7 @@ describe("buildMemoryInsights", () => {
       buildMemory("r2", {
         type: "rule",
         scope: "project",
-        project_id: "github.com/WebRenew/memories",
+        project_id: "github.com/webrenew/memories",
         tags: "auth,mfa",
         content: "Do not require MFA for production deploy approvals.",
         created_at: "2026-02-11T12:00:00.000Z",
@@ -75,7 +75,7 @@ describe("buildMemoryInsights", () => {
       buildMemory("r3", {
         type: "rule",
         scope: "project",
-        project_id: "github.com/WebRenew/memories",
+        project_id: "github.com/webrenew/memories",
         tags: "billing",
         content: "Enable billing alerts for usage spikes.",
       }),
@@ -101,7 +101,7 @@ describe("buildMemoryInsights", () => {
       buildMemory("n1", {
         type: "note",
         scope: "project",
-        project_id: "github.com/WebRenew/memories",
+        project_id: "github.com/webrenew/memories",
         content: "Dashboard card should show fallback and latency for faster debugging.",
         tags: null,
         created_at: "2026-02-12T12:00:00.000Z",
@@ -110,7 +110,7 @@ describe("buildMemoryInsights", () => {
       buildMemory("n2", {
         type: "note",
         scope: "project",
-        project_id: "github.com/WebRenew/memories",
+        project_id: "github.com/webrenew/memories",
         content: "Workspace switch latency budget should be tracked in CI.",
         tags: "perf,workspace",
         created_at: "2026-02-12T13:00:00.000Z",
@@ -119,7 +119,7 @@ describe("buildMemoryInsights", () => {
       buildMemory("n3", {
         type: "note",
         scope: "project",
-        project_id: "github.com/WebRenew/memories",
+        project_id: "github.com/webrenew/memories",
         content: "Workspace switch latency budget should be tracked in CI for alerts.",
         tags: "perf,workspace",
         created_at: "2026-02-12T14:00:00.000Z",
@@ -138,7 +138,7 @@ describe("buildMemoryInsights", () => {
     expect(insights.weekly.changedCount).toBe(3)
     expect(insights.weekly.newCount).toBe(3)
     expect(insights.weekly.trend).toBe("up")
-    expect(insights.weekly.topProjects[0]?.project).toBe("github.com/WebRenew/memories")
+    expect(insights.weekly.topProjects[0]?.project).toBe("github.com/webrenew/memories")
 
     expect(insights.actions.relabel.some((action) => action.memoryIds.includes("n1"))).toBe(true)
     expect(insights.actions.merge.some((action) => action.memoryIds.includes("n2"))).toBe(true)

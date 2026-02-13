@@ -3,7 +3,7 @@
 Middleware and tools for integrating memories.sh with the [AI SDK](https://ai-sdk.dev/).
 
 [![npm version](https://img.shields.io/npm/v/@memories.sh/ai-sdk?color=000&labelColor=1a1a2e)](https://www.npmjs.com/package/@memories.sh/ai-sdk)
-[![License: Apache-2.0](https://img.shields.io/npm/l/@memories.sh/ai-sdk?color=000&labelColor=1a1a2e)](https://github.com/WebRenew/memories/blob/main/LICENSE)
+[![License: Apache-2.0](https://img.shields.io/npm/l/@memories.sh/ai-sdk?color=000&labelColor=1a1a2e)](https://github.com/webrenew/memories/blob/main/LICENSE)
 
 ## Install
 
@@ -137,4 +137,4 @@ Full docs: [memories.sh/docs](https://memories.sh/docs)
 
 ## License
 
-[Apache 2.0](https://github.com/WebRenew/memories/blob/main/LICENSE)
+[Apache 2.0](https://github.com/webrenew/memories/blob/main/LICENSE)

@@ -136,7 +136,7 @@ describe("/api/orgs/[orgId]/github-capture/settings", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           allowed_events: ["pr", "push"],
-          repo_allow_list: ["https://github.com/WebRenew/memories"],
+          repo_allow_list: ["https://github.com/webrenew/memories"],
           repo_block_list: ["WebRenew/private.git"],
           branch_filters: ["refs/heads/main", "release/*"],
           label_filters: ["memory", "docs"],

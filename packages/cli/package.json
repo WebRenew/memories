@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/WebRenew/memories.git",
+    "url": "https://github.com/webrenew/memories.git",
     "directory": "packages/cli"
   },
   "homepage": "https://memories.sh",

@@ -28,7 +28,7 @@ const apiShowcase: ApiShowcaseItem[] = [
   "graphDepth": 1,
   "scope": {
     "tenantId": "webrenew-prod",
-    "projectId": "github.com/WebRenew/memories"
+    "projectId": "github.com/webrenew/memories"
   }
 }`,
     response: `{
@@ -58,7 +58,7 @@ const apiShowcase: ApiShowcaseItem[] = [
   "category": "setup",
   "tags": ["env", "config"],
   "scope": {
-    "projectId": "github.com/WebRenew/memories",
+    "projectId": "github.com/webrenew/memories",
     "userId": "charles@webrenew.io"
   }
 }`,
@@ -84,7 +84,7 @@ const apiShowcase: ApiShowcaseItem[] = [
   "mode": "canary",
   "scope": {
     "tenantId": "webrenew-prod",
-    "projectId": "github.com/WebRenew/memories"
+    "projectId": "github.com/webrenew/memories"
   }
 }`,
     response: `{

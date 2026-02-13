@@ -72,7 +72,7 @@ export function TopNav({ user }: { user?: User | null }) {
 
             <div className="flex items-center gap-6">
               <a
-                href="https://github.com/WebRenew/memories"
+                href="https://github.com/webrenew/memories"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-muted-foreground/80 hover:text-foreground transition-colors"
