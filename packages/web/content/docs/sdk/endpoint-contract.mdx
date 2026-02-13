@@ -1,50 +1,60 @@
 ---
 title: SDK Endpoint Contract
-description: Canonical HTTP routes, response envelope, and error model for SDK integrations.
+description: Canonical HTTP routes, request/response shapes, and error semantics for SDK integrations.
 ---
 
-The SDK HTTP surface is versioned under `/api/sdk/v1/*` and returns one stable response envelope for every endpoint.
+This page is the canonical contract for the SDK HTTP surface under `/api/sdk/v1/*`.
+
+Use it when implementing direct HTTP integrations, debugging SDK client behavior, or validating backward compatibility in CI.
 
 ## Base URL
-
-Hosted base URL:
 
 ```text
 https://memories.sh
 ```
 
-Runtime endpoints:
+## Endpoint Matrix
 
-- `POST /api/sdk/v1/context/get`
-- `POST /api/sdk/v1/memories/add`
-- `POST /api/sdk/v1/memories/search`
-- `POST /api/sdk/v1/memories/list`
-- `POST /api/sdk/v1/memories/edit`
-- `POST /api/sdk/v1/memories/forget`
-- `GET|POST /api/sdk/v1/graph/status`
-- `POST /api/sdk/v1/graph/trace`
-- `GET|POST|PATCH /api/sdk/v1/graph/rollout`
-- `GET /api/sdk/v1/health`
+| Group | Route | Methods | Auth |
+| --- | --- | --- | --- |
+| Health | `/api/sdk/v1/health` | `GET` | None |
+| Runtime | `/api/sdk/v1/context/get` | `POST` | Bearer MCP API key |
+| Runtime | `/api/sdk/v1/memories/add` | `POST` | Bearer MCP API key |
+| Runtime | `/api/sdk/v1/memories/search` | `POST` | Bearer MCP API key |
+| Runtime | `/api/sdk/v1/memories/list` | `POST` | Bearer MCP API key |
+| Runtime | `/api/sdk/v1/memories/edit` | `POST` | Bearer MCP API key |
+| Runtime | `/api/sdk/v1/memories/forget` | `POST` | Bearer MCP API key |
+| Graph | `/api/sdk/v1/graph/status` | `GET`, `POST` | Bearer MCP API key |
+| Graph | `/api/sdk/v1/graph/trace` | `POST` | Bearer MCP API key |
+| Graph | `/api/sdk/v1/graph/rollout` | `GET`, `POST`, `PATCH` | Bearer MCP API key |
+| Management | `/api/sdk/v1/management/keys` | `GET`, `POST`, `DELETE` | Legacy management auth (session/legacy path) |
+| Management | `/api/sdk/v1/management/tenants` | `GET`, `POST`, `DELETE` | Legacy management auth (session/legacy path) |
 
-Management endpoints:
-
-- `GET|POST|DELETE /api/sdk/v1/management/keys`
-- `GET|POST|DELETE /api/sdk/v1/management/tenants`
-
-Legacy management aliases still work:
+Legacy aliases are still available:
 
 - `/api/mcp/key`
 - `/api/mcp/tenants`
 
 ## Authentication
 
-Send your API key in the `Authorization` header:
+### Runtime + graph endpoints
+
+Send your MCP API key:
 
 ```http
 Authorization: Bearer mcp_xxx
+Content-Type: application/json
 ```
 
+### Management endpoints
+
+`/api/sdk/v1/management/*` is currently a compatibility wrapper over legacy management routes and uses the same auth path as those endpoints.
+
+If you are doing headless server-to-server management calls, validate auth flow in your environment before rollout.
+
 ## Canonical Response Envelope
+
+Every SDK v1 endpoint returns this envelope shape.
 
 Success:
 
@@ -70,8 +80,8 @@ Failure:
   "data": null,
   "error": {
     "type": "validation_error",
-    "code": "INVALID_INPUT",
-    "message": "tenantId is required",
+    "code": "INVALID_REQUEST",
+    "message": "Invalid request payload",
     "status": 400,
     "retryable": false,
     "details": {
@@ -87,65 +97,441 @@ Failure:
 }
 ```
 
-## Error Types
+## Error Semantics
+
+### Error types
 
 - `auth_error` (`401`, `403`)
-- `validation_error` (`400`)
+- `validation_error` (`400`, `409`)
 - `not_found_error` (`404`)
 - `rate_limit_error` (`429`)
 - `internal_error` (`500+`)
-- `unknown_error` (other statuses)
+- `unknown_error` (fallback classification)
+
+### Common error codes
+
+| Code | Typical status | Notes |
+| --- | --- | --- |
+| `MISSING_API_KEY` | `401` | Runtime/graph endpoint called without `Authorization` |
+| `INVALID_API_KEY_FORMAT` | `401` | Bearer token format is invalid |
+| `INVALID_API_KEY` | `401` | Key hash not found |
+| `API_KEY_EXPIRED` | `401` | Key exists but expired |
+| `RATE_LIMITED` | `429` | Includes `details.retryAfterSeconds` |
+| `INVALID_REQUEST` | `400` | JSON shape/validation failed |
+| `QUERY_REQUIRED` | `400` | Empty query for search |
+| `TENANT_ID_INVALID` | `400` | Invalid `scope.tenantId` |
+| `USER_ID_INVALID` | `400` | Invalid `scope.userId` |
+| `DATABASE_NOT_CONFIGURED` | `400` | No active workspace DB for API key owner |
+| `TENANT_DATABASE_NOT_CONFIGURED` | `404` | Unknown tenant mapping |
+| `TENANT_DATABASE_NOT_READY` | `409` | Tenant DB mapping exists but not ready |
+| `TENANT_DATABASE_CREDENTIALS_MISSING` | `404` | Tenant mapping missing credentials |
+| `CANARY_ROLLOUT_BLOCKED` | `409` | Quality gate blocked canary rollout |
+| `INTERNAL_ERROR` | `500` | Fallback internal error code |
+| `LEGACY_MCP_KEY_ERROR` | passthrough | Management keys wrapper error |
+| `LEGACY_MCP_TENANTS_ERROR` | passthrough | Management tenants wrapper error |
 
 ## Scope Model
 
-All runtime endpoints accept request scope fields directly or through `scope`:
-
-- `tenantId`: route request to a tenant-mapped database
-- `userId`: enforce end-user memory isolation
-- `projectId`: narrow retrieval and writes to a project/repo
-
-If `tenantId` is omitted, the request uses the API key's default workspace database.
-
-## Hybrid Retrieval + Rollout
-
-Hybrid retrieval is controlled by per-request strategy fields and workspace rollout mode:
-
-- Request strategy: `strategy` (`baseline` or `hybrid_graph`)
-- Graph settings: `graphDepth` (`0|1|2`) and `graphLimit` (`1-50`)
-- Workspace rollout mode (`/api/sdk/v1/graph/rollout`): `off` (baseline only), `shadow` (execute graph but do not apply expansion), `canary` (apply expansion for hybrid requests)
-
-`/api/sdk/v1/graph/trace` includes retrieval diagnostics in `trace`:
+Runtime + graph requests accept optional scoped routing under `scope`:
 
 ```json
 {
-  "trace": {
-    "requestedStrategy": "hybrid_graph",
-    "strategy": "baseline",
-    "rolloutMode": "shadow",
-    "shadowExecuted": true,
-    "qualityGateStatus": "pass",
-    "qualityGateBlocked": false,
-    "qualityGateReasonCodes": [],
-    "fallbackTriggered": true,
-    "fallbackReason": "shadow_mode"
+  "scope": {
+    "tenantId": "acme-prod",
+    "userId": "user_123",
+    "projectId": "github.com/acme/platform"
   }
 }
 ```
 
-`/api/sdk/v1/graph/status` returns rollout status with shadow metrics and alarms:
+- `tenantId`: route to tenant-mapped database
+- `userId`: enforce end-user isolation
+- `projectId`: narrow to project/repo-scoped memories
 
-- `rollout`: current mode, `updatedAt`, `updatedBy`
-- `shadowMetrics`: request volume, fallback rate, graph error fallbacks, and averages
-- `qualityGate`: current/previous window eval snapshot with `status`, `canaryBlocked`, and detailed `reasons`
-- `alarms`: generated safety alarms such as `HIGH_FALLBACK_RATE` and `GRAPH_EXPANSION_ERRORS`
+If `tenantId` is omitted, the request uses the API key owner's active workspace DB.
 
-`/api/sdk/v1/graph/rollout` now enforces a hard canary safety gate:
+## Request Constraints (Selected)
 
-- `POST/PATCH mode=canary` returns `409` + `CANARY_ROLLOUT_BLOCKED` when quality regressions exceed thresholds.
-- Successful rollout responses include `qualityGate` so clients can render gate state without calling status separately.
+| Field | Constraint |
+| --- | --- |
+| `query` | max `500` chars |
+| `content` (`memories/add`, `memories/edit`) | `1..8000` chars |
+| `limit` (`context/get`, `search`, `trace`) | `1..50` |
+| `limit` (`memories/list`) | `1..100` |
+| `graphDepth` | `0`, `1`, or `2` |
+| `graphLimit` | `1..50` |
+| `tags[]` | max `50` tags, each `1..120` chars |
+| `paths[]` | max `100` paths, each `1..300` chars |
+| `category` | `1..120` chars |
+
+## Runtime Endpoint Contracts
+
+### `POST /api/sdk/v1/context/get`
+
+Retrieve context bundle (rules + memories + trace).
+
+Request:
+
+```json
+{
+  "query": "deployment process",
+  "limit": 5,
+  "includeRules": true,
+  "mode": "all",
+  "strategy": "baseline",
+  "graphDepth": 1,
+  "graphLimit": 8,
+  "scope": {
+    "tenantId": "acme-prod",
+    "userId": "user_123",
+    "projectId": "github.com/acme/platform"
+  }
+}
+```
+
+Defaults:
+
+- `limit`: `5`
+- `includeRules`: `true`
+- `mode`: `all`
+- `strategy`: `baseline`
+- `graphDepth`: `1`
+- `graphLimit`: `8`
+
+Response `data`:
+
+- `mode`, `query`
+- `rules[]`
+- `memories[]`
+- `workingMemories[]`
+- `longTermMemories[]`
+- `trace` (strategy, rollout mode, fallback details, candidate counts)
+
+### `POST /api/sdk/v1/memories/add`
+
+Create a memory.
+
+Request:
+
+```json
+{
+  "content": "Use canary rollout for graph retrieval changes",
+  "type": "rule",
+  "layer": "rule",
+  "tags": ["rollout", "graph"],
+  "paths": ["packages/web/src/app/**"],
+  "category": "ops",
+  "metadata": {
+    "source": "runbook"
+  },
+  "scope": {
+    "projectId": "github.com/acme/platform",
+    "userId": "user_123"
+  }
+}
+```
+
+Success status is `201`.  
+
+Response `data`:
+
+- `id`
+- `message`
+- `memory` (structured memory record)
+
+### `POST /api/sdk/v1/memories/search`
+
+Search memories by query.
+
+Request:
+
+```json
+{
+  "query": "rollout",
+  "type": "rule",
+  "layer": "rule",
+  "limit": 10,
+  "scope": {
+    "userId": "user_123"
+  }
+}
+```
+
+Response `data`:
+
+- `memories[]`
+- `count`
+
+### `POST /api/sdk/v1/memories/list`
+
+List recent memories with optional filters.
+
+Request:
+
+```json
+{
+  "type": "rule",
+  "layer": "rule",
+  "tags": "rollout",
+  "limit": 20,
+  "scope": {
+    "projectId": "github.com/acme/platform",
+    "userId": "user_123"
+  }
+}
+```
+
+Response `data`:
+
+- `memories[]`
+- `count`
+
+### `POST /api/sdk/v1/memories/edit`
+
+Update an existing memory.
+
+Request:
+
+```json
+{
+  "id": "mem_abc123",
+  "content": "Use canary then promote to full rollout after quality checks",
+  "tags": ["rollout", "canary"],
+  "scope": {
+    "userId": "user_123"
+  }
+}
+```
+
+Requires at least one editable field beyond `id` (`content`, `type`, `layer`, `tags`, `paths`, `category`, or `metadata`).
+
+Response `data`:
+
+- `id`
+- `updated: true`
+- `message`
+
+### `POST /api/sdk/v1/memories/forget`
+
+Soft-delete a memory.
+
+Request:
+
+```json
+{
+  "id": "mem_abc123",
+  "scope": {
+    "userId": "user_123"
+  }
+}
+```
+
+Response `data`:
+
+- `id`
+- `deleted: true`
+- `message`
+
+## Graph Endpoint Contracts
+
+### `GET|POST /api/sdk/v1/graph/status`
+
+Read graph health + rollout metrics for current scope.
+
+`GET` query params:
+
+- `topNodesLimit`
+- `tenantId`
+- `userId`
+- `projectId`
+
+`POST` body:
+
+```json
+{
+  "topNodesLimit": 10,
+  "scope": {
+    "tenantId": "acme-prod",
+    "userId": "user_123",
+    "projectId": "github.com/acme/platform"
+  }
+}
+```
+
+Response `data` includes:
+
+- `enabled`, `flags`
+- `health` (`ok` | `schema_missing`)
+- `tables`, `counts`
+- `rollout`
+- `shadowMetrics`
+- `qualityGate`
+- `alarms`
+- `topConnectedNodes`
+- `recentErrors`
+- `sampledAt`
+- `scope` (resolved scope echo)
+
+### `POST /api/sdk/v1/graph/trace`
+
+Trace retrieval behavior and graph expansion decisions.
+
+Request is similar to `context/get`, but defaults differ:
+
+- `strategy` default: `hybrid_graph`
+- `limit` default: `10`
+
+Response `data` includes:
+
+- `mode`, `includeRules`, `query`
+- `strategy`: `{ requested, applied }`
+- `trace`: rollout/fallback/candidate metrics
+- `tiers`: rule/working/long-term ID lists
+- `recall[]`: rank + source (`baseline` or `graph_expansion`) + graph explainability
+- `rules[]`, `memories[]`
+
+### `GET|POST|PATCH /api/sdk/v1/graph/rollout`
+
+Manage rollout mode.
+
+`GET`:
+
+- reads current rollout + quality gate + metrics summary
+
+`POST` / `PATCH` request:
+
+```json
+{
+  "mode": "canary",
+  "scope": {
+    "tenantId": "acme-prod",
+    "projectId": "github.com/acme/platform"
+  }
+}
+```
+
+`mode` must be one of:
+
+- `off`
+- `shadow`
+- `canary`
+
+Canary gate behavior:
+
+- `POST/PATCH mode=canary` can return `409` with `CANARY_ROLLOUT_BLOCKED`
+- error `details` includes `reasonCodes`, `qualityStatus`, and `windowHours`
+
+Successful response `data` includes:
+
+- `rollout`
+- `shadowMetrics`
+- `qualityGate`
+- `scope`
+
+## Health Contract
+
+### `GET /api/sdk/v1/health`
+
+Response `data`:
+
+```json
+{
+  "status": "ok",
+  "service": "memories-sdk",
+  "schemaVersion": "2026-02-11"
+}
+```
+
+## Management Endpoint Contracts
+
+`/api/sdk/v1/management/*` currently wraps legacy `/api/mcp/*` responses into SDK envelopes.
+
+### `GET|POST|DELETE /api/sdk/v1/management/keys`
+
+- `GET`: current key status (`hasKey`, `keyPreview`, `createdAt`, `expiresAt`, `isExpired`)
+- `POST`: rotate key with `expiresAt` body
+- `DELETE`: revoke key
+
+`POST` request:
+
+```json
+{
+  "expiresAt": "2027-01-01T00:00:00.000Z"
+}
+```
+
+### `GET|POST|DELETE /api/sdk/v1/management/tenants`
+
+- `GET`: list tenant DB mappings
+- `POST`: upsert tenant mapping
+- `DELETE`: disable tenant mapping by `tenantId` query param
+
+`POST` request:
+
+```json
+{
+  "tenantId": "acme-prod",
+  "mode": "provision",
+  "metadata": {
+    "region": "us-east-2"
+  }
+}
+```
+
+Attach mode request:
+
+```json
+{
+  "tenantId": "acme-prod",
+  "mode": "attach",
+  "tursoDbUrl": "libsql://example.turso.io",
+  "tursoDbToken": "token",
+  "tursoDbName": "example"
+}
+```
+
+`DELETE` example:
+
+```http
+DELETE /api/sdk/v1/management/tenants?tenantId=acme-prod
+```
+
+## cURL Quick Reference
+
+### Context
+
+```bash
+curl -sS https://memories.sh/api/sdk/v1/context/get \
+  -H "Authorization: Bearer $MEMORIES_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query":"deployment",
+    "scope":{"tenantId":"acme-prod","projectId":"github.com/acme/platform"}
+  }'
+```
+
+### Add memory
+
+```bash
+curl -sS https://memories.sh/api/sdk/v1/memories/add \
+  -H "Authorization: Bearer $MEMORIES_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content":"Always run smoke tests before deploy",
+    "type":"rule",
+    "scope":{"projectId":"github.com/acme/platform"}
+  }'
+```
+
+### Graph rollout status
+
+```bash
+curl -sS "https://memories.sh/api/sdk/v1/graph/rollout?tenantId=acme-prod" \
+  -H "Authorization: Bearer $MEMORIES_API_KEY"
+```
 
 ## Compatibility Notes
 
-- SDK clients should prefer `transport: "sdk_http"` or `transport: "auto"`.
-- MCP JSON-RPC (`/api/mcp`) remains supported for MCP-native clients.
-- Breaking SDK HTTP changes will ship under a new route prefix (`/api/sdk/v2/*`).
+- Prefer `transport: "sdk_http"` (or `"auto"`) in SDK clients.
+- MCP JSON-RPC (`/api/mcp`) remains available for MCP-native clients.
+- Breaking SDK HTTP changes will ship under a new prefix (`/api/sdk/v2/*`).
