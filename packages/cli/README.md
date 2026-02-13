@@ -34,6 +34,7 @@ memories serve
 ## Features
 
 - **One store, every tool** — generate native configs for Cursor, Claude Code, Copilot, Windsurf, Gemini, Cline, Roo, and more
+- **Auto-setup** — `memories setup` detects tools, configures MCP, and imports existing project skills automatically
 - **Path-scoped rules** — `--paths "src/api/**"` becomes `paths:` in Claude, `globs:` in Cursor
 - **Skills** — define reusable agent workflows following the [Agent Skills](https://agentskills.io) standard
 - **`.agents/` directory** — canonical, tool-agnostic config format

@@ -152,7 +152,7 @@ Or configure in your tool's MCP settings:
 
 | Command | Description |
 |---------|-------------|
-| `memories setup` | Initialize in current project, auto-detect tools |
+| `memories setup` | Initialize in current project, auto-detect tools, and import project skills |
 | `memories add <content>` | Add a memory with type, tags, paths, category |
 | `memories edit [id]` | Edit a memory (interactive picker or by ID) |
 | `memories forget <id>` | Soft-delete a memory |
@@ -179,7 +179,7 @@ memories ingest cursor           # .cursorrules, .cursor/rules/
 memories ingest claude           # CLAUDE.md
 memories ingest claude-rules     # .claude/rules/*.md (extracts paths)
 memories ingest cursor-rules     # .cursor/rules/*.mdc (extracts globs)
-memories ingest skills           # .agents/skills/, .claude/skills/
+memories ingest skills           # .agents/.claude/.cursor/.codex/... skills dirs
 memories ingest --all            # scan everything
 ```
 
