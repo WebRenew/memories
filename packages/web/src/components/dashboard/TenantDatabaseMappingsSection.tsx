@@ -108,13 +108,13 @@ export function TenantDatabaseMappingsSection({
         }
 
         if (!res.ok) {
-          throw new Error(data.error || "Failed to load tenant mappings")
+          throw new Error(data.error || "Failed to load AI SDK projects")
         }
 
         setMappings(Array.isArray(data.tenantDatabases) ? data.tenantDatabases : [])
       } catch (err) {
         console.error("Failed to fetch tenant mappings:", err)
-        setError(err instanceof Error ? err.message : "Failed to load tenant mappings")
+        setError(err instanceof Error ? err.message : "Failed to load AI SDK projects")
       } finally {
         setLoading(false)
         setRefreshing(false)
@@ -171,7 +171,7 @@ export function TenantDatabaseMappingsSection({
   async function handleCreateOrAttach() {
     const trimmedTenantId = tenantId.trim()
     if (!trimmedTenantId) {
-      setError("tenantId is required")
+      setError("Project ID (`tenantId`) is required")
       return
     }
 
@@ -182,7 +182,7 @@ export function TenantDatabaseMappingsSection({
       }
 
       if (!provisionAcknowledged) {
-        setError("Acknowledge the provisioning warning before creating tenant databases.")
+        setError("Acknowledge the provisioning warning before creating project databases.")
         return
       }
     }
@@ -222,10 +222,10 @@ export function TenantDatabaseMappingsSection({
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) {
-        throw new Error(data.error || "Failed to save tenant mapping")
+        throw new Error(data.error || "Failed to save AI SDK project")
       }
 
-      setStatusMessage(mode === "provision" ? "Tenant database provisioned" : "Tenant database attached")
+      setStatusMessage(mode === "provision" ? "Project database provisioned" : "Project database attached")
       setTenantId("")
       if (mode === "attach") {
         setTursoDbUrl("")
@@ -236,14 +236,14 @@ export function TenantDatabaseMappingsSection({
       await fetchMappings({ silent: true })
     } catch (err) {
       console.error("Failed to create tenant mapping:", err)
-      setError(err instanceof Error ? err.message : "Failed to save tenant mapping")
+      setError(err instanceof Error ? err.message : "Failed to save AI SDK project")
     } finally {
       setSaving(false)
     }
   }
 
   async function handleDisable(tenantToDisable: string) {
-    if (!confirm(`Disable tenant mapping for ${tenantToDisable}?`)) {
+    if (!confirm(`Disable AI SDK project ${tenantToDisable}?`)) {
       return
     }
 
@@ -256,14 +256,14 @@ export function TenantDatabaseMappingsSection({
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) {
-        throw new Error(data.error || "Failed to disable tenant mapping")
+        throw new Error(data.error || "Failed to disable AI SDK project")
       }
 
-      setStatusMessage(`Disabled ${tenantToDisable}`)
+      setStatusMessage(`Disabled project ${tenantToDisable}`)
       await fetchMappings({ silent: true })
     } catch (err) {
       console.error("Failed to disable tenant mapping:", err)
-      setError(err instanceof Error ? err.message : "Failed to disable tenant mapping")
+      setError(err instanceof Error ? err.message : "Failed to disable AI SDK project")
     } finally {
       setDisablingTenantId(null)
     }
@@ -274,31 +274,38 @@ export function TenantDatabaseMappingsSection({
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Database className="h-4 w-4 text-primary" />
-          <h3 className="font-semibold">Tenant Databases</h3>
+          <h3 className="font-semibold">Step 2: AI SDK Projects</h3>
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          Map `tenant_id` to isolated Turso databases for SaaS customers.
+          Map `tenantId` to isolated Turso databases for SaaS customer workspaces.
         </p>
       </div>
 
       <div className="p-4 space-y-4">
         {!hasApiKey ? (
           <p className="text-sm text-muted-foreground">
-            Generate an API key first, then configure tenant database mappings.
+            Generate an API key first, then create your first AI SDK project.
           </p>
         ) : apiKeyExpired ? (
           <p className="text-sm text-muted-foreground">
-            Your API key is expired. Regenerate it before managing tenant mappings.
+            Your API key is expired. Regenerate it before managing AI SDK projects.
           </p>
         ) : (
           <>
+            <div className="rounded-md border border-border bg-muted/20 p-3">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                `tenantId` here is your SaaS project/customer boundary. It is separate from git repo scope
+                (`projectId`) used by coding agents.
+              </p>
+            </div>
+
             <div className="border border-amber-500/30 bg-amber-500/10 rounded-md p-3 space-y-3">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-amber-200">Multi-tenant routing can increase infrastructure spend</p>
+                  <p className="text-sm font-medium text-amber-200">Project provisioning can increase infrastructure spend</p>
                   <p className="text-xs text-amber-100/80 mt-1">
-                    Provisioning creates a new Turso database per tenant. Use spend controls to prevent accidental database creation.
+                    Provisioning creates a new Turso database per project. Use spend controls to prevent accidental database creation.
                   </p>
                 </div>
               </div>
@@ -313,9 +320,9 @@ export function TenantDatabaseMappingsSection({
                       : "border-border hover:bg-muted/30"
                   }`}
                 >
-                  <p className="text-xs font-semibold">Attach Only (Recommended)</p>
+                  <p className="text-xs font-semibold">Attach Existing DBs (Recommended)</p>
                   <p className="text-[11px] text-muted-foreground mt-1">
-                    Prevent one-click DB creation; only map existing tenant DBs.
+                    Prevent one-click creation; only map existing project DBs.
                   </p>
                 </button>
 
@@ -328,9 +335,9 @@ export function TenantDatabaseMappingsSection({
                       : "border-border hover:bg-muted/30"
                   }`}
                 >
-                  <p className="text-xs font-semibold">Allow Provisioning</p>
+                  <p className="text-xs font-semibold">Allow One-Click Provisioning</p>
                   <p className="text-[11px] text-muted-foreground mt-1">
-                    Enable one-click tenant DB provisioning from this dashboard.
+                    Enable one-click project DB provisioning from this dashboard.
                   </p>
                 </button>
               </div>
@@ -342,7 +349,7 @@ export function TenantDatabaseMappingsSection({
                   onChange={(event) => handleProvisionAcknowledgedChange(event.target.checked)}
                   className="mt-0.5"
                 />
-                I understand that provisioning tenant databases may create billable infrastructure costs.
+                I understand that provisioning project databases may create billable infrastructure costs.
               </label>
             </div>
 
@@ -359,7 +366,7 @@ export function TenantDatabaseMappingsSection({
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   <Server className="h-3 w-3 inline mr-1.5" />
-                  Provision New
+                  Provision New Project DB
                 </button>
                 <button
                   type="button"
@@ -371,19 +378,19 @@ export function TenantDatabaseMappingsSection({
                   }`}
                 >
                   <Link2 className="h-3 w-3 inline mr-1.5" />
-                  Attach Existing
+                  Attach Existing DB
                 </button>
               </div>
 
               {spendControl === "attach_only" && (
                 <p className="text-xs text-muted-foreground">
-                  Spend control is set to Attach Only. Switch to Allow Provisioning to create tenant databases from this page.
+                  Spend control is set to Attach Existing DBs. Switch to Allow One-Click Provisioning to create project databases from this page.
                 </p>
               )}
 
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="space-y-1">
-                  <span className="text-xs text-muted-foreground">tenantId</span>
+                  <span className="text-xs text-muted-foreground">Project ID (`tenantId`)</span>
                   <input
                     value={tenantId}
                     onChange={(event) => setTenantId(event.target.value)}
@@ -393,7 +400,7 @@ export function TenantDatabaseMappingsSection({
                 </label>
 
                 <label className="space-y-1">
-                  <span className="text-xs text-muted-foreground">Metadata (JSON)</span>
+                  <span className="text-xs text-muted-foreground">Project Metadata (JSON)</span>
                   <input
                     value={metadataInput}
                     onChange={(event) => setMetadataInput(event.target.value)}
@@ -406,7 +413,7 @@ export function TenantDatabaseMappingsSection({
               {mode === "attach" && (
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="space-y-1 md:col-span-2">
-                    <span className="text-xs text-muted-foreground">tursoDbUrl</span>
+                    <span className="text-xs text-muted-foreground">Database URL (`tursoDbUrl`)</span>
                     <input
                       value={tursoDbUrl}
                       onChange={(event) => setTursoDbUrl(event.target.value)}
@@ -416,7 +423,7 @@ export function TenantDatabaseMappingsSection({
                   </label>
 
                   <label className="space-y-1">
-                    <span className="text-xs text-muted-foreground">tursoDbToken</span>
+                    <span className="text-xs text-muted-foreground">Database Token (`tursoDbToken`)</span>
                     <input
                       type="password"
                       value={tursoDbToken}
@@ -427,7 +434,7 @@ export function TenantDatabaseMappingsSection({
                   </label>
 
                   <label className="space-y-1">
-                    <span className="text-xs text-muted-foreground">tursoDbName (optional)</span>
+                    <span className="text-xs text-muted-foreground">Database Name (`tursoDbName`, optional)</span>
                     <input
                       value={tursoDbName}
                       onChange={(event) => setTursoDbName(event.target.value)}
@@ -446,21 +453,21 @@ export function TenantDatabaseMappingsSection({
               >
                 {saving
                   ? mode === "provision"
-                    ? "Provisioning..."
-                    : "Attaching..."
+                    ? "Provisioning Project..."
+                    : "Attaching Project..."
                   : mode === "provision"
-                    ? "Provision Tenant Database"
-                    : "Attach Tenant Database"}
+                    ? "Provision Project Database"
+                    : "Attach Project Database"}
               </button>
 
               <p className="text-xs text-muted-foreground">
-                Existing mappings move automatically when you rotate your API key.
+                Existing project mappings move automatically when you rotate your API key.
               </p>
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Current Mappings</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Current AI SDK Projects</p>
                 <button
                   type="button"
                   onClick={() => void fetchMappings({ silent: true })}
@@ -476,7 +483,7 @@ export function TenantDatabaseMappingsSection({
                 <div className="animate-pulse h-20 bg-muted/20 rounded" />
               ) : sortedMappings.length === 0 ? (
                 <div className="border border-dashed border-border rounded p-4 text-sm text-muted-foreground">
-                  No tenant mappings yet.
+                  No AI SDK projects yet.
                 </div>
               ) : (
                 <div className="space-y-2">

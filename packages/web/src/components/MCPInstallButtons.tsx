@@ -161,7 +161,7 @@ export function MCPInstallButtons() {
             <div className="mt-3 flex items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground">
                 <strong>Replace</strong> <code className="bg-muted px-1 rounded">{API_KEY_PLACEHOLDER}</code> with your{" "}
-                <a href="/app/api-keys" className="underline hover:text-foreground">API key</a>.
+                <a href="/app/sdk-projects" className="underline hover:text-foreground">API key</a>.
               </p>
               <a
                 href={CURSOR_INSTALL_URL}

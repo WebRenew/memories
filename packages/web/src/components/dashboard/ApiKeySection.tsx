@@ -204,10 +204,10 @@ export function ApiKeySection() {
         <div className="p-4 border-b border-border">
           <div className="flex items-center gap-2">
             <Key className="h-4 w-4 text-primary" />
-            <h3 className="font-semibold">API Key</h3>
+            <h3 className="font-semibold">Step 1: API Key</h3>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Connect Cursor, Claude, and other AI tools to your memories
+            Generate a `mem_` key for SDK runtime calls and MCP clients.
           </p>
         </div>
 
@@ -276,7 +276,7 @@ export function ApiKeySection() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">MCP Endpoint URL</label>
+                <label className="text-xs text-muted-foreground">MCP Endpoint URL (for MCP clients)</label>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 bg-muted/30 px-3 py-2 rounded text-xs font-mono truncate">
                     {MCP_ENDPOINT}
@@ -337,7 +337,7 @@ export function ApiKeySection() {
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Generate an API key to connect AI tools to your memories.
+                Generate an API key to create AI SDK projects and connect AI tools.
               </p>
               <button
                 onClick={generateKey}

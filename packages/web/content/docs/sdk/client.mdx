@@ -237,7 +237,7 @@ const context = await client.context.get({
 
 ## Management APIs
 
-When you manage API keys or tenant mappings programmatically, prefer the SDK management endpoints:
+When you manage API keys or AI SDK Projects (`tenantId` mappings) programmatically, prefer the SDK management endpoints:
 
 - `/api/sdk/v1/management/keys`
 - `/api/sdk/v1/management/tenants`
@@ -259,14 +259,14 @@ const rotatedKey = await client.management.keys.create({
 })
 const revoked = await client.management.keys.revoke()
 
-const tenantMappings = await client.management.tenants.list()
-const upsertedTenant = await client.management.tenants.upsert({
+const sdkProjects = await client.management.tenants.list()
+const upsertedProject = await client.management.tenants.upsert({
   tenantId: "acme-prod",
   mode: "provision",
 })
-const disabledTenant = await client.management.tenants.disable("acme-prod")
+const disabledProject = await client.management.tenants.disable("acme-prod")
 
-void [keyStatus, rotatedKey, revoked, tenantMappings, upsertedTenant, disabledTenant]
+void [keyStatus, rotatedKey, revoked, sdkProjects, upsertedProject, disabledProject]
 ```
 
 Legacy MCP management routes (`/api/mcp/key`, `/api/mcp/tenants`) remain available for backward compatibility.

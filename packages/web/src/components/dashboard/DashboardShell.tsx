@@ -32,7 +32,7 @@ interface WorkspaceSummary {
 
 const navItems = [
   { href: "/app", label: "Memories", icon: Database },
-  { href: "/app/api-keys", label: "API Keys", icon: KeyRound },
+  { href: "/app/sdk-projects", label: "SDK Projects", icon: KeyRound },
   { href: "/app/stats", label: "Stats", icon: BarChart3 },
   { href: "/app/graph-explorer", label: "Graph", icon: Network },
   { href: "/app/team", label: "Team", icon: Users },

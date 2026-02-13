@@ -30,11 +30,24 @@ The memories.sh SDK gives AI applications persistent memory through two packages
 
 - `tenantId`: required for SaaS isolation (routes to a tenant-specific memory database)
 - `userId`: optional per-end-user scope inside a tenant
-- `projectId`: optional per-project/repository scope
+- `projectId`: optional git/repository context filter (not an auth boundary)
 
 When tenant auto-provision is enabled on your server, first requests for a new `tenantId` can provision its Turso database automatically.
 
+`tenantId` and `projectId` are intentionally different:
+
+- `tenantId` chooses the memory database (security boundary)
+- `projectId` narrows retrieval inside that database (context boundary)
+
+Start with [AI SDK Projects](/docs/sdk/projects) if you want the dashboard-first flow.
+
 ## Quick Start
+
+### Dashboard setup (recommended first)
+
+1. Open **Dashboard → AI SDK Projects**.
+2. Generate a `mem_...` API key.
+3. Create your first project (`tenantId`) by attaching an existing Turso DB or provisioning a new one.
 
 ### Install
 
@@ -169,6 +182,7 @@ The SDK is available on the Enterprise plan. [Contact us](mailto:hello@memories.
 
 ## Next Steps
 
+- [AI SDK Projects](/docs/sdk/projects) — dashboard onboarding for solo devs and teams
 - [Middleware reference](/docs/sdk/middleware) — `memoriesMiddleware()` config and composability
 - [SaaS auth routing](/docs/sdk/saas-auth-routing) — derive trusted `tenantId`/`userId` in backend routes
 - [Tools reference](/docs/sdk/tools) — `memoriesTools()` bundle and individual tools

@@ -15,7 +15,7 @@ const layers: {
     description: (
       <>
         <code className="font-mono text-[0.9em] text-foreground/80 bg-muted px-1.5 py-0.5 rounded">memoriesMiddleware()</code>{" "}
-        connects any model to cloud memory. 2 lines to ship.
+        connects any model to cloud memory. Pair with AI SDK Projects in the dashboard.
       </>
     ),
     accent: true,
@@ -54,7 +54,7 @@ export function SDKSection() {
             </div>
 
             <h2 className="font-mono font-normal text-2xl sm:text-4xl text-foreground mb-6">
-              <ScrambleText text="Cloud-native memory for AI apps." delayMs={200} />
+              <ScrambleText text="Cloud-native memory for AI apps and SaaS teams." delayMs={200} />
             </h2>
 
             <p className="text-lg text-muted-foreground max-w-lg mb-4">
@@ -63,9 +63,10 @@ export function SDKSection() {
               all it takes.
             </p>
             <p className="text-sm text-muted-foreground max-w-lg mb-8">
-              Import the middleware, pass your model, and ship. The CLI and MCP
-              handle local-first storage and agent access—the SDK brings it all
-              to production.
+              Start in Dashboard → AI SDK Projects to create your API key and
+              project isolation (`tenantId`). Then add middleware and ship. The
+              CLI and MCP handle local-first storage and agent access, while the
+              SDK handles your app runtime.
             </p>
 
             <Link
