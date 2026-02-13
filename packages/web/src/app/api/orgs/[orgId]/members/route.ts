@@ -26,6 +26,11 @@ interface OrganizationTursoRow {
   turso_db_token: string | null
 }
 
+interface AuthUserRow {
+  id: string
+  last_sign_in_at?: string | null
+}
+
 function isMissingColumnError(error: unknown, columnName: string): boolean {
   const message =
     typeof error === "object" && error !== null && "message" in error
@@ -37,6 +42,48 @@ function isMissingColumnError(error: unknown, columnName: string): boolean {
     message.includes(columnName.toLowerCase()) &&
     message.includes("does not exist")
   )
+}
+
+async function listLastLoginByUserId(
+  admin: ReturnType<typeof createAdminClient>,
+  userIds: string[],
+): Promise<Map<string, string | null>> {
+  const output = new Map<string, string | null>()
+  const remaining = new Set(userIds)
+  if (remaining.size === 0) return output
+
+  let page = 1
+  const perPage = Math.min(1000, Math.max(100, remaining.size))
+  const maxPages = 25
+
+  for (let i = 0; i < maxPages && remaining.size > 0; i += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage })
+    if (error) {
+      console.warn("Failed to list auth users for login timestamps:", error.message)
+      break
+    }
+
+    const users = (data?.users ?? []) as AuthUserRow[]
+    if (users.length === 0) break
+
+    for (const authUser of users) {
+      if (!remaining.has(authUser.id)) continue
+      output.set(authUser.id, authUser.last_sign_in_at ?? null)
+      remaining.delete(authUser.id)
+    }
+
+    if (users.length < perPage) break
+    const total = typeof data?.total === "number" ? data.total : null
+    if (total !== null && page * perPage >= total) break
+    page += 1
+  }
+
+  // Any unresolved IDs remain null instead of forcing per-user lookups (avoids N+1).
+  for (const missing of remaining) {
+    output.set(missing, null)
+  }
+
+  return output
 }
 
 // GET /api/orgs/[orgId]/members - List organization members
@@ -115,22 +162,10 @@ export async function GET(
 
     usersById = new Map((users as UserRow[] | null | undefined)?.map((row) => [row.id, row]) ?? [])
 
-    // Auth-level last login metadata is useful for workspace owners.
-    const loginLookups = await Promise.allSettled(
-      userIds.map(async (memberUserId) => {
-        const { data, error } = await admin.auth.admin.getUserById(memberUserId)
-        if (error || !data.user) {
-          return { userId: memberUserId, lastLoginAt: null }
-        }
-
-        return { userId: memberUserId, lastLoginAt: data.user.last_sign_in_at ?? null }
-      })
-    )
-
-    for (const lookup of loginLookups) {
-      if (lookup.status === "fulfilled") {
-        lastLoginByUserId.set(lookup.value.userId, lookup.value.lastLoginAt)
-      }
+    // Read auth login metadata via paged listUsers (single batched path; avoids per-member N+1).
+    const loginMap = await listLastLoginByUserId(admin, userIds)
+    for (const [memberUserId, lastLoginAt] of loginMap.entries()) {
+      lastLoginByUserId.set(memberUserId, lastLoginAt)
     }
   }
 

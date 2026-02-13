@@ -21,7 +21,14 @@ export async function GET(request: Request) {
       email: auth.email,
     })
 
-    return NextResponse.json({ health })
+    return NextResponse.json(
+      { health },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=10, stale-while-revalidate=30",
+        },
+      }
+    )
   } catch (error) {
     console.error("Failed to build integration health payload:", error)
     return NextResponse.json({ error: "Failed to load integration health" }, { status: 500 })

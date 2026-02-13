@@ -97,6 +97,12 @@ Acceptance criteria:
 Why:
 - Slow personal/org switching breaks trust and daily usability.
 
+Status update (2026-02-13):
+- Budgets + alarms are shipped.
+- Workspace summary prefetch/cache is shipped in dashboard switcher.
+- Team members API removed per-member auth lookup N+1 (batched auth list lookup).
+- Remaining: deeper query profiling for large tenants and selective cache invalidation tuning.
+
 Deliverables:
 - API/query profiling for workspace load paths
 - Prefetch + cache strategy for personal and active org summaries

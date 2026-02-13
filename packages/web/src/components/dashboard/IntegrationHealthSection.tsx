@@ -32,13 +32,13 @@ export function IntegrationHealthSection({ initialHealth }: IntegrationHealthSec
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const loadHealth = useCallback(async () => {
+  const loadHealth = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
     setError(null)
     try {
       const response = await fetch("/api/integration/health", {
         method: "GET",
-        cache: "no-store",
+        cache: options?.force ? "no-store" : "default",
       })
       const body = await response.json().catch(() => null)
       if (!response.ok) {
@@ -102,7 +102,7 @@ export function IntegrationHealthSection({ initialHealth }: IntegrationHealthSec
           )}
           <button
             type="button"
-            onClick={() => void loadHealth()}
+            onClick={() => void loadHealth({ force: true })}
             disabled={loading}
             className="px-2.5 py-1 text-[11px] border border-border bg-muted/20 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors disabled:opacity-60"
           >

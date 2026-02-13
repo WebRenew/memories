@@ -18,6 +18,36 @@ interface WorkspaceSwitcherProps {
   memberships: OrgMembership[]
 }
 
+interface WorkspaceSummary {
+  ownerType: "user" | "organization"
+  orgId: string | null
+  orgRole: "owner" | "admin" | "member" | null
+  plan: "free" | "pro" | "past_due"
+  hasDatabase: boolean
+  canProvision: boolean
+  canManageBilling: boolean
+}
+
+interface WorkspaceSummariesResponse {
+  summaries?: {
+    currentOrgId: string | null
+    personal: WorkspaceSummary
+    organizations: Array<{
+      id: string
+      name: string
+      slug: string
+      role: "owner" | "admin" | "member"
+      workspace: WorkspaceSummary
+    }>
+  }
+}
+
+const PERSONAL_KEY = "__personal_workspace__"
+
+function workspaceSummaryKey(orgId: string | null): string {
+  return orgId ?? PERSONAL_KEY
+}
+
 const roleIcon = (role: string) => {
   switch (role) {
     case "owner":
@@ -34,6 +64,10 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
   const [isOpen, setIsOpen] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [workspaceSummaryById, setWorkspaceSummaryById] = useState<
+    Record<string, WorkspaceSummary>
+  >({})
+  const [isPrefetching, setIsPrefetching] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const activeOrg = currentOrgId
@@ -52,6 +86,38 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
       document.addEventListener("mousedown", handleClickOutside)
     }
     return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [isOpen])
+
+  async function prefetchWorkspaceSummaries(options?: { force?: boolean }) {
+    setIsPrefetching(true)
+    try {
+      const response = await fetch("/api/workspace?includeSummaries=1", {
+        method: "GET",
+        cache: options?.force ? "no-store" : "force-cache",
+      })
+      if (!response.ok) return
+
+      const payload = (await response.json().catch(() => ({}))) as WorkspaceSummariesResponse
+      const summaries = payload.summaries
+      if (!summaries) return
+
+      const nextMap: Record<string, WorkspaceSummary> = {
+        [PERSONAL_KEY]: summaries.personal,
+      }
+      for (const item of summaries.organizations) {
+        nextMap[item.id] = item.workspace
+      }
+      setWorkspaceSummaryById(nextMap)
+    } catch {
+      // Best-effort prefetch only.
+    } finally {
+      setIsPrefetching(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!isOpen) return
+    void prefetchWorkspaceSummaries()
   }, [isOpen])
 
   async function switchWorkspace(nextOrgId: string | null) {
@@ -74,6 +140,14 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || "Failed to switch workspace")
       }
+
+      // Warm short-lived workspace summaries + health payload for the next render.
+      await Promise.all([
+        prefetchWorkspaceSummaries({ force: true }),
+        fetch("/api/integration/health", { method: "GET", cache: "force-cache" }).catch(
+          () => undefined,
+        ),
+      ])
 
       setIsOpen(false)
       router.refresh()
@@ -112,8 +186,11 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
           <div className="absolute top-full left-0 mt-1.5 z-50 min-w-[220px] bg-background border border-border shadow-lg">
             <div className="px-3 py-2 border-b border-border">
-              <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-muted-foreground">
+              <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-muted-foreground flex items-center gap-2">
                 Workspace
+                {(isSwitching || isPrefetching) && (
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                )}
               </span>
             </div>
 
@@ -128,6 +205,17 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
                 <p className="text-xs font-bold truncate">Personal</p>
                 <p className="text-[10px] text-muted-foreground">Your private workspace</p>
               </div>
+              {workspaceSummaryById[PERSONAL_KEY] && (
+                <span
+                  className={`text-[9px] uppercase tracking-[0.14em] ${
+                    workspaceSummaryById[PERSONAL_KEY].hasDatabase
+                      ? "text-emerald-400"
+                      : "text-amber-400"
+                  }`}
+                >
+                  {workspaceSummaryById[PERSONAL_KEY].hasDatabase ? "DB ready" : "No DB"}
+                </span>
+              )}
               {currentOrgId === null && (
                 <Check className="h-3.5 w-3.5 text-primary shrink-0" />
               )}
@@ -157,6 +245,19 @@ export function WorkspaceSwitcher({ currentOrgId, memberships }: WorkspaceSwitch
                         <span className="text-[10px] text-muted-foreground capitalize">{m.role}</span>
                       </div>
                     </div>
+                    {workspaceSummaryById[workspaceSummaryKey(m.organization.id)] && (
+                      <span
+                        className={`text-[9px] uppercase tracking-[0.14em] ${
+                          workspaceSummaryById[workspaceSummaryKey(m.organization.id)].hasDatabase
+                            ? "text-emerald-400"
+                            : "text-amber-400"
+                        }`}
+                      >
+                        {workspaceSummaryById[workspaceSummaryKey(m.organization.id)].hasDatabase
+                          ? "DB ready"
+                          : "No DB"}
+                      </span>
+                    )}
                     {currentOrgId === m.organization.id && (
                       <Check className="h-3.5 w-3.5 text-primary shrink-0" />
                     )}

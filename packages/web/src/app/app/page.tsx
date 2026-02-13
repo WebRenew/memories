@@ -10,8 +10,6 @@ import type { Memory } from "@/types/memory"
 import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 import { getGraphStatusPayload, type GraphStatusPayload } from "@/lib/memory-service/graph/status"
 import { ensureMemoryUserIdSchema } from "@/lib/memory-service/scope"
-import { createAdminClient } from "@/lib/supabase/admin"
-import { buildIntegrationHealthPayload, type IntegrationHealthPayload } from "@/lib/integration-health"
 import { buildMemoryInsights, type MemoryInsights } from "@/lib/memory-insights"
 
 function isMissingDeletedAtColumnError(error: unknown): boolean {
@@ -50,7 +48,6 @@ export default async function MemoriesPage() {
 
   let memories: Memory[] = []
   let graphStatus: GraphStatusPayload | null = null
-  let integrationHealth: IntegrationHealthPayload | null = null
   let memoryInsights: MemoryInsights | null = null
   let connectError = false
 
@@ -105,23 +102,12 @@ export default async function MemoriesPage() {
     connectError = true
   }
 
-  try {
-    const admin = createAdminClient()
-    integrationHealth = await buildIntegrationHealthPayload({
-      admin,
-      userId: user.id,
-      email: user.email ?? "",
-    })
-  } catch (healthError) {
-    console.error("Failed to load integration health for dashboard:", healthError)
-    integrationHealth = null
-  }
-
   const workspaceKey = `${context?.ownerType ?? "user"}:${context?.orgId ?? user.id}`
 
   return (
     <div className="space-y-8">
-      <IntegrationHealthSection initialHealth={integrationHealth} />
+      {/* Loaded client-side to keep workspace switches snappy; endpoint has short private cache. */}
+      <IntegrationHealthSection initialHealth={null} />
 
       <GithubCaptureQueueSection />
 

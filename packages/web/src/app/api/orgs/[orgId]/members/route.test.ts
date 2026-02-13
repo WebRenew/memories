@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const {
   mockGetUser,
   mockAdminFrom,
-  mockAdminGetUserById,
+  mockAdminListUsers,
   mockCheckRateLimit,
 } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockAdminFrom: vi.fn(),
-  mockAdminGetUserById: vi.fn(),
+  mockAdminListUsers: vi.fn(),
   mockCheckRateLimit: vi.fn(),
 }))
 
@@ -25,7 +25,7 @@ vi.mock("@/lib/supabase/admin", () => ({
     from: mockAdminFrom,
     auth: {
       admin: {
-        getUserById: mockAdminGetUserById,
+        listUsers: mockAdminListUsers,
       },
     },
   })),
@@ -42,8 +42,11 @@ describe("/api/orgs/[orgId]/members", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockCheckRateLimit.mockResolvedValue(null)
-    mockAdminGetUserById.mockResolvedValue({
-      data: { user: { last_sign_in_at: "2026-02-12T10:00:00.000Z" } },
+    mockAdminListUsers.mockResolvedValue({
+      data: {
+        users: [{ id: "user-1", last_sign_in_at: "2026-02-12T10:00:00.000Z" }],
+        total: 1,
+      },
       error: null,
     })
   })
