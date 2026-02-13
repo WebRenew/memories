@@ -5,6 +5,7 @@ import {
   extractGithubAccountLink,
   verifyGithubWebhookSignature,
 } from "./github-capture"
+import { filterGithubCaptureCandidatesBySettings } from "./github-capture-settings"
 
 describe("github capture helpers", () => {
   it("verifies webhook signatures", () => {
@@ -167,6 +168,83 @@ describe("github capture helpers", () => {
     expect(candidates[0]?.metadata).toMatchObject({
       tag_name: "v16.1.7",
       target_commitish: "main",
+    })
+  })
+
+  it("filters candidates with capture policy controls", () => {
+    const pullRequestCandidates = buildGithubCaptureCandidates("pull_request", {
+      action: "opened",
+      repository: {
+        id: 1,
+        full_name: "WebRenew/memories",
+        owner: { login: "WebRenew" },
+      },
+      sender: { login: "charles" },
+      pull_request: {
+        number: 10,
+        title: "Add policy checks",
+        body: "Adds org capture policy support.",
+        state: "open",
+        updated_at: "2026-02-13T00:00:00.000Z",
+        head: { sha: "abcdef123456" },
+        base: { ref: "main" },
+        labels: [{ name: "memory" }],
+      },
+    })
+
+    const issueCandidates = buildGithubCaptureCandidates("issues", {
+      action: "opened",
+      repository: {
+        id: 1,
+        full_name: "WebRenew/memories",
+        owner: { login: "WebRenew" },
+      },
+      sender: { login: "charles" },
+      issue: {
+        number: 15,
+        title: "Issue should be filtered by event",
+        body: "Issue body.",
+        state: "open",
+        updated_at: "2026-02-13T00:00:00.000Z",
+        labels: [{ name: "memory" }],
+      },
+    })
+
+    const releaseCandidates = buildGithubCaptureCandidates("release", {
+      action: "published",
+      repository: {
+        id: 1,
+        full_name: "WebRenew/memories",
+        owner: { login: "WebRenew" },
+      },
+      sender: { login: "charles" },
+      release: {
+        id: 33,
+        tag_name: "v16.1.8-beta",
+        target_commitish: "main",
+        prerelease: true,
+      },
+    })
+
+    const result = filterGithubCaptureCandidatesBySettings(
+      [...pullRequestCandidates, ...issueCandidates, ...releaseCandidates],
+      {
+        allowed_events: ["pull_request", "release"],
+        repo_allow_list: ["webrenew/*"],
+        repo_block_list: [],
+        branch_filters: ["main"],
+        label_filters: ["memory"],
+        actor_filters: ["charles"],
+        include_prerelease: false,
+      },
+    )
+
+    expect(result.accepted).toHaveLength(1)
+    expect(result.accepted[0]?.sourceEvent).toBe("pull_request")
+    expect(result.dropped).toBe(2)
+    expect(result.reasons).toMatchObject({
+      event_not_allowed: 1,
+      prerelease_blocked: 1,
     })
   })
 })

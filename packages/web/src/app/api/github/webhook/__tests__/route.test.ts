@@ -18,6 +18,22 @@ function signPayload(payload: string, secret: string): string {
   return `sha256=${digest}`
 }
 
+function createCaptureSettingsSelectMock(row: Record<string, unknown> | null = null) {
+  return {
+    select: vi.fn(() => {
+      const chain = {
+        eq: vi.fn(() => chain),
+        limit: vi.fn().mockResolvedValue({
+          data: row ? [row] : [],
+          error: null,
+        }),
+      }
+
+      return chain
+    }),
+  }
+}
+
 describe("/api/github/webhook", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -82,6 +98,10 @@ describe("/api/github/webhook", () => {
         return {
           insert: mockInsert,
         }
+      }
+
+      if (table === "github_capture_settings") {
+        return createCaptureSettingsSelectMock()
       }
 
       if (table === "github_account_links") {
@@ -162,6 +182,10 @@ describe("/api/github/webhook", () => {
         }
       }
 
+      if (table === "github_capture_settings") {
+        return createCaptureSettingsSelectMock()
+      }
+
       if (table === "github_account_links") {
         return {
           select: vi.fn(() => ({
@@ -192,5 +216,94 @@ describe("/api/github/webhook", () => {
     expect(body.ok).toBe(true)
     expect(body.inserted).toBe(1)
     expect(mockInsert).toHaveBeenCalledTimes(1)
+  })
+
+  it("blocks enqueue when capture policy filters all candidates", async () => {
+    const payload = JSON.stringify({
+      action: "opened",
+      repository: {
+        id: 1,
+        full_name: "WebRenew/memories",
+        html_url: "https://github.com/WebRenew/memories",
+        owner: { login: "WebRenew" },
+      },
+      sender: { login: "charles" },
+      pull_request: {
+        number: 101,
+        title: "Should be filtered",
+        body: "PR blocked by policy event filter",
+        html_url: "https://github.com/WebRenew/memories/pull/101",
+        state: "open",
+        updated_at: "2026-02-13T20:00:00.000Z",
+        head: { sha: "abcdef123456" },
+      },
+    })
+
+    const mockInsert = vi.fn().mockResolvedValue({ error: null })
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "organizations") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { id: "org-1", slug: "webrenew" },
+                error: null,
+              }),
+            }),
+          })),
+        }
+      }
+
+      if (table === "github_capture_queue") {
+        return {
+          insert: mockInsert,
+        }
+      }
+
+      if (table === "github_capture_settings") {
+        return createCaptureSettingsSelectMock({
+          allowed_events: ["issues"],
+          repo_allow_list: [],
+          repo_block_list: [],
+          branch_filters: [],
+          label_filters: [],
+          actor_filters: [],
+          include_prerelease: true,
+        })
+      }
+
+      if (table === "github_account_links") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: null, error: { message: "not found" } }),
+            }),
+          })),
+        }
+      }
+
+      return {}
+    })
+
+    const request = new Request("https://example.com/api/github/webhook", {
+      method: "POST",
+      headers: {
+        "x-github-event": "pull_request",
+        "x-hub-signature-256": signPayload(payload, "test-secret"),
+        "content-type": "application/json",
+      },
+      body: payload,
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(200)
+
+    const body = await response.json()
+    expect(body.ok).toBe(true)
+    expect(body.inserted).toBe(0)
+    expect(body.ignored).toBe("capture_policy_filtered")
+    expect(body.dropped_reasons).toMatchObject({ event_not_allowed: 1 })
+    expect(mockInsert).not.toHaveBeenCalled()
   })
 })

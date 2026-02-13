@@ -124,3 +124,13 @@ export const githubCaptureDecisionSchema = z.object({
   action: z.enum(["approve", "reject"]),
   note: z.string().trim().max(500).optional(),
 })
+
+export const updateGithubCaptureSettingsSchema = z.object({
+  allowed_events: z.array(z.string()).optional(),
+  repo_allow_list: z.array(z.string()).optional(),
+  repo_block_list: z.array(z.string()).optional(),
+  branch_filters: z.array(z.string()).optional(),
+  label_filters: z.array(z.string()).optional(),
+  actor_filters: z.array(z.string()).optional(),
+  include_prerelease: z.boolean().optional(),
+})

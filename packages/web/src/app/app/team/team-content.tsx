@@ -35,6 +35,16 @@ interface OrganizationDetails {
   updated_at?: string | null
 }
 
+interface GithubCaptureSettings {
+  allowed_events: Array<"pull_request" | "issues" | "push" | "release">
+  repo_allow_list: string[]
+  repo_block_list: string[]
+  branch_filters: string[]
+  label_filters: string[]
+  actor_filters: string[]
+  include_prerelease: boolean
+}
+
 interface Member {
   id: string
   role: string
@@ -123,6 +133,31 @@ function summarizeAuditMetadata(metadata: Record<string, unknown> | null): strin
   return parts.length > 0 ? parts.join(" • ") : null
 }
 
+function formatListField(values: string[] | null | undefined): string {
+  if (!Array.isArray(values) || values.length === 0) return ""
+  return values.join("\n")
+}
+
+function parseListField(value: string): string[] {
+  return Array.from(
+    new Set(
+      value
+        .split(/\r?\n|,/)
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+    )
+  )
+}
+
+function sameStringList(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false
+
+  const leftSorted = [...left].sort()
+  const rightSorted = [...right].sort()
+
+  return leftSorted.every((value, index) => value === rightSorted[index])
+}
+
 export function TeamContent({ 
   organizations, 
   currentOrgId,
@@ -148,6 +183,17 @@ export function TeamContent({
   const [domainAutoJoinDomain, setDomainAutoJoinDomain] = useState("")
   const [domainSettingsError, setDomainSettingsError] = useState<string | null>(null)
   const [domainSettingsSuccess, setDomainSettingsSuccess] = useState<string | null>(null)
+  const [captureSettings, setCaptureSettings] = useState<GithubCaptureSettings | null>(null)
+  const [savingCaptureSettings, setSavingCaptureSettings] = useState(false)
+  const [captureSettingsError, setCaptureSettingsError] = useState<string | null>(null)
+  const [captureSettingsSuccess, setCaptureSettingsSuccess] = useState<string | null>(null)
+  const [allowedEvents, setAllowedEvents] = useState<Array<"pull_request" | "issues" | "push" | "release">>([])
+  const [includePrerelease, setIncludePrerelease] = useState(true)
+  const [repoAllowListText, setRepoAllowListText] = useState("")
+  const [repoBlockListText, setRepoBlockListText] = useState("")
+  const [branchFiltersText, setBranchFiltersText] = useState("")
+  const [labelFiltersText, setLabelFiltersText] = useState("")
+  const [actorFiltersText, setActorFiltersText] = useState("")
   const [showCreateOrg, setShowCreateOrg] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -170,19 +216,39 @@ export function TeamContent({
   const selectedOrgRecordDomain = selectedOrgRecord?.domain_auto_join_domain
   const isOwner = selectedOrg?.role === "owner"
   const isAdmin = selectedOrg?.role === "admin" || isOwner
+  const parsedRepoAllowList = parseListField(repoAllowListText)
+  const parsedRepoBlockList = parseListField(repoBlockListText)
+  const parsedBranchFilters = parseListField(branchFiltersText)
+  const parsedLabelFilters = parseListField(labelFiltersText)
+  const parsedActorFilters = parseListField(actorFiltersText)
   const domainSettingsDirty =
     selectedOrgRecord !== undefined &&
     (domainAutoJoinEnabled !== Boolean(selectedOrgRecord?.domain_auto_join_enabled) ||
       domainAutoJoinDomain.trim().toLowerCase() !== (selectedOrgRecord?.domain_auto_join_domain ?? "").toLowerCase())
+  const captureSettingsDirty =
+    captureSettings !== null &&
+    (
+      !sameStringList(allowedEvents, captureSettings.allowed_events) ||
+      includePrerelease !== captureSettings.include_prerelease ||
+      !sameStringList(parsedRepoAllowList, captureSettings.repo_allow_list) ||
+      !sameStringList(parsedRepoBlockList, captureSettings.repo_block_list) ||
+      !sameStringList(parsedBranchFilters, captureSettings.branch_filters) ||
+      !sameStringList(parsedLabelFilters, captureSettings.label_filters) ||
+      !sameStringList(parsedActorFilters, captureSettings.actor_filters)
+    )
 
-  async function fetchOrgData(orgId: string, options?: { includeAudit?: boolean }) {
+  async function fetchOrgData(orgId: string, options?: { includeAudit?: boolean; includeCaptureSettings?: boolean }) {
     const includeAudit = options?.includeAudit ?? false
+    const includeCaptureSettings = options?.includeCaptureSettings ?? false
     setLoading(true)
     try {
-      const [membersRes, invitesRes, orgRes] = await Promise.all([
+      const [membersRes, invitesRes, orgRes, captureSettingsRes] = await Promise.all([
         fetch(`/api/orgs/${orgId}/members`),
         fetch(`/api/orgs/${orgId}/invites`),
         fetch(`/api/orgs/${orgId}`),
+        includeCaptureSettings
+          ? fetch(`/api/orgs/${orgId}/github-capture/settings`)
+          : Promise.resolve(null),
       ])
       
       if (membersRes.ok) {
@@ -207,6 +273,25 @@ export function TeamContent({
         setOrgDetails(null)
       }
 
+      if (includeCaptureSettings && captureSettingsRes) {
+        if (captureSettingsRes.ok) {
+          const data = await captureSettingsRes.json()
+          setCaptureSettings(data.settings ?? null)
+          setCaptureSettingsError(null)
+        } else {
+          const body = await captureSettingsRes.json().catch(() => ({}))
+          const message =
+            typeof body?.error === "string"
+              ? body.error
+              : `Failed to fetch GitHub capture settings (${captureSettingsRes.status})`
+          setCaptureSettings(body?.settings ?? null)
+          setCaptureSettingsError(message)
+        }
+      } else {
+        setCaptureSettings(null)
+        setCaptureSettingsError(null)
+      }
+
       if (includeAudit) {
         const auditRes = await fetch(`/api/orgs/${orgId}/audit?limit=40`)
         if (auditRes.ok) {
@@ -228,6 +313,10 @@ export function TeamContent({
       }
     } catch (error) {
       console.error("Error fetching org data:", error)
+      if (includeCaptureSettings) {
+        setCaptureSettings(null)
+        setCaptureSettingsError("Failed to load GitHub capture settings")
+      }
       if (includeAudit) {
         setAuditEvents([])
         setAuditError("Failed to fetch audit log")
@@ -241,11 +330,13 @@ export function TeamContent({
     if (selectedOrgId) {
       const selectedOrgRole = organizations.find((org) => org.id === selectedOrgId)?.role
       const includeAudit = selectedOrgRole === "owner" || selectedOrgRole === "admin"
-      fetchOrgData(selectedOrgId, { includeAudit })
+      fetchOrgData(selectedOrgId, { includeAudit, includeCaptureSettings: includeAudit })
     } else {
       setOrgDetails(null)
       setAuditEvents([])
       setAuditError(null)
+      setCaptureSettings(null)
+      setCaptureSettingsError(null)
     }
   }, [organizations, selectedOrgId])
 
@@ -256,6 +347,29 @@ export function TeamContent({
     setDomainSettingsError(null)
     setDomainSettingsSuccess(null)
   }, [selectedOrgRecordId, selectedOrgRecordDomainEnabled, selectedOrgRecordDomain])
+
+  useEffect(() => {
+    if (!captureSettings) {
+      setAllowedEvents([])
+      setIncludePrerelease(true)
+      setRepoAllowListText("")
+      setRepoBlockListText("")
+      setBranchFiltersText("")
+      setLabelFiltersText("")
+      setActorFiltersText("")
+      setCaptureSettingsSuccess(null)
+      return
+    }
+
+    setAllowedEvents(captureSettings.allowed_events)
+    setIncludePrerelease(captureSettings.include_prerelease)
+    setRepoAllowListText(formatListField(captureSettings.repo_allow_list))
+    setRepoBlockListText(formatListField(captureSettings.repo_block_list))
+    setBranchFiltersText(formatListField(captureSettings.branch_filters))
+    setLabelFiltersText(formatListField(captureSettings.label_filters))
+    setActorFiltersText(formatListField(captureSettings.actor_filters))
+    setCaptureSettingsSuccess(null)
+  }, [captureSettings])
 
   async function createOrganization() {
     if (!newOrgName.trim()) return
@@ -296,7 +410,7 @@ export function TeamContent({
       })
       
       if (res.ok && selectedOrgId) {
-        fetchOrgData(selectedOrgId, { includeAudit: isAdmin })
+        fetchOrgData(selectedOrgId, { includeAudit: isAdmin, includeCaptureSettings: isAdmin })
       }
     } catch (e) {
       console.error(e)
@@ -308,7 +422,7 @@ export function TeamContent({
       await fetch(`/api/orgs/${selectedOrgId}/invites?inviteId=${inviteId}`, {
         method: "DELETE",
       })
-      if (selectedOrgId) fetchOrgData(selectedOrgId, { includeAudit: isAdmin })
+      if (selectedOrgId) fetchOrgData(selectedOrgId, { includeAudit: isAdmin, includeCaptureSettings: isAdmin })
     } catch (e) {
       console.error(e)
     }
@@ -323,7 +437,7 @@ export function TeamContent({
       })
       
       if (res.ok && selectedOrgId) {
-        fetchOrgData(selectedOrgId, { includeAudit: isAdmin })
+        fetchOrgData(selectedOrgId, { includeAudit: isAdmin, includeCaptureSettings: isAdmin })
       }
     } catch (e) {
       console.error(e)
@@ -356,13 +470,64 @@ export function TeamContent({
       setOrgDetails(data.organization ?? null)
       setDomainSettingsSuccess("Domain auto-join settings updated.")
       if (selectedOrgId) {
-        fetchOrgData(selectedOrgId, { includeAudit: isAdmin })
+        fetchOrgData(selectedOrgId, { includeAudit: isAdmin, includeCaptureSettings: isAdmin })
       }
     } catch (error) {
       console.error("Failed to update domain auto-join settings:", error)
       setDomainSettingsError("Failed to update settings. Please try again.")
     } finally {
       setSavingDomainSettings(false)
+    }
+  }
+
+  function toggleAllowedEvent(event: "pull_request" | "issues" | "push" | "release") {
+    setAllowedEvents((previous) =>
+      previous.includes(event)
+        ? previous.filter((existing) => existing !== event)
+        : [...previous, event]
+    )
+  }
+
+  async function saveGithubCaptureSettings() {
+    if (!selectedOrgId || !isAdmin) return
+    if (allowedEvents.length === 0) {
+      setCaptureSettingsError("Select at least one event type to capture.")
+      return
+    }
+
+    setSavingCaptureSettings(true)
+    setCaptureSettingsError(null)
+    setCaptureSettingsSuccess(null)
+
+    try {
+      const response = await fetch(`/api/orgs/${selectedOrgId}/github-capture/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          allowed_events: allowedEvents,
+          repo_allow_list: parsedRepoAllowList,
+          repo_block_list: parsedRepoBlockList,
+          branch_filters: parsedBranchFilters,
+          label_filters: parsedLabelFilters,
+          actor_filters: parsedActorFilters,
+          include_prerelease: includePrerelease,
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setCaptureSettingsError(data.error || "Failed to save GitHub capture settings")
+        return
+      }
+
+      setCaptureSettings(data.settings ?? null)
+      setCaptureSettingsSuccess("GitHub capture policy updated.")
+      fetchOrgData(selectedOrgId, { includeAudit: isAdmin, includeCaptureSettings: true })
+    } catch (error) {
+      console.error("Failed to update GitHub capture settings:", error)
+      setCaptureSettingsError("Failed to save GitHub capture settings")
+    } finally {
+      setSavingCaptureSettings(false)
     }
   }
 
@@ -604,6 +769,174 @@ export function TeamContent({
                 </div>
               )}
 
+              {isAdmin && (
+                <div className="border border-border bg-card/20 p-4 space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="font-semibold">GitHub Capture Policy</h3>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Enforce org-level capture rules before webhook items are added to review queue.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                      Allowed Events
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { value: "pull_request", label: "PR" },
+                        { value: "issues", label: "Issue" },
+                        { value: "push", label: "Push" },
+                        { value: "release", label: "Release" },
+                      ].map((eventOption) => {
+                        const isActive = allowedEvents.includes(
+                          eventOption.value as "pull_request" | "issues" | "push" | "release"
+                        )
+                        return (
+                          <button
+                            key={eventOption.value}
+                            type="button"
+                            onClick={() =>
+                              toggleAllowedEvent(
+                                eventOption.value as "pull_request" | "issues" | "push" | "release"
+                              )
+                            }
+                            className={`px-2.5 py-1.5 border text-xs tracking-[0.08em] transition-colors ${
+                              isActive
+                                ? "border-primary/40 bg-primary/10 text-foreground"
+                                : "border-border bg-muted/20 text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {eventOption.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex items-start justify-between gap-4 border border-border bg-muted/10 px-3 py-2.5">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                        Prerelease Handling
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        When disabled, prerelease GitHub release events are ignored before enqueue.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIncludePrerelease((previous) => !previous)}
+                      className={`relative inline-flex h-6 w-11 items-center border transition-colors ${
+                        includePrerelease
+                          ? "bg-primary/20 border-primary/40"
+                          : "bg-muted/30 border-border"
+                      }`}
+                      aria-pressed={includePrerelease}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 bg-foreground transition-transform ${
+                          includePrerelease ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                        Repo Allow List
+                      </label>
+                      <textarea
+                        value={repoAllowListText}
+                        onChange={(event) => setRepoAllowListText(event.target.value)}
+                        placeholder="webrenew/memories"
+                        rows={4}
+                        className="w-full px-3 py-2 bg-muted/30 border border-border text-xs font-mono focus:outline-none focus:border-primary resize-y"
+                      />
+                      <p className="text-[11px] text-muted-foreground">Leave blank to allow all repositories.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                        Repo Block List
+                      </label>
+                      <textarea
+                        value={repoBlockListText}
+                        onChange={(event) => setRepoBlockListText(event.target.value)}
+                        placeholder="example/private-repo"
+                        rows={4}
+                        className="w-full px-3 py-2 bg-muted/30 border border-border text-xs font-mono focus:outline-none focus:border-primary resize-y"
+                      />
+                      <p className="text-[11px] text-muted-foreground">Blocked repos are always ignored.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                        Branch Filters
+                      </label>
+                      <textarea
+                        value={branchFiltersText}
+                        onChange={(event) => setBranchFiltersText(event.target.value)}
+                        placeholder="main\nrelease/*"
+                        rows={4}
+                        className="w-full px-3 py-2 bg-muted/30 border border-border text-xs font-mono focus:outline-none focus:border-primary resize-y"
+                      />
+                      <p className="text-[11px] text-muted-foreground">Applies to PR, push, and release targets.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                        Label Filters
+                      </label>
+                      <textarea
+                        value={labelFiltersText}
+                        onChange={(event) => setLabelFiltersText(event.target.value)}
+                        placeholder="memory\ndocs"
+                        rows={4}
+                        className="w-full px-3 py-2 bg-muted/30 border border-border text-xs font-mono focus:outline-none focus:border-primary resize-y"
+                      />
+                      <p className="text-[11px] text-muted-foreground">Applies to PR and issue labels.</p>
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                        Actor Filters
+                      </label>
+                      <textarea
+                        value={actorFiltersText}
+                        onChange={(event) => setActorFiltersText(event.target.value)}
+                        placeholder="charles\nbot-*"
+                        rows={3}
+                        className="w-full px-3 py-2 bg-muted/30 border border-border text-xs font-mono focus:outline-none focus:border-primary resize-y"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Restrict to GitHub actors/logins. Supports <code>*</code> wildcards.
+                      </p>
+                    </div>
+                  </div>
+
+                  {captureSettingsError ? (
+                    <p className="text-xs text-red-400">{captureSettingsError}</p>
+                  ) : null}
+                  {captureSettingsSuccess ? (
+                    <p className="text-xs text-emerald-400">{captureSettingsSuccess}</p>
+                  ) : null}
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={saveGithubCaptureSettings}
+                      disabled={!captureSettingsDirty || savingCaptureSettings}
+                      className="px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-xs font-medium hover:bg-primary/20 transition-colors disabled:opacity-50"
+                    >
+                      {savingCaptureSettings ? "Saving..." : "Save Capture Policy"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Invite Modal */}
               {showInvite && selectedOrgId && (
                 <InviteModal
@@ -611,7 +944,11 @@ export function TeamContent({
                   isOwner={isOwner}
                   loading={loading}
                   onClose={() => setShowInvite(false)}
-                  onInviteSent={() => { if (selectedOrgId) fetchOrgData(selectedOrgId, { includeAudit: isAdmin }) }}
+                  onInviteSent={() => {
+                    if (selectedOrgId) {
+                      fetchOrgData(selectedOrgId, { includeAudit: isAdmin, includeCaptureSettings: isAdmin })
+                    }
+                  }}
                 />
               )}
 
