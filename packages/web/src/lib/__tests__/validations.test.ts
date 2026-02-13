@@ -13,6 +13,7 @@ import {
   acceptInviteSchema,
   checkoutSchema,
   updateUserSchema,
+  enterpriseContactSchema,
 } from "../validations"
 
 describe("parseBody", () => {
@@ -368,5 +369,44 @@ describe("updateUserSchema", () => {
       const result = updateUserSchema.safeParse({ embedding_model: model })
       expect(result.success).toBe(true)
     }
+  })
+})
+
+describe("enterpriseContactSchema", () => {
+  it("should accept valid enterprise contact input", () => {
+    const result = enterpriseContactSchema.safeParse({
+      name: "Jane Doe",
+      workEmail: "jane@example.com",
+      company: "Acme Inc",
+      teamSize: "15 engineers",
+      interest: "both",
+      useCase: "We need shared memory across tenants for our AI support product.",
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it("should reject short use cases", () => {
+    const result = enterpriseContactSchema.safeParse({
+      name: "Jane Doe",
+      workEmail: "jane@example.com",
+      company: "Acme Inc",
+      teamSize: "15 engineers",
+      interest: "enterprise",
+      useCase: "Too short",
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("should reject honeypot field when present", () => {
+    const result = enterpriseContactSchema.safeParse({
+      name: "Jane Doe",
+      workEmail: "jane@example.com",
+      company: "Acme Inc",
+      teamSize: "15 engineers",
+      interest: "usage_based",
+      useCase: "We expect around 1M calls per month and need usage-based pricing.",
+      hp: "spam",
+    })
+    expect(result.success).toBe(false)
   })
 })

@@ -41,7 +41,7 @@ const tiers: {
     monthlyPrice: "$15",
     yearlyPrice: "$12.50",
     yearlyTotal: "$150",
-    description: "Sync and back up state across machines.",
+    description: "Start here for hosted memory, team sync, and dashboard access.",
     features: [
       { key: "free", label: "Everything in Free" },
       { key: "sync", label: "Cloud backup and sync" },
@@ -58,7 +58,7 @@ const tiers: {
     name: "Enterprise",
     monthlyPrice: "Custom",
     yearlyPrice: "Custom",
-    description: "SDK access for AI apps with persistent memory.",
+    description: "Contracts, compliance controls, and scale support for production SaaS.",
     features: [
       { key: "pro", label: "Everything in Professional" },
       { key: "ai-sdk", label: <><code className={code}>@memories.sh/ai-sdk</code> package</> },
@@ -68,14 +68,14 @@ const tiers: {
       { key: "embeddings", label: "Custom embedding models" },
       { key: "sla", label: "Dedicated support and SLA" },
     ],
-    cta: "Contact Us",
+    cta: "Talk to Sales",
     highlighted: false,
   },
 ];
 
 function getTierCtaHref(tierName: string, isAuthenticated: boolean): string {
-  if (tierName === "Enterprise") return "mailto:hello@memories.sh";
-  if (tierName === "Professional") return isAuthenticated ? "/app/upgrade" : "/docs/cloud-sync";
+  if (tierName === "Enterprise") return "/enterprise";
+  if (tierName === "Professional") return isAuthenticated ? "/app/upgrade" : "/login?next=/app/upgrade";
   if (tierName === "Free") return isAuthenticated ? "/app" : "/docs/getting-started";
   return isAuthenticated ? "/app" : "/docs/getting-started";
 }
@@ -102,7 +102,7 @@ export function Pricing({ user }: { user?: User | null }) {
             <ScrambleText text="Simple, Transparent Pricing" delayMs={200} />
           </h2>
           <p className="text-muted-foreground max-w-2xl mx-auto text-lg font-light leading-relaxed">
-            Free gives you durable local state and recall on your machine. Pro adds sync and backup for that state across every device you work on.
+            Free gives you durable local state and recall on your machine. Pro gets teams live quickly, then you can add enterprise controls and higher-volume routing as you scale.
           </p>
         </div>
 

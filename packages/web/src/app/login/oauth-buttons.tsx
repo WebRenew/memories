@@ -13,11 +13,20 @@ export function OAuthButtons() {
       provider === "github"
         ? "read:user user:email"
         : "openid profile email"
+    const requestedNext = new URL(window.location.href).searchParams.get("next")
+    const safeNext =
+      requestedNext && requestedNext.startsWith("/") && !requestedNext.startsWith("//")
+        ? requestedNext
+        : null
+    const redirectUrl = new URL(`${window.location.origin}/auth/callback`)
+    if (safeNext) {
+      redirectUrl.searchParams.set("next", safeNext)
+    }
 
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: redirectUrl.toString(),
         scopes,
       },
     })

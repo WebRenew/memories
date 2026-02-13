@@ -159,3 +159,15 @@ export const applyMemoryInsightActionSchema = z.object({
   memoryIds: z.array(z.string().trim().min(1, "Memory id is required")).min(1, "Select at least one memory"),
   proposedTags: z.array(z.string().trim().min(1)).max(20).optional(),
 })
+
+// --- Enterprise Contact ---
+
+export const enterpriseContactSchema = z.object({
+  name: z.string().trim().min(2, "Name is required").max(120, "Name is too long"),
+  workEmail: z.string().trim().email("Valid work email is required").max(320, "Email is too long"),
+  company: z.string().trim().min(2, "Company is required").max(160, "Company name is too long"),
+  teamSize: z.string().trim().min(1, "Team size is required").max(40, "Team size is too long"),
+  interest: z.enum(["enterprise", "usage_based", "both"]).default("both"),
+  useCase: z.string().trim().min(20, "Please share at least 20 characters").max(4000, "Use case is too long"),
+  hp: z.string().max(0).optional(),
+})
