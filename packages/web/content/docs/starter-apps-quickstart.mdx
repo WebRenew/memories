@@ -30,12 +30,13 @@ Each starter accepts the same core variables:
 ```bash
 MEMORIES_API_KEY=mem_xxx
 MEMORIES_BASE_URL=https://memories.sh
-MEMORIES_TENANT_ID=acme-workspace      # optional
-MEMORIES_USER_ID=user_123              # optional
-MEMORIES_PROJECT_ID=starter-demo       # optional
+MEMORIES_TENANT_ID=acme-workspace      # optional AI SDK Project (security/database boundary)
+MEMORIES_USER_ID=user_123              # optional end-user scope
+MEMORIES_PROJECT_ID=starter-demo       # optional repo context filter
 ```
 
 `MEMORIES_API_KEY` is required. The others are optional scope defaults.
+`MEMORIES_PROJECT_ID` is a context filter, not an auth boundary.
 
 ## Option A: Next.js Starter (`next@16.1.6`)
 

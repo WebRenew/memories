@@ -30,6 +30,12 @@ cd your-project
 memories setup
 ```
 
+<Callout>
+This guide is the CLI/local flow (`global` + git project scope). For SaaS SDK scope,
+use `tenantId` as the security/database boundary, `userId` as end-user scope, and
+`projectId` as an optional repo context filter. See [AI SDK Projects](/docs/sdk/projects).
+</Callout>
+
 The `init` command does several things automatically:
 
 1. **Creates the local database** at `~/.config/memories/local.db`

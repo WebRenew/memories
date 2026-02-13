@@ -5,6 +5,11 @@ description: MCP resources exposed by the memories.sh server.
 
 The memories.sh MCP server exposes 3 resources that AI tools can read to access your memories.
 
+<Callout>
+These resources are based on CLI/global+project memory scope. For SaaS auth boundaries and
+per-user routing, use MCP tool arguments (`tenant_id`, `user_id`, optional `project_id`).
+</Callout>
+
 ## memories://rules
 
 All active rules formatted as markdown, split by global and project scope.

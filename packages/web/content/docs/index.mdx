@@ -7,6 +7,12 @@ description: One memory store for all your AI coding tools. Store rules, decisio
 
 **memories.sh** is a local-first CLI that gives your AI coding agents persistent memory. Store your coding rules, architectural decisions, and project knowledge in a single local database, then generate native configuration files for Cursor, Claude Code, GitHub Copilot, Windsurf, and more.
 
+<Callout>
+Scope model by surface: CLI uses `global` + git project scope. SDK uses `tenantId`
+(security/database boundary), `userId` (end-user scope), and `projectId` (optional repo
+context filter).
+</Callout>
+
 ## Why memories.sh?
 
 If you use multiple AI coding tools, you know the pain:

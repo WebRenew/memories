@@ -5,6 +5,12 @@ description: How memories.sh identifies and scopes to the current project using 
 
 memories.sh uses the git remote URL to identify the current project. This happens automatically — no configuration needed.
 
+<Callout>
+This project ID maps to CLI/MCP project scope. In SDK integrations, the same value can be
+used as `projectId` (optional repo context filter), while `tenantId` remains the
+security/database boundary.
+</Callout>
+
 ## How It Works
 
 When you run a command inside a git repository, memories.sh:

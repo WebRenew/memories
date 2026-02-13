@@ -17,7 +17,7 @@ export function FAQ() {
     },
     {
       q: "What's the difference between global and project memory?",
-      a: <>Global memory is your persistent state across tools and projects. Project memory is repo-specific and auto-scoped via git remote. You can also create path-scoped rules with glob patterns (e.g. <code className={c}>src/api/**</code>) for fine-grained context.</>
+      a: <>Global memory is your persistent state across tools and projects. Project memory is repo-specific and auto-scoped via git remote. You can also create path-scoped rules with glob patterns (e.g. <code className={c}>src/api/**</code>) for fine-grained context. In SDK apps, scope terms are different: <code className={c}>tenantId</code> is the security/database boundary, <code className={c}>userId</code> is end-user scope, and <code className={c}>projectId</code> is an optional repo context filter.</>
     },
     {
       q: "Am I locked into memories.sh?",
@@ -33,7 +33,7 @@ export function FAQ() {
     },
     {
       q: "What is the SDK for?",
-      a: <>The TypeScript SDK (<code className={c}>@memories.sh/ai-sdk</code>) lets you wire persistent memory into AI apps. <code className={c}>memoriesMiddleware()</code> wraps any Vercel AI SDK model so rules and context auto-inject into every prompt—no tool calls needed. For agent loops, use <code className={c}>memoriesTools()</code> to let the LLM manage its own memory.</>
+      a: <>The TypeScript SDK (<code className={c}>@memories.sh/ai-sdk</code>) lets you wire persistent memory into AI apps. <code className={c}>memoriesMiddleware()</code> wraps any Vercel AI SDK model so rules and context auto-inject into every prompt. For agent loops, use <code className={c}>memoriesTools()</code> to let the LLM manage memory directly. Use <code className={c}>tenantId</code> as the security/database boundary, <code className={c}>userId</code> for end-user scope, and <code className={c}>projectId</code> as an optional repo context filter.</>
     }
   ];
 

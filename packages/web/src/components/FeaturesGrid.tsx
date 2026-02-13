@@ -64,7 +64,7 @@ export function FeaturesGrid() {
     },
     {
       title: "Scoped Memory",
-      detail: "Global preferences, repo rules auto-scoped via git remote, and path-scoped rules with glob patterns like src/api/**.",
+      detail: "CLI uses global + git project scopes with path rules. SDK uses tenantId as the security/database boundary, userId as end-user scope, and projectId as an optional repo filter.",
       metric: "Right context",
       docsUrl: "/docs/concepts/scopes"
     },
