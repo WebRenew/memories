@@ -107,7 +107,6 @@ const SYNC_TARGETS = [
   
   // .opencode - OpenCode instructions
   { dir: ".", files: ["opencode.json", "opencode.jsonc"] },
-  { dir: ".config/opencode", files: ["opencode.json"] },
   { dir: ".opencode", files: ["instructions.md"] },
   { dir: ".opencode/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
   
@@ -123,11 +122,77 @@ const SYNC_TARGETS = [
   { dir: ".openclaw/workspace/skills", pattern: /\.(md|json|yaml|yml|toml|txt)$/, recurse: true },
 ];
 
+// Optional app-level config files. These can include credentials or environment-specific settings.
+const OPTIONAL_CONFIG_TARGETS = [
+  { dir: ".config/opencode", files: ["opencode.json"] },
+  { dir: ".openclaw", files: ["openclaw.json"] },
+];
+
 interface SyncTarget {
   dir: string;
   files?: string[];
   pattern?: RegExp;
   recurse?: boolean;
+}
+
+function getSyncTargets(includeConfig: boolean): readonly SyncTarget[] {
+  return includeConfig
+    ? [...SYNC_TARGETS, ...OPTIONAL_CONFIG_TARGETS]
+    : SYNC_TARGETS;
+}
+
+function listOptionalConfigPaths(): string[] {
+  const paths: string[] = [];
+  for (const target of OPTIONAL_CONFIG_TARGETS) {
+    if (!target.files) continue;
+    for (const file of target.files) {
+      paths.push(join(target.dir, file));
+    }
+  }
+  return paths;
+}
+
+const OPTIONAL_CONFIG_PATHS = new Set(listOptionalConfigPaths());
+const REDACTED_PLACEHOLDER = "[REDACTED]";
+const SENSITIVE_CONFIG_KEY_PATTERN = [
+  "token",
+  "secret",
+  "password",
+  "passphrase",
+  "api[_-]?key",
+  "private[_-]?key",
+  "client[_-]?secret",
+  "access[_-]?token",
+  "refresh[_-]?token",
+  "authorization",
+  "cookie",
+].join("|");
+const SENSITIVE_DOUBLE_QUOTED_VALUE_RE = new RegExp(
+  `("([^"\\\\]*(?:${SENSITIVE_CONFIG_KEY_PATTERN})[^"\\\\]*)"\\s*:\\s*)"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"`,
+  "gi",
+);
+const SENSITIVE_SINGLE_QUOTED_VALUE_RE = new RegExp(
+  `('([^'\\\\]*(?:${SENSITIVE_CONFIG_KEY_PATTERN})[^'\\\\]*)'\\s*:\\s*)'([^'\\\\]*(?:\\\\.[^'\\\\]*)*)'`,
+  "gi",
+);
+
+function sanitizeOptionalConfig(path: string, content: string): { content: string; redactions: number } {
+  if (!OPTIONAL_CONFIG_PATHS.has(path)) {
+    return { content, redactions: 0 };
+  }
+
+  let redactions = 0;
+  let sanitized = content.replace(SENSITIVE_DOUBLE_QUOTED_VALUE_RE, (_match, prefix) => {
+    redactions += 1;
+    return `${prefix}"${REDACTED_PLACEHOLDER}"`;
+  });
+
+  sanitized = sanitized.replace(SENSITIVE_SINGLE_QUOTED_VALUE_RE, (_match, prefix) => {
+    redactions += 1;
+    return `${prefix}'${REDACTED_PLACEHOLDER}'`;
+  });
+
+  return { content: sanitized, redactions };
 }
 
 async function scanTarget(baseDir: string, target: SyncTarget, relativeTo: string = ""): Promise<{ path: string; fullPath: string; source: string }[]> {
@@ -182,10 +247,15 @@ async function scanTarget(baseDir: string, target: SyncTarget, relativeTo: strin
   return results;
 }
 
-async function scanAllTargets(baseDir: string): Promise<{ path: string; fullPath: string; source: string }[]> {
+async function scanAllTargets(
+  baseDir: string,
+  options: { includeConfig?: boolean } = {},
+): Promise<{ path: string; fullPath: string; source: string }[]> {
+  const { includeConfig = false } = options;
   const results: { path: string; fullPath: string; source: string }[] = [];
+  const targets = getSyncTargets(includeConfig);
   
-  for (const target of SYNC_TARGETS) {
+  for (const target of targets) {
     const targetResults = await scanTarget(baseDir, target);
     results.push(...targetResults);
   }
@@ -255,6 +325,10 @@ filesCommand
   .description("Import files from .agents, .cursor, .claude and other config directories")
   .option("-g, --global", "Ingest global configs from home directory", true)
   .option("-p, --project", "Ingest project configs from current directory")
+  .option(
+    "--include-config",
+    "Include app-level config JSON files (for example ~/.openclaw/openclaw.json)",
+  )
   .option("--dry-run", "Show what would be imported without making changes")
   .action(async (opts) => {
     const db = await getDb();
@@ -265,7 +339,7 @@ filesCommand
     
     // Scan global configs
     if (opts.global !== false) {
-      const files = await scanAllTargets(home);
+      const files = await scanAllTargets(home, { includeConfig: Boolean(opts.includeConfig) });
       for (const file of files) {
         filesToIngest.push({
           ...file,
@@ -276,7 +350,7 @@ filesCommand
     
     // Scan project configs
     if (opts.project) {
-      const files = await scanAllTargets(cwd);
+      const files = await scanAllTargets(cwd, { includeConfig: Boolean(opts.includeConfig) });
       for (const file of files) {
         filesToIngest.push({
           ...file,
@@ -304,10 +378,18 @@ filesCommand
     let imported = 0;
     let updated = 0;
     let skipped = 0;
+    let redactedFileCount = 0;
+    let redactedValueCount = 0;
     
     for (const file of filesToIngest) {
       try {
-        const content = await readFile(file.fullPath, "utf-8");
+        let content = await readFile(file.fullPath, "utf-8");
+        const sanitized = sanitizeOptionalConfig(file.path, content);
+        content = sanitized.content;
+        if (sanitized.redactions > 0) {
+          redactedFileCount += 1;
+          redactedValueCount += sanitized.redactions;
+        }
         const hash = hashContent(content);
         
         // Check if file already exists
@@ -351,6 +433,14 @@ filesCommand
     }
     
     spinner.succeed(`Imported ${imported} new, updated ${updated}, skipped ${skipped} unchanged`);
+    if (redactedFileCount > 0) {
+      console.log(
+        chalk.yellow(
+          `Redacted ${redactedValueCount} sensitive value${redactedValueCount === 1 ? "" : "s"} in ${redactedFileCount} config file${redactedFileCount === 1 ? "" : "s"}.`,
+        ),
+      );
+      console.log(chalk.dim("Store secrets in Supabase Vault (or env vars), not in synced memory/file stores."));
+    }
   });
 
 // Push local files to disk (apply synced files)
@@ -359,6 +449,10 @@ filesCommand
   .description("Write synced files to disk (restore from cloud)")
   .option("-g, --global", "Apply global files to home directory")
   .option("-p, --project", "Apply project files to current directory")
+  .option(
+    "--include-config",
+    "Include app-level config JSON files (for example ~/.openclaw/openclaw.json)",
+  )
   .option("--dry-run", "Show what would be written without making changes")
   .option("-f, --force", "Overwrite existing files without prompting")
   .action(async (opts) => {
@@ -376,7 +470,10 @@ filesCommand
     }
     
     const result = await db.execute({ sql, args });
-    const files = result.rows as unknown as ApplyFile[];
+    const includeConfig = Boolean(opts.includeConfig);
+    const files = (result.rows as unknown as ApplyFile[]).filter((file) =>
+      includeConfig || !OPTIONAL_CONFIG_PATHS.has(file.path),
+    );
     
     if (files.length === 0) {
       console.log(chalk.dim("No files to apply."));
@@ -399,6 +496,7 @@ filesCommand
     
     let written = 0;
     let skippedExisting = 0;
+    let appliedRedactedConfigs = 0;
     
     for (const file of files) {
       const baseDir = file.scope === "global" ? home : cwd;
@@ -422,12 +520,23 @@ filesCommand
       // Write file
       await writeFile(targetPath, file.content, "utf-8");
       written++;
+      if (OPTIONAL_CONFIG_PATHS.has(file.path) && file.content.includes(REDACTED_PLACEHOLDER)) {
+        appliedRedactedConfigs += 1;
+      }
     }
     
     if (skippedExisting > 0) {
       spinner.succeed(`Applied ${written} files, skipped ${skippedExisting} (use --force to overwrite)`);
     } else {
       spinner.succeed(`Applied ${written} files`);
+    }
+    if (appliedRedactedConfigs > 0) {
+      console.log(
+        chalk.yellow(
+          `Applied ${appliedRedactedConfigs} config file${appliedRedactedConfigs === 1 ? "" : "s"} with redacted secret placeholders.`,
+        ),
+      );
+      console.log(chalk.dim("Populate secrets from Supabase Vault (or env vars) after apply."));
     }
   });
 

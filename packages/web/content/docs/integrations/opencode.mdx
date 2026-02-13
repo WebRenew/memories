@@ -69,10 +69,17 @@ memories files apply --global --force
 ```
 
 This syncs:
-- `opencode.json` / `.config/opencode/opencode.json` — OpenCode MCP configuration
+- `opencode.json` — Project OpenCode MCP configuration
 - `.agents/**/*` — Canonical shared harness files
 - `.opencode/instructions.md` — Your instruction files
 - `.opencode/skills/**/*` — Any skills you've created
+
+To also sync the global OpenCode config (`~/.config/opencode/opencode.json`):
+
+```bash
+memories files ingest --global --include-config
+memories files apply --global --include-config --force
+```
 
 ## OpenCode-Specific Features
 

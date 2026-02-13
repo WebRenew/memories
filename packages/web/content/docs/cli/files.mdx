@@ -41,10 +41,21 @@ The command intelligently syncs only meaningful configuration files, not cache o
 | `.gemini/` | `GEMINI.md`, `settings.json`, `skills/**/*` |
 | `.roo/` | `config.json`, `rules.md`, `rules/*.md`, `skills/**/*` |
 | `.amp/` | `AGENTS.md`, `rules.md`, `rules/*.md`, `skills/**/*` |
-| `opencode.json` / `.config/opencode/` | `opencode.json` |
+| `opencode.json` | `opencode.json` |
 | `.opencode/` | `instructions.md`, `skills/**/*` |
 | `.factory/` | `config.json`, `instructions.md`, `droids/*.md`, `tasks/*.md`, `skills/**/*` |
 | `~/.openclaw/workspace/` | `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `USER.md`, `HEARTBEAT.md`, `BOOTSTRAP.md`, `BOOT.md`, `MEMORY.md`, `memory/*.md`, `skills/**/*` |
+
+### Optional app config JSON (`--include-config`)
+
+Use `--include-config` when you also want to port app-level config JSON files:
+
+| Path | Notes |
+|------|-------|
+| `~/.config/opencode/opencode.json` | OpenCode global config |
+| `~/.openclaw/openclaw.json` | OpenClaw runtime config |
+
+Sensitive fields (for example keys/tokens/secrets) are automatically redacted to `[REDACTED]` before storing in synced file records. Keep real secret values in Supabase Vault or environment variables.
 
 ### File types included
 
@@ -120,6 +131,12 @@ Import both global and project configs:
 memories files ingest --global --project
 ```
 
+Include app config JSON too:
+
+```bash
+memories files ingest --global --include-config
+```
+
 ### Apply files to disk
 
 Restore synced files to your local machine:
@@ -136,6 +153,12 @@ memories files apply --global --dry-run
 
 # Force overwrite existing files
 memories files apply --global --force
+```
+
+Include app config JSON too:
+
+```bash
+memories files apply --global --include-config --force
 ```
 
 ### View file content
@@ -231,4 +254,5 @@ memories files apply --project
 1. **Start with dry-run**: Always use `--dry-run` first to see what will be imported
 2. **Check file counts**: The ingest command shows how many files will be imported — if you see thousands, something might be wrong
 3. **Use with cloud sync**: Files sync works best when combined with `memories sync` for multi-device access
-4. **Don't sync secrets**: MCP configs may contain API keys — consider using environment variables instead
+4. **Use `--include-config` intentionally**: App-level JSON config is opt-in and may be machine-specific
+5. **Keep secrets out of synced stores**: Real secret values belong in Supabase Vault or env vars

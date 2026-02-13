@@ -58,6 +58,15 @@ This writes:
 - `~/.openclaw/workspace/memory/*.md`
 - `~/.openclaw/workspace/skills/**/*`
 
+To include OpenClaw runtime config (`~/.openclaw/openclaw.json`) in file sync too:
+
+```bash
+memories files ingest --global --include-config
+memories files apply --global --include-config --force
+```
+
+Secret-like fields are redacted before storage; keep real credentials in Supabase Vault or environment variables.
+
 ### 3) Keep it in sync
 
 Whenever memories change:
