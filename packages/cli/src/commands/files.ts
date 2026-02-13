@@ -2,6 +2,8 @@ import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import { getDb, syncDb, readSyncConfig } from "../lib/db.js";
+import { readAuth, getApiClient } from "../lib/auth.js";
+import { getProjectId } from "../lib/git.js";
 import { nanoid } from "nanoid";
 import { createHash } from "node:crypto";
 import { readFile, writeFile, mkdir, readdir, stat } from "node:fs/promises";
@@ -153,6 +155,10 @@ function listOptionalConfigPaths(): string[] {
 }
 
 const OPTIONAL_CONFIG_PATHS = new Set(listOptionalConfigPaths());
+const OPTIONAL_CONFIG_INTEGRATIONS = new Map<string, string>([
+  [join(".config/opencode", "opencode.json"), "opencode"],
+  [join(".openclaw", "openclaw.json"), "openclaw"],
+]);
 const REDACTED_PLACEHOLDER = "[REDACTED]";
 const SENSITIVE_CONFIG_KEY_PATTERN = [
   "token",
@@ -176,23 +182,154 @@ const SENSITIVE_SINGLE_QUOTED_VALUE_RE = new RegExp(
   "gi",
 );
 
-function sanitizeOptionalConfig(path: string, content: string): { content: string; redactions: number } {
+interface OptionalConfigSanitization {
+  content: string;
+  redactions: number;
+  secrets: Record<string, string>;
+}
+
+interface ConfigVaultEntry {
+  scope: "global" | "project";
+  project_id?: string;
+  integration: string;
+  config_path: string;
+  secrets: Record<string, string>;
+}
+
+function sanitizeOptionalConfig(path: string, content: string): OptionalConfigSanitization {
   if (!OPTIONAL_CONFIG_PATHS.has(path)) {
-    return { content, redactions: 0 };
+    return { content, redactions: 0, secrets: {} };
   }
 
+  const secrets: Record<string, string> = {};
   let redactions = 0;
-  let sanitized = content.replace(SENSITIVE_DOUBLE_QUOTED_VALUE_RE, (_match, prefix) => {
+  let sanitized = content.replace(SENSITIVE_DOUBLE_QUOTED_VALUE_RE, (_match, prefix, key, value) => {
+    if (typeof key === "string" && typeof value === "string") {
+      secrets[key] = value;
+    }
     redactions += 1;
     return `${prefix}"${REDACTED_PLACEHOLDER}"`;
   });
 
-  sanitized = sanitized.replace(SENSITIVE_SINGLE_QUOTED_VALUE_RE, (_match, prefix) => {
+  sanitized = sanitized.replace(SENSITIVE_SINGLE_QUOTED_VALUE_RE, (_match, prefix, key, value) => {
+    if (typeof key === "string" && typeof value === "string") {
+      secrets[key] = value;
+    }
     redactions += 1;
     return `${prefix}'${REDACTED_PLACEHOLDER}'`;
   });
 
-  return { content: sanitized, redactions };
+  return { content: sanitized, redactions, secrets };
+}
+
+function hydrateOptionalConfig(path: string, content: string, secrets: Record<string, string>): { content: string; hydrated: number } {
+  if (!OPTIONAL_CONFIG_PATHS.has(path)) {
+    return { content, hydrated: 0 };
+  }
+
+  let hydrated = 0;
+  let out = content.replace(SENSITIVE_DOUBLE_QUOTED_VALUE_RE, (match, prefix, key, value) => {
+    if (value !== REDACTED_PLACEHOLDER) return match;
+    const secret = secrets[key];
+    if (typeof secret !== "string" || secret.length === 0) return match;
+    hydrated += 1;
+    return `${prefix}"${secret}"`;
+  });
+
+  out = out.replace(SENSITIVE_SINGLE_QUOTED_VALUE_RE, (match, prefix, key, value) => {
+    if (value !== REDACTED_PLACEHOLDER) return match;
+    const secret = secrets[key];
+    if (typeof secret !== "string" || secret.length === 0) return match;
+    hydrated += 1;
+    return `${prefix}'${secret}'`;
+  });
+
+  return { content: out, hydrated };
+}
+
+function configProjectId(scope: string, cwd: string): string | null {
+  if (scope === "global") return null;
+  return getProjectId(cwd);
+}
+
+async function pushConfigSecretsToVault(entries: ConfigVaultEntry[]): Promise<{ synced: number; error?: string; proRequired?: boolean }> {
+  if (entries.length === 0) return { synced: 0 };
+
+  const auth = await readAuth();
+  if (!auth) {
+    return { synced: 0, error: "Not logged in. Run memories login to sync config secrets to Vault." };
+  }
+
+  const apiFetch = getApiClient(auth);
+  const response = await apiFetch("/api/files/config-secrets", {
+    method: "POST",
+    body: JSON.stringify({ entries }),
+  });
+
+  if (!response.ok) {
+    const bodyText = await response.text();
+    if (response.status === 403) {
+      return {
+        synced: 0,
+        proRequired: true,
+        error: bodyText || "Vault-backed config secret sync is a Pro feature.",
+      };
+    }
+    return {
+      synced: 0,
+      error: bodyText || `Failed to sync config secrets (${response.status})`,
+    };
+  }
+
+  const payload = (await response.json().catch(() => ({}))) as { synced?: number };
+  return { synced: payload.synced ?? 0 };
+}
+
+async function fetchConfigSecretsFromVault(params: {
+  scope: "global" | "project";
+  projectId?: string | null;
+  integration: string;
+  configPath: string;
+}): Promise<{ secrets: Record<string, string>; error?: string; proRequired?: boolean }> {
+  const auth = await readAuth();
+  if (!auth) {
+    return { secrets: {}, error: "Not logged in. Run memories login to hydrate config secrets from Vault." };
+  }
+
+  const apiFetch = getApiClient(auth);
+  const query = new URLSearchParams({
+    scope: params.scope,
+    integration: params.integration,
+    config_path: params.configPath,
+  });
+  if (params.scope === "project" && params.projectId) {
+    query.set("project_id", params.projectId);
+  }
+
+  const response = await apiFetch(`/api/files/config-secrets?${query.toString()}`, {
+    method: "GET",
+  });
+
+  if (!response.ok) {
+    const bodyText = await response.text();
+    if (response.status === 403) {
+      return {
+        secrets: {},
+        proRequired: true,
+        error: bodyText || "Vault-backed config secret hydration is a Pro feature.",
+      };
+    }
+    if (response.status === 404) {
+      return { secrets: {} };
+    }
+    return {
+      secrets: {},
+      error: bodyText || `Failed to fetch config secrets (${response.status})`,
+    };
+  }
+
+  const payload = (await response.json().catch(() => ({}))) as { secrets?: Record<string, string> };
+  return { secrets: payload.secrets ?? {} };
 }
 
 async function scanTarget(baseDir: string, target: SyncTarget, relativeTo: string = ""): Promise<{ path: string; fullPath: string; source: string }[]> {
@@ -334,12 +471,14 @@ filesCommand
     const db = await getDb();
     const home = homedir();
     const cwd = process.cwd();
+    const includeConfig = Boolean(opts.includeConfig);
+    const projectId = getProjectId(cwd);
     
     const filesToIngest: { path: string; fullPath: string; scope: string; source: string }[] = [];
     
     // Scan global configs
     if (opts.global !== false) {
-      const files = await scanAllTargets(home, { includeConfig: Boolean(opts.includeConfig) });
+      const files = await scanAllTargets(home, { includeConfig });
       for (const file of files) {
         filesToIngest.push({
           ...file,
@@ -350,7 +489,7 @@ filesCommand
     
     // Scan project configs
     if (opts.project) {
-      const files = await scanAllTargets(cwd, { includeConfig: Boolean(opts.includeConfig) });
+      const files = await scanAllTargets(cwd, { includeConfig });
       for (const file of files) {
         filesToIngest.push({
           ...file,
@@ -380,6 +519,7 @@ filesCommand
     let skipped = 0;
     let redactedFileCount = 0;
     let redactedValueCount = 0;
+    const vaultEntries: ConfigVaultEntry[] = [];
     
     for (const file of filesToIngest) {
       try {
@@ -389,6 +529,25 @@ filesCommand
         if (sanitized.redactions > 0) {
           redactedFileCount += 1;
           redactedValueCount += sanitized.redactions;
+          if (includeConfig && Object.keys(sanitized.secrets).length > 0) {
+            const integration = OPTIONAL_CONFIG_INTEGRATIONS.get(file.path);
+            if (integration) {
+              const scope = file.scope === "global" ? "global" : "project";
+              const scopedProjectId = scope === "project" ? projectId : null;
+              if (scope === "global" || scopedProjectId) {
+                const entry: ConfigVaultEntry = {
+                  scope,
+                  integration,
+                  config_path: file.path,
+                  secrets: sanitized.secrets,
+                };
+                if (scope === "project" && scopedProjectId) {
+                  entry.project_id = scopedProjectId;
+                }
+                vaultEntries.push(entry);
+              }
+            }
+          }
         }
         const hash = hashContent(content);
         
@@ -440,6 +599,22 @@ filesCommand
         ),
       );
       console.log(chalk.dim("Store secrets in Supabase Vault (or env vars), not in synced memory/file stores."));
+      if (includeConfig && vaultEntries.length > 0) {
+        const vaultResult = await pushConfigSecretsToVault(vaultEntries);
+        if (vaultResult.synced > 0) {
+          console.log(chalk.green(`Synced ${vaultResult.synced} config secret value${vaultResult.synced === 1 ? "" : "s"} to Vault.`));
+        } else if (vaultResult.error) {
+          const message = vaultResult.error.includes("{")
+            ? "Failed to sync config secrets to Vault."
+            : vaultResult.error;
+          console.log(chalk.yellow(message));
+          if (vaultResult.proRequired) {
+            console.log(chalk.dim("Upgrade to Pro to enable scoped Vault-backed config secret sync."));
+          }
+        }
+      } else if (includeConfig && opts.project && !projectId) {
+        console.log(chalk.yellow("Skipped project-scoped Vault sync for config secrets (no git project id detected)."));
+      }
     }
   });
 
@@ -471,6 +646,7 @@ filesCommand
     
     const result = await db.execute({ sql, args });
     const includeConfig = Boolean(opts.includeConfig);
+    const projectId = getProjectId(cwd);
     const files = (result.rows as unknown as ApplyFile[]).filter((file) =>
       includeConfig || !OPTIONAL_CONFIG_PATHS.has(file.path),
     );
@@ -497,16 +673,53 @@ filesCommand
     let written = 0;
     let skippedExisting = 0;
     let appliedRedactedConfigs = 0;
+    let hydratedSecretValues = 0;
+    let hydrationWarnings = 0;
     
     for (const file of files) {
       const baseDir = file.scope === "global" ? home : cwd;
       const targetPath = join(baseDir, file.path);
+      let contentToWrite = file.content;
+
+      if (
+        includeConfig &&
+        OPTIONAL_CONFIG_PATHS.has(file.path) &&
+        contentToWrite.includes(REDACTED_PLACEHOLDER)
+      ) {
+        const integration = OPTIONAL_CONFIG_INTEGRATIONS.get(file.path);
+        if (integration) {
+          const scope = file.scope === "global" ? "global" : "project";
+          const scopedProjectId = configProjectId(file.scope, cwd);
+          if (scope === "global" || scopedProjectId) {
+            const secretResult = await fetchConfigSecretsFromVault({
+              scope,
+              projectId: scopedProjectId,
+              integration,
+              configPath: file.path,
+            });
+            if (Object.keys(secretResult.secrets).length > 0) {
+              const hydrated = hydrateOptionalConfig(file.path, contentToWrite, secretResult.secrets);
+              contentToWrite = hydrated.content;
+              hydratedSecretValues += hydrated.hydrated;
+            } else if (secretResult.error) {
+              hydrationWarnings += 1;
+              const fallbackMessage = secretResult.error.includes("{")
+                ? `Could not hydrate ${file.path} from Vault.`
+                : secretResult.error;
+              console.log(chalk.yellow(fallbackMessage));
+              if (secretResult.proRequired) {
+                console.log(chalk.dim("Upgrade to Pro to enable scoped Vault-backed config secret hydration."));
+              }
+            }
+          }
+        }
+      }
       
       // Check if file exists and we're not forcing
       if (existsSync(targetPath) && !opts.force) {
         const existingContent = await readFile(targetPath, "utf-8");
         const existingHash = hashContent(existingContent);
-        const newHash = hashContent(file.content);
+        const newHash = hashContent(contentToWrite);
         
         if (existingHash !== newHash) {
           skippedExisting++;
@@ -518,9 +731,9 @@ filesCommand
       await mkdir(dirname(targetPath), { recursive: true });
       
       // Write file
-      await writeFile(targetPath, file.content, "utf-8");
+      await writeFile(targetPath, contentToWrite, "utf-8");
       written++;
-      if (OPTIONAL_CONFIG_PATHS.has(file.path) && file.content.includes(REDACTED_PLACEHOLDER)) {
+      if (OPTIONAL_CONFIG_PATHS.has(file.path) && contentToWrite.includes(REDACTED_PLACEHOLDER)) {
         appliedRedactedConfigs += 1;
       }
     }
@@ -536,7 +749,16 @@ filesCommand
           `Applied ${appliedRedactedConfigs} config file${appliedRedactedConfigs === 1 ? "" : "s"} with redacted secret placeholders.`,
         ),
       );
-      console.log(chalk.dim("Populate secrets from Supabase Vault (or env vars) after apply."));
+      console.log(chalk.dim("Populate any remaining placeholders from Supabase Vault (or env vars) after apply."));
+    }
+    if (hydratedSecretValues > 0) {
+      console.log(chalk.green(`Hydrated ${hydratedSecretValues} config secret value${hydratedSecretValues === 1 ? "" : "s"} from Vault.`));
+    }
+    if (includeConfig && opts.project && !projectId) {
+      console.log(chalk.yellow("Project-scoped config secret hydration was skipped (no git project id detected)."));
+    }
+    if (hydrationWarnings > 0) {
+      console.log(chalk.dim(`Config secret hydration completed with ${hydrationWarnings} warning${hydrationWarnings === 1 ? "" : "s"}.`));
     }
   });
 
