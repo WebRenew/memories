@@ -62,6 +62,22 @@ interface Invite {
   }
 }
 
+interface AuditEvent {
+  id: string
+  action: string
+  target_type: string | null
+  target_id: string | null
+  target_label: string | null
+  metadata: Record<string, unknown> | null
+  created_at: string
+  actor_user_id: string | null
+  actor: {
+    id: string
+    email: string | null
+    name: string | null
+  } | null
+}
+
 function roleIcon(role: string) {
   switch (role) {
     case "owner": return <Crown className="h-3 w-3 text-amber-400" />
@@ -75,6 +91,36 @@ function formatLastLogin(lastLoginAt: string | null): string {
   const date = new Date(lastLoginAt)
   if (Number.isNaN(date.getTime())) return "Unknown"
   return date.toLocaleString()
+}
+
+function formatAuditAction(action: string): string {
+  return action
+    .split("_")
+    .map((part) => (part ? `${part[0].toUpperCase()}${part.slice(1)}` : part))
+    .join(" ")
+}
+
+function summarizeAuditMetadata(metadata: Record<string, unknown> | null): string | null {
+  if (!metadata || typeof metadata !== "object") return null
+
+  const keys = [
+    "role",
+    "previousRole",
+    "nextRole",
+    "removedBySelf",
+    "domain_auto_join_enabled",
+    "domain_auto_join_domain",
+  ]
+
+  const parts: string[] = []
+  for (const key of keys) {
+    if (!(key in metadata)) continue
+    const value = metadata[key]
+    if (value === null || value === undefined) continue
+    parts.push(`${key}=${String(value)}`)
+  }
+
+  return parts.length > 0 ? parts.join(" • ") : null
 }
 
 export function TeamContent({ 
@@ -93,6 +139,8 @@ export function TeamContent({
   })
   const [members, setMembers] = useState<Member[]>([])
   const [invites, setInvites] = useState<Invite[]>([])
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
+  const [auditError, setAuditError] = useState<string | null>(null)
   const [orgDetails, setOrgDetails] = useState<OrganizationDetails | null>(null)
   const [loading, setLoading] = useState(false)
   const [savingDomainSettings, setSavingDomainSettings] = useState(false)
@@ -127,7 +175,8 @@ export function TeamContent({
     (domainAutoJoinEnabled !== Boolean(selectedOrgRecord?.domain_auto_join_enabled) ||
       domainAutoJoinDomain.trim().toLowerCase() !== (selectedOrgRecord?.domain_auto_join_domain ?? "").toLowerCase())
 
-  async function fetchOrgData(orgId: string) {
+  async function fetchOrgData(orgId: string, options?: { includeAudit?: boolean }) {
+    const includeAudit = options?.includeAudit ?? false
     setLoading(true)
     try {
       const [membersRes, invitesRes, orgRes] = await Promise.all([
@@ -157,8 +206,32 @@ export function TeamContent({
         console.error("Failed to fetch organization:", orgRes.status, await orgRes.text())
         setOrgDetails(null)
       }
+
+      if (includeAudit) {
+        const auditRes = await fetch(`/api/orgs/${orgId}/audit?limit=40`)
+        if (auditRes.ok) {
+          const data = await auditRes.json()
+          setAuditEvents(data.events || [])
+          setAuditError(null)
+        } else {
+          const body = await auditRes.json().catch(() => ({}))
+          const message =
+            typeof body?.error === "string"
+              ? body.error
+              : `Failed to fetch audit log (${auditRes.status})`
+          setAuditEvents([])
+          setAuditError(message)
+        }
+      } else {
+        setAuditEvents([])
+        setAuditError(null)
+      }
     } catch (error) {
       console.error("Error fetching org data:", error)
+      if (includeAudit) {
+        setAuditEvents([])
+        setAuditError("Failed to fetch audit log")
+      }
     } finally {
       setLoading(false)
     }
@@ -166,11 +239,15 @@ export function TeamContent({
 
   useEffect(() => {
     if (selectedOrgId) {
-      fetchOrgData(selectedOrgId)
+      const selectedOrgRole = organizations.find((org) => org.id === selectedOrgId)?.role
+      const includeAudit = selectedOrgRole === "owner" || selectedOrgRole === "admin"
+      fetchOrgData(selectedOrgId, { includeAudit })
     } else {
       setOrgDetails(null)
+      setAuditEvents([])
+      setAuditError(null)
     }
-  }, [selectedOrgId])
+  }, [organizations, selectedOrgId])
 
   useEffect(() => {
     if (!selectedOrgRecordId) return
@@ -219,7 +296,7 @@ export function TeamContent({
       })
       
       if (res.ok && selectedOrgId) {
-        fetchOrgData(selectedOrgId)
+        fetchOrgData(selectedOrgId, { includeAudit: isAdmin })
       }
     } catch (e) {
       console.error(e)
@@ -231,7 +308,7 @@ export function TeamContent({
       await fetch(`/api/orgs/${selectedOrgId}/invites?inviteId=${inviteId}`, {
         method: "DELETE",
       })
-      if (selectedOrgId) fetchOrgData(selectedOrgId)
+      if (selectedOrgId) fetchOrgData(selectedOrgId, { includeAudit: isAdmin })
     } catch (e) {
       console.error(e)
     }
@@ -246,7 +323,7 @@ export function TeamContent({
       })
       
       if (res.ok && selectedOrgId) {
-        fetchOrgData(selectedOrgId)
+        fetchOrgData(selectedOrgId, { includeAudit: isAdmin })
       }
     } catch (e) {
       console.error(e)
@@ -279,7 +356,7 @@ export function TeamContent({
       setOrgDetails(data.organization ?? null)
       setDomainSettingsSuccess("Domain auto-join settings updated.")
       if (selectedOrgId) {
-        fetchOrgData(selectedOrgId)
+        fetchOrgData(selectedOrgId, { includeAudit: isAdmin })
       }
     } catch (error) {
       console.error("Failed to update domain auto-join settings:", error)
@@ -534,7 +611,7 @@ export function TeamContent({
                   isOwner={isOwner}
                   loading={loading}
                   onClose={() => setShowInvite(false)}
-                  onInviteSent={() => { if (selectedOrgId) fetchOrgData(selectedOrgId) }}
+                  onInviteSent={() => { if (selectedOrgId) fetchOrgData(selectedOrgId, { includeAudit: isAdmin }) }}
                 />
               )}
 
@@ -677,6 +754,53 @@ export function TeamContent({
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {isAdmin && (
+                <div className="border border-border bg-card/20">
+                  <div className="p-4 border-b border-border flex items-center justify-between gap-3">
+                    <h3 className="font-semibold">Audit Log</h3>
+                    <p className="text-xs text-muted-foreground">{auditEvents.length} recent events</p>
+                  </div>
+                  {auditError ? (
+                    <div className="p-4 text-sm text-red-400">{auditError}</div>
+                  ) : auditEvents.length === 0 ? (
+                    <div className="p-4 text-sm text-muted-foreground">No audit events yet.</div>
+                  ) : (
+                    <div className="divide-y divide-border max-h-[420px] overflow-y-auto">
+                      {auditEvents.map((event) => {
+                        const actorLabel =
+                          event.actor?.name ||
+                          event.actor?.email ||
+                          (event.actor_user_id === userId ? "You" : "System")
+                        const metadataSummary = summarizeAuditMetadata(event.metadata)
+
+                        return (
+                          <div key={event.id} className="p-4 space-y-1.5">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-xs uppercase tracking-[0.14em] text-primary/90 font-semibold">
+                                {formatAuditAction(event.action)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(event.created_at).toLocaleString()}
+                              </p>
+                            </div>
+                            <p className="text-sm">
+                              <span className="text-muted-foreground">Actor:</span> {actorLabel}
+                            </p>
+                            <p className="text-sm">
+                              <span className="text-muted-foreground">Target:</span>{" "}
+                              {event.target_label || event.target_id || "—"}
+                            </p>
+                            {metadataSummary ? (
+                              <p className="text-xs text-muted-foreground font-mono">{metadataSummary}</p>
+                            ) : null}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </>

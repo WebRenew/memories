@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { logOrgAuditEvent } from "@/lib/org-audit"
 import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 import { parseBody, updateOrgSchema } from "@/lib/validations"
@@ -187,6 +188,21 @@ export async function PATCH(
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  await logOrgAuditEvent({
+    client: supabase,
+    orgId,
+    actorUserId: user.id,
+    action: updatesDomainSettings ? "org_domain_auto_join_updated" : "org_settings_updated",
+    targetType: "organization",
+    targetId: orgId,
+    targetLabel: org?.name ?? null,
+    metadata: {
+      updatedFields: Object.keys(updates).sort(),
+      domain_auto_join_enabled: org?.domain_auto_join_enabled ?? null,
+      domain_auto_join_domain: org?.domain_auto_join_domain ?? null,
+    },
+  })
 
   return NextResponse.json({ organization: org })
 }

@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import { logOrgAuditEvent } from "@/lib/org-audit"
 import { addTeamSeat } from "@/lib/stripe/teams"
 import { getUniqueEmailDomains } from "@/lib/org-domain"
 
@@ -133,6 +134,19 @@ export async function autoJoinOrganizationsForEmails(input: AutoJoinInput): Prom
     }
 
     joinedOrgIds.push(org.id)
+
+    await logOrgAuditEvent({
+      client: admin,
+      orgId: org.id,
+      actorUserId: input.userId,
+      action: "org_domain_auto_join_member_added",
+      targetType: "user",
+      targetId: input.userId,
+      targetLabel: input.userId,
+      metadata: {
+        matchedDomains: domains,
+      },
+    })
 
     await admin
       .from("org_invites")

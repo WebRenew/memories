@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { logOrgAuditEvent } from "@/lib/org-audit"
 import { removeTeamSeat } from "@/lib/stripe/teams"
 import { createClient as createTurso } from "@libsql/client"
 import { NextResponse } from "next/server"
@@ -272,6 +273,20 @@ export async function DELETE(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  await logOrgAuditEvent({
+    client: supabase,
+    orgId,
+    actorUserId: user.id,
+    action: "org_member_removed",
+    targetType: "user",
+    targetId: targetUserId,
+    targetLabel: targetUserId,
+    metadata: {
+      targetRole: targetMembership.role,
+      removedBySelf: targetUserId === user.id,
+    },
+  })
+
   // Decrement seat in Stripe
   if (org?.stripe_subscription_id) {
     try {
@@ -357,6 +372,20 @@ export async function PATCH(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  await logOrgAuditEvent({
+    client: supabase,
+    orgId,
+    actorUserId: user.id,
+    action: "org_member_role_updated",
+    targetType: "user",
+    targetId: userId,
+    targetLabel: userId,
+    metadata: {
+      previousRole: targetMembership.role,
+      nextRole: role,
+    },
+  })
 
   return NextResponse.json({ success: true })
 }

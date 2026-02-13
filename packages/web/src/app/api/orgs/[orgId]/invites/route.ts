@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { logOrgAuditEvent } from "@/lib/org-audit"
 import { sendTeamInviteEmail } from "@/lib/resend"
 import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
@@ -164,6 +165,7 @@ export async function POST(
   const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://memories.sh"}/invite/accept?token=${invite.token}`
 
   // Send invite email
+  const emailSent = Boolean(process.env.RESEND_API_KEY)
   if (process.env.RESEND_API_KEY) {
     try {
       await sendTeamInviteEmail({
@@ -179,10 +181,25 @@ export async function POST(
     }
   }
 
+  await logOrgAuditEvent({
+    client: supabase,
+    orgId,
+    actorUserId: user.id,
+    action: "org_invite_created",
+    targetType: "invite",
+    targetId: invite.id,
+    targetLabel: email.toLowerCase(),
+    metadata: {
+      role,
+      expiresAt: invite.expires_at,
+      emailSent,
+    },
+  })
+
   return NextResponse.json({ 
     invite,
     inviteUrl,
-    emailSent: !!process.env.RESEND_API_KEY,
+    emailSent,
     message: process.env.RESEND_API_KEY 
       ? `Invite sent to ${email}` 
       : `Invite created. Share this link: ${inviteUrl}` 
@@ -224,6 +241,13 @@ export async function DELETE(
     return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
   }
 
+  const { data: inviteToRevoke } = await supabase
+    .from("org_invites")
+    .select("id, email, role")
+    .eq("id", inviteId)
+    .eq("org_id", orgId)
+    .maybeSingle()
+
   const { error } = await supabase
     .from("org_invites")
     .delete()
@@ -232,6 +256,21 @@ export async function DELETE(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  if (inviteToRevoke) {
+    await logOrgAuditEvent({
+      client: supabase,
+      orgId,
+      actorUserId: user.id,
+      action: "org_invite_revoked",
+      targetType: "invite",
+      targetId: inviteToRevoke.id,
+      targetLabel: inviteToRevoke.email,
+      metadata: {
+        role: inviteToRevoke.role,
+      },
+    })
   }
 
   return NextResponse.json({ success: true })

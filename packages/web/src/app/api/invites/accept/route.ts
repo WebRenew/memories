@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { logOrgAuditEvent } from "@/lib/org-audit"
 import { addTeamSeat } from "@/lib/stripe/teams"
 import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
@@ -147,6 +148,20 @@ export async function POST(request: Request) {
       .eq("id", invite.id)
     return NextResponse.json({ error: memberError.message }, { status: 500 })
   }
+
+  await logOrgAuditEvent({
+    client: writeClient,
+    orgId: invite.org_id,
+    actorUserId: user.id,
+    action: "org_invite_accepted",
+    targetType: "user",
+    targetId: user.id,
+    targetLabel: invite.email,
+    metadata: {
+      inviteId: invite.id,
+      role: invite.role,
+    },
+  })
 
   // Set as user's current org if they don't have one
   const { error: orgError } = await writeClient

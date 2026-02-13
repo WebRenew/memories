@@ -1,4 +1,5 @@
 import { authenticateRequest } from "@/lib/auth"
+import { logOrgAuditEvent } from "@/lib/org-audit"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
@@ -130,6 +131,19 @@ export async function POST(request: Request) {
     .update({ current_org_id: org.id })
     .eq("id", auth.userId)
     .is("current_org_id", null)
+
+  await logOrgAuditEvent({
+    client: admin,
+    orgId: org.id,
+    actorUserId: auth.userId,
+    action: "org_created",
+    targetType: "organization",
+    targetId: org.id,
+    targetLabel: org.name ?? slug,
+    metadata: {
+      slug,
+    },
+  })
 
   return NextResponse.json({ organization: org }, { status: 201 })
 }
