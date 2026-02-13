@@ -130,7 +130,7 @@ describe("/api/mcp/key", () => {
               single: vi.fn().mockResolvedValue({
                 data: {
                   mcp_api_key_hash: "deadbeef",
-                  mcp_api_key_prefix: "mcp_12345678",
+                  mcp_api_key_prefix: "mem_12345678",
                   mcp_api_key_last4: "abcd",
                   mcp_api_key_created_at: "2026-02-10T00:00:00.000Z",
                   mcp_api_key_expires_at: "2099-01-01T00:00:00.000Z",
@@ -145,7 +145,7 @@ describe("/api/mcp/key", () => {
       const response = await GET()
       const body = await response.json()
       expect(body.hasKey).toBe(true)
-      expect(body.keyPreview).toBe("mcp_12345678********************abcd")
+      expect(body.keyPreview).toBe("mem_12345678********************abcd")
       expect(body.apiKey).toBeUndefined()
       expect(body.expiresAt).toBe("2099-01-01T00:00:00.000Z")
       expect(body.isExpired).toBe(false)
@@ -207,15 +207,15 @@ describe("/api/mcp/key", () => {
       const response = await POST(request)
       const body = await response.json()
 
-      expect(body.apiKey).toMatch(/^mcp_[a-f0-9]{64}$/)
-      expect(body.keyPreview).toMatch(/^mcp_[a-f0-9]{8}\*{20}[a-f0-9]{4}$/)
+      expect(body.apiKey).toMatch(/^mem_[a-f0-9]{64}$/)
+      expect(body.keyPreview).toMatch(/^mem_[a-f0-9]{8}\*{20}[a-f0-9]{4}$/)
       expect(body.expiresAt).toBe(validExpiry)
       expect(body.message).toBeDefined()
 
       const payload = usersUpdate.mock.calls[0]?.[0]
       expect(payload.mcp_api_key).toBeNull()
       expect(payload.mcp_api_key_hash).toMatch(/^[a-f0-9]{64}$/)
-      expect(payload.mcp_api_key_prefix).toMatch(/^mcp_[a-f0-9]{8}$/)
+      expect(payload.mcp_api_key_prefix).toMatch(/^mem_[a-f0-9]{8}$/)
       expect(payload.mcp_api_key_last4).toMatch(/^[a-f0-9]{4}$/)
       expect(payload.mcp_api_key_expires_at).toBe(validExpiry)
     })
@@ -284,7 +284,7 @@ describe("/api/mcp/key", () => {
       const body = await response.json()
 
       expect(response.status).toBe(200)
-      expect(body.apiKey).toMatch(/^mcp_[a-f0-9]{64}$/)
+      expect(body.apiKey).toMatch(/^mem_[a-f0-9]{64}$/)
       expect(tenantSelectEq).toHaveBeenCalledWith("api_key_hash", "old_hash_123")
       expect(tenantUpsert).toHaveBeenCalledWith(
         expect.arrayContaining([

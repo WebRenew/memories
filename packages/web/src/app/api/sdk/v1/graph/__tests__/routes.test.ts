@@ -90,7 +90,7 @@ import {
   POST as rolloutPOST,
 } from "../rollout/route"
 
-const VALID_API_KEY = `mcp_${"a".repeat(64)}`
+const VALID_API_KEY = `mem_${"a".repeat(64)}`
 
 function makeRequest(path: string, method: "GET" | "POST" | "PATCH", body?: unknown, apiKey?: string): NextRequest {
   const headers: Record<string, string> = {}
@@ -119,7 +119,7 @@ describe("/api/sdk/v1/graph/*", () => {
       },
       error: null,
     })
-    mockTenantSelect.mockReturnValue({ data: null, error: { message: "not found" } })
+    mockTenantSelect.mockReturnValue({ data: null, error: null })
     mockResolveActiveMemoryContext.mockResolvedValue({
       ownerType: "user",
       orgId: null,

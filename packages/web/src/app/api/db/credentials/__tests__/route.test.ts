@@ -34,7 +34,7 @@ vi.mock("@/lib/active-memory-context", () => ({
 
 import { GET } from "../route"
 
-const VALID_API_KEY = `mcp_${"a".repeat(64)}`
+const VALID_API_KEY = `mem_${"a".repeat(64)}`
 
 describe("/api/db/credentials", () => {
   beforeEach(() => {

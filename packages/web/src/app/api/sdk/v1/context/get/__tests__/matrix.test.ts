@@ -13,20 +13,22 @@ vi.mock("@/lib/supabase/admin", () => ({
     from: vi.fn((table: string) => ({
       select: vi.fn(() => {
         const filters: Record<string, unknown> = {}
+        const runSingle = () => {
+          if (table === "users") {
+            return mockUserSelect({ table, filters })
+          }
+          if (table === "sdk_tenant_databases") {
+            return mockTenantSelect({ table, filters })
+          }
+          return { data: null, error: { message: `Unexpected table: ${table}` } }
+        }
         const query = {
           eq: vi.fn((column: string, value: unknown) => {
             filters[column] = value
             return query
           }),
-          single: vi.fn(() => {
-            if (table === "users") {
-              return mockUserSelect({ table, filters })
-            }
-            if (table === "sdk_tenant_databases") {
-              return mockTenantSelect({ table, filters })
-            }
-            return { data: null, error: { message: `Unexpected table: ${table}` } }
-          }),
+          single: vi.fn(runSingle),
+          maybeSingle: vi.fn(runSingle),
         }
         return query
       }),
@@ -51,7 +53,7 @@ vi.mock("@libsql/client", () => ({
 
 import { POST } from "../route"
 
-const VALID_API_KEY = `mcp_${"a".repeat(64)}`
+const VALID_API_KEY = `mem_${"a".repeat(64)}`
 
 function makePostRequest(body: unknown): NextRequest {
   return new NextRequest("https://example.com/api/sdk/v1/context/get", {
@@ -89,7 +91,7 @@ describe("/api/sdk/v1/context/get isolation matrix", () => {
       error: null,
     })
 
-    mockTenantSelect.mockReturnValue({ data: null, error: { message: "not found" } })
+    mockTenantSelect.mockReturnValue({ data: null, error: null })
 
     mockResolveActiveMemoryContext.mockResolvedValue({
       ownerType: "user",

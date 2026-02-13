@@ -13,20 +13,22 @@ vi.mock("@/lib/supabase/admin", () => ({
     from: vi.fn((table: string) => ({
       select: vi.fn(() => {
         const filters: Record<string, unknown> = {}
+        const runSingle = () => {
+          if (table === "users") {
+            return mockUserSelect({ table, filters })
+          }
+          if (table === "sdk_tenant_databases") {
+            return mockTenantSelect({ table, filters })
+          }
+          return { data: null, error: { message: `Unexpected table: ${table}` } }
+        }
         const query = {
           eq: vi.fn((column: string, value: unknown) => {
             filters[column] = value
             return query
           }),
-          single: vi.fn(() => {
-            if (table === "users") {
-              return mockUserSelect({ table, filters })
-            }
-            if (table === "sdk_tenant_databases") {
-              return mockTenantSelect({ table, filters })
-            }
-            return { data: null, error: { message: `Unexpected table: ${table}` } }
-          }),
+          single: vi.fn(runSingle),
+          maybeSingle: vi.fn(runSingle),
         }
         return query
       }),
@@ -53,7 +55,7 @@ vi.mock("@libsql/client", () => ({
 import { POST as mcpPost } from "@/app/api/mcp/route"
 import { POST as sdkPost } from "../route"
 
-const VALID_API_KEY = `mcp_${"a".repeat(64)}`
+const VALID_API_KEY = `mem_${"a".repeat(64)}`
 
 function makeMcpContextRequest(args: Record<string, unknown>): NextRequest {
   return new NextRequest("https://example.com/api/mcp", {
@@ -112,7 +114,7 @@ describe("MCP vs SDK context parity", () => {
       error: null,
     })
 
-    mockTenantSelect.mockReturnValue({ data: null, error: { message: "not found" } })
+    mockTenantSelect.mockReturnValue({ data: null, error: null })
 
     mockResolveActiveMemoryContext.mockResolvedValue({
       ownerType: "user",

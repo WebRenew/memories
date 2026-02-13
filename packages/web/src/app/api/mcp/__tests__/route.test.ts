@@ -11,20 +11,22 @@ vi.mock("@/lib/supabase/admin", () => ({
     from: vi.fn((table: string) => ({
       select: vi.fn(() => {
         const filters: Record<string, unknown> = {}
+        const runSingle = () => {
+          if (table === "users") {
+            return mockAdminSelect({ table, filters })
+          }
+          if (table === "sdk_tenant_databases") {
+            return mockTenantSelect({ table, filters })
+          }
+          return { data: null, error: { message: `Unexpected table: ${table}` } }
+        }
         const query = {
           eq: vi.fn((column: string, value: unknown) => {
             filters[column] = value
             return query
           }),
-          single: vi.fn(() => {
-            if (table === "users") {
-              return mockAdminSelect({ table, filters })
-            }
-            if (table === "sdk_tenant_databases") {
-              return mockTenantSelect({ table, filters })
-            }
-            return { data: null, error: { message: `Unexpected table: ${table}` } }
-          }),
+          single: vi.fn(runSingle),
+          maybeSingle: vi.fn(runSingle),
         }
         return query
       }),
@@ -54,7 +56,7 @@ vi.mock("@/lib/rate-limit", () => ({
 import { GET, POST, OPTIONS } from "../route"
 import { NextRequest } from "next/server"
 
-const VALID_API_KEY = `mcp_${"a".repeat(64)}`
+const VALID_API_KEY = `mem_${"a".repeat(64)}`
 
 // Helpers
 function makePostRequest(body: unknown, apiKey = VALID_API_KEY): NextRequest {
@@ -118,7 +120,7 @@ function getExecuteCallBySqlFragment(fragment: string): { sql: string; args?: un
 describe("/api/mcp", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockTenantSelect.mockReturnValue({ data: null, error: { message: "not found" } })
+    mockTenantSelect.mockReturnValue({ data: null, error: null })
     mockResolveActiveMemoryContext.mockResolvedValue({
       ownerType: "user",
       orgId: null,
@@ -1146,7 +1148,7 @@ describe("/api/mcp", () => {
 
     it("returns typed error when tenant database is not configured", async () => {
       setupAuth()
-      mockTenantSelect.mockReturnValue({ data: null, error: { message: "not found" } })
+      mockTenantSelect.mockReturnValue({ data: null, error: null })
 
       const response = await POST(makePostRequest(
         jsonrpc("tools/call", {
