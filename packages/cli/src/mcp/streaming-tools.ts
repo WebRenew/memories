@@ -8,8 +8,7 @@ import {
   getStreamState,
 } from "../lib/memory.js";
 import { resolveMemoryScopeInput } from "./scope.js";
-import { TYPE_LABELS } from "./formatters.js";
-import { withStorageWarnings } from "./index.js";
+import { TYPE_LABELS, withStorageWarnings } from "./formatters.js";
 
 // ─── Streaming Tool Registrations ─────────────────────────────────────────────
 

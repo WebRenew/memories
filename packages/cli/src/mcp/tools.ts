@@ -18,8 +18,8 @@ import {
   formatMemory,
   formatRulesSection,
   formatMemoriesSection,
+  withStorageWarnings,
 } from "./formatters.js";
-import { withStorageWarnings } from "./index.js";
 
 // ─── Core Tool Registrations ─────────────────────────────────────────────────
 

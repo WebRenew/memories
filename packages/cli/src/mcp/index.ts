@@ -7,13 +7,7 @@ import {
 import { getProjectId } from "../lib/git.js";
 import { setCloudMode } from "../lib/db.js";
 import { CLI_VERSION } from "../lib/version.js";
-import {
-  formatStorageWarningsForText,
-  getStorageWarnings,
-  type StorageWarning,
-} from "../lib/storage-health.js";
 import { formatMemory } from "./formatters.js";
-import type { ToolResponsePayload } from "./formatters.js";
 import { registerCoreTools } from "./tools.js";
 import { registerStreamingTools } from "./streaming-tools.js";
 
@@ -24,39 +18,7 @@ export function setCloudCredentials(url: string, token: string): void {
 
 // Re-export startMcpHttpServer for serve command
 export { startMcpHttpServer } from "./mcp-http.js";
-
-// ─── Storage Warning Helper ───────────────────────────────────────────────────
-
-export async function withStorageWarnings(
-  result: ToolResponsePayload,
-  warningsOverride?: StorageWarning[]
-): Promise<ToolResponsePayload> {
-  if (result.isError) return result;
-
-  if (result.content.length === 0) return result;
-
-  try {
-    const warnings = warningsOverride ?? (await getStorageWarnings()).warnings;
-    if (warnings.length === 0) return result;
-
-    const warningBlock = formatStorageWarningsForText(warnings);
-    if (!warningBlock) return result;
-
-    const nextContent = [...result.content];
-    const textPart = nextContent[0];
-    nextContent[0] = {
-      ...textPart,
-      text: `${textPart.text}\n\n${warningBlock}`,
-    };
-
-    return {
-      ...result,
-      content: nextContent,
-    };
-  } catch {
-    return result;
-  }
-}
+export { withStorageWarnings } from "./formatters.js";
 
 // ─── MCP Server Factory ──────────────────────────────────────────────────────
 
