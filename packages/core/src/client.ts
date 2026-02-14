@@ -821,7 +821,8 @@ export class MemoriesClient {
     },
 
     bulkForget: async (filters: BulkForgetFilter, options?: { dryRun?: boolean }): Promise<BulkForgetResult> => {
-      const rawScope = this.withDefaultScopeSdk({ projectId: filters.projectId })
+      // Scope carries tenantId/userId for routing; projectId is a query-level filter only
+      const rawScope = this.withDefaultScopeSdk({})
       const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
       const dryRun = options?.dryRun ?? false
 

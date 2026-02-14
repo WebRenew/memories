@@ -26,7 +26,7 @@ const requestSchema = z.object({
   }).refine(
     (d) => d.all ? !d.types && !d.tags && !d.olderThanDays && !d.pattern :
       (d.types || d.tags || d.olderThanDays || d.pattern),
-    { message: "Provide at least one filter, or use all:true (cannot combine all with other filters)" }
+    { message: "Provide at least one filter (types, tags, olderThanDays, or pattern), or use all:true. projectId alone is not a sufficient filter; all:true cannot be combined with content filters." }
   ),
   dryRun: z.boolean().default(false),
 })

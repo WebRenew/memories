@@ -668,7 +668,7 @@ export async function findMemoriesToForget(filter: BulkForgetFilter): Promise<Me
   }
 
   if (filter.pattern) {
-    // Escape literal SQL LIKE wildcards, then convert glob wildcards
+    // Escape literal LIKE wildcards, then convert glob syntax (* → %, ? → _)
     const likePattern = filter.pattern
       .replace(/%/g, "\\%")
       .replace(/_/g, "\\_")

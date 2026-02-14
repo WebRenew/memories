@@ -1246,13 +1246,9 @@ describe("/api/mcp", () => {
 
     it("should report accurate count when dry run exceeds 1000 preview limit", async () => {
       setupAuth()
-      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
-        const sql = typeof input === "string" ? input : input.sql
-        if (sql.includes("COUNT(*)")) {
-          return { rows: [{ cnt: 2500 }] }
-        }
-        // Return 1000 rows for the preview SELECT
-        const previewRows = Array.from({ length: 1000 }, (_, i) => ({
+      mockExecute.mockImplementation(async (_input: { sql: string } | string) => {
+        // Single LIMIT 1001 query returns 1001 rows to signal overflow
+        const previewRows = Array.from({ length: 1001 }, (_, i) => ({
           id: `m${i}`, type: "note", content: `Memory ${i}`,
         }))
         return { rows: previewRows }
@@ -1265,10 +1261,10 @@ describe("/api/mcp", () => {
         })
       ))
       const body = await response.json()
-      // count reflects true total, not capped preview
-      expect(body.result.structuredContent.data.count).toBe(2500)
+      // count is capped at 1000 when overflow detected (no unbounded COUNT)
+      expect(body.result.structuredContent.data.count).toBe(1000)
       expect(body.result.structuredContent.data.memories).toHaveLength(1000)
-      expect(body.result.content[0].text).toContain("showing first 1000")
+      expect(body.result.content[0].text).toContain("more than 1000")
     })
 
     it("should build WHERE clause with tags filter using LIKE", async () => {

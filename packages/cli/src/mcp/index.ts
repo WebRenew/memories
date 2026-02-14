@@ -476,7 +476,7 @@ Requires at least one filter, or all:true to delete everything. Cannot combine a
     {
       types: z.array(z.enum(["rule", "decision", "fact", "note", "skill"])).optional().describe("Filter by memory types"),
       tags: z.array(z.string()).optional().describe("Filter by tags (substring match)"),
-      older_than_days: z.number().int().positive().optional().describe("Delete memories older than N days"),
+      older_than_days: z.number().int().min(1).optional().describe("Delete memories older than N days (must be >= 1)"),
       pattern: z.string().optional().describe("Content pattern (* as wildcard, ? as single-char wildcard)"),
       project_id: z.string().optional().describe("Scope deletion to a specific project"),
       all: z.boolean().optional().describe("Delete all memories (cannot combine with other filters)"),
@@ -495,7 +495,7 @@ Requires at least one filter, or all:true to delete everything. Cannot combine a
         }
         if (!isAll && !hasFilters) {
           return {
-            content: [{ type: "text", text: "Provide at least one filter (types, tags, older_than_days, pattern), or use all:true." }],
+            content: [{ type: "text", text: "Provide at least one filter (types, tags, older_than_days, pattern), or use all:true. project_id alone is not a sufficient filter." }],
             isError: true,
           };
         }

@@ -109,6 +109,23 @@ export async function removeMemoryGraphMapping(turso: TursoClient, memoryId: str
   await pruneOrphanGraphNodes(turso)
 }
 
+const GRAPH_BATCH_SIZE = 200
+
+export async function bulkRemoveMemoryGraphMappings(turso: TursoClient, memoryIds: string[]): Promise<void> {
+  if (memoryIds.length === 0) return
+
+  for (let i = 0; i < memoryIds.length; i += GRAPH_BATCH_SIZE) {
+    const batch = memoryIds.slice(i, i + GRAPH_BATCH_SIZE)
+    const placeholders = batch.map(() => "?").join(", ")
+    await turso.batch([
+      { sql: `DELETE FROM memory_node_links WHERE memory_id IN (${placeholders})`, args: batch },
+      { sql: `DELETE FROM graph_edges WHERE evidence_memory_id IN (${placeholders})`, args: batch },
+    ])
+  }
+
+  await pruneOrphanGraphNodes(turso)
+}
+
 export async function syncMemoryGraphMapping(turso: TursoClient, input: GraphMemoryInput): Promise<void> {
   await ensureGraphTables(turso)
   await removeMemoryGraphMapping(turso, input.id)

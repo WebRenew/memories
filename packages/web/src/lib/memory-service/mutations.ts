@@ -10,7 +10,7 @@ import {
   VALID_TYPES,
 } from "./types"
 import { buildNotExpiredFilter, parseMemoryLayer, workingMemoryExpiresAt } from "./scope"
-import { removeMemoryGraphMapping, syncMemoryGraphMapping } from "./graph/upsert"
+import { bulkRemoveMemoryGraphMappings, removeMemoryGraphMapping, syncMemoryGraphMapping } from "./graph/upsert"
 
 async function compactWorkingMemoriesForUser(
   turso: TursoClient,
@@ -373,8 +373,7 @@ export async function bulkForgetMemoriesPayload(params: {
 
   const types = Array.isArray(args.types) ? (args.types as string[]).filter((t) => VALID_TYPES.has(t)) : undefined
   const tags = Array.isArray(args.tags) ? (args.tags as string[]).filter(Boolean) : undefined
-  const olderThanDaysRaw = typeof args.older_than_days === "number" && Number.isFinite(args.older_than_days) && args.older_than_days > 0 ? Math.floor(args.older_than_days) : undefined
-  const olderThanDays = olderThanDaysRaw && olderThanDaysRaw >= 1 ? olderThanDaysRaw : undefined
+  const olderThanDays = typeof args.older_than_days === "number" && Number.isFinite(args.older_than_days) && args.older_than_days > 0 ? Math.max(1, Math.ceil(args.older_than_days)) : undefined
   const pattern = typeof args.pattern === "string" ? args.pattern.trim() : undefined
   const projectId = typeof args.project_id === "string" ? args.project_id.trim() : undefined
   const all = args.all === true
@@ -398,7 +397,7 @@ export async function bulkForgetMemoriesPayload(params: {
       apiError({
         type: "validation_error",
         code: "BULK_FORGET_NO_FILTERS",
-        message: "Provide at least one filter (types, tags, older_than_days, pattern), or use all:true",
+        message: "Provide at least one filter (types, tags, older_than_days, pattern), or use all:true. project_id alone is not a sufficient filter.",
         status: 400,
         retryable: false,
       }),
@@ -450,29 +449,29 @@ export async function bulkForgetMemoriesPayload(params: {
   const whereSQL = whereClauses.join(" AND ")
 
   if (dryRun) {
-    const countResult = await turso.execute({
-      sql: `SELECT COUNT(*) as cnt FROM memories WHERE ${whereSQL}`,
-      args: whereArgs,
-    })
-    const totalCount = Number((countResult.rows[0] as unknown as { cnt: number }).cnt) || 0
-
+    // Fetch up to 1001 rows to detect overflow without an unbounded COUNT(*)
+    const DRY_RUN_LIMIT = 1000
     const result = await turso.execute({
-      sql: `SELECT id, type, content FROM memories WHERE ${whereSQL} ORDER BY created_at DESC LIMIT 1000`,
-      args: whereArgs,
+      sql: `SELECT id, type, content FROM memories WHERE ${whereSQL} ORDER BY created_at DESC LIMIT ?`,
+      args: [...whereArgs, DRY_RUN_LIMIT + 1],
     })
 
-    const memories = (result.rows as unknown as { id: string; type: string; content: string }[]).map((row) => ({
+    const rows = result.rows as unknown as { id: string; type: string; content: string }[]
+    const hasMore = rows.length > DRY_RUN_LIMIT
+    const displayRows = hasMore ? rows.slice(0, DRY_RUN_LIMIT) : rows
+
+    const memories = displayRows.map((row) => ({
       id: row.id,
       type: row.type,
       contentPreview: row.content.length > 80 ? `${row.content.slice(0, 80).trim()}...` : row.content,
     }))
 
-    const message = totalCount > 1000
-      ? `Dry run: ${totalCount} memories would be deleted (showing first 1000)`
-      : `Dry run: ${totalCount} memories would be deleted`
+    const message = hasMore
+      ? `Dry run: more than ${DRY_RUN_LIMIT} memories would be deleted (showing first ${DRY_RUN_LIMIT})`
+      : `Dry run: ${rows.length} memories would be deleted`
     return {
       text: message,
-      data: { count: totalCount, memories, message },
+      data: { count: hasMore ? DRY_RUN_LIMIT : rows.length, memories, message },
     }
   }
 
@@ -502,14 +501,12 @@ export async function bulkForgetMemoriesPayload(params: {
     })
   }
 
-  // Clean up graph mappings
+  // Clean up graph mappings (batched)
   if (GRAPH_MAPPING_ENABLED) {
-    for (const id of ids) {
-      try {
-        await removeMemoryGraphMapping(turso, id)
-      } catch (err) {
-        console.error("Graph mapping cleanup failed on bulk_forget:", err)
-      }
+    try {
+      await bulkRemoveMemoryGraphMappings(turso, ids)
+    } catch (err) {
+      console.error("Graph mapping cleanup failed on bulk_forget:", err)
     }
   }
 
