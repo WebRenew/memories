@@ -62,12 +62,15 @@ When using `add_memory`, pick the right type:
 
 - **project** (default) — Scoped to current git repo, detected automatically
 - **global** — Applies everywhere, set `global: true` in `add_memory`
+- **project override** — Set `project_id: "github.com/org/repo"` in `add_memory` (or `start_memory_stream`) to force project scope when the MCP process is running outside that repo
+
+Do not send both `global: true` and `project_id` in the same call.
 
 ## Streaming Memory Tools
 
 For collecting content from SSE sources (v0 artifacts, streaming responses):
 
-1. `start_memory_stream({ type?, tags?, global? })` → returns `stream_id`
+1. `start_memory_stream({ type?, tags?, global?, project_id? })` → returns `stream_id`
 2. `append_memory_chunk({ stream_id, chunk })` (repeat for each piece)
 3. `finalize_memory_stream({ stream_id })` → creates memory + triggers embedding
 4. `cancel_memory_stream({ stream_id })` → discard if aborted

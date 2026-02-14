@@ -84,6 +84,21 @@ memories serve
 
 **Tools**: `get_context`, `add_memory`, `search_memories`, `get_rules`, `list_memories`, `edit_memory`, `forget_memory`
 
+If your MCP client runs outside the repo directory, force project scope with `project_id`:
+
+```json
+{
+  "name": "add_memory",
+  "arguments": {
+    "content": "Use retries for transient API failures",
+    "type": "rule",
+    "project_id": "github.com/webrenew/agent-space"
+  }
+}
+```
+
+Use `global: true` for global scope (do not combine `global` with `project_id`).
+
 ## Documentation
 
 Full documentation at [memories.sh/docs](https://memories.sh/docs)

@@ -151,6 +151,21 @@ Or configure in your tool's MCP settings:
 
 **3 resources**: `memories://rules`, `memories://recent`, `memories://project/{id}`
 
+When using MCP outside the target repo directory, pass `project_id` on writes to force project scope:
+
+```json
+{
+  "name": "add_memory",
+  "arguments": {
+    "content": "Use polling with exponential backoff",
+    "type": "rule",
+    "project_id": "github.com/webrenew/agent-space"
+  }
+}
+```
+
+Use `global: true` for user-wide memories (do not send both `global` and `project_id`).
+
 ## CLI Reference
 
 | Command | Description |

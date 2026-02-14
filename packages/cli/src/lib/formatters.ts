@@ -30,7 +30,7 @@ When you learn something important about this project, save it for future sessio
 - \`memories add "<fact>" --type fact\` — Project facts
 
 **Via MCP (if connected):**
-Use the \`add_memory\` tool with content and type parameters.
+Use the \`add_memory\` tool with \`content\` and \`type\`. Set \`project_id\` when running outside the repo, or \`global: true\` for user-wide memories.
 
 **When to save:**
 - Architectural decisions and their rationale

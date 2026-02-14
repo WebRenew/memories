@@ -113,6 +113,8 @@ Use `--type` flag with `add`:
 - **project** (default) — Scoped to current git repo
 - **global** — `memories add "Use TypeScript" --type rule --global`
 
+When using MCP instead of CLI commands (for example from browser tools or agents running outside the repo), use `add_memory` with `project_id` to force project scope.
+
 ## Advanced Features
 
 - **Templates**: `memories add --template decision` — structured prompts for common patterns

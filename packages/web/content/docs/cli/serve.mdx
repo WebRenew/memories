@@ -102,12 +102,27 @@ The MCP server exposes these tools:
 | Tool | Description |
 |------|-------------|
 | `get_context` | Get rules and relevant memories (primary tool) |
-| `add_memory` | Store a new memory with type and tags |
+| `add_memory` | Store a memory (`global: true` or `project_id` override) |
 | `search_memories` | Full-text or semantic search |
 | `get_rules` | Get all active rules |
 | `list_memories` | List recent memories |
 | `edit_memory` | Update a memory |
 | `forget_memory` | Soft-delete a memory |
+
+When your MCP client runs outside the target repo, pass `project_id` to force project scope:
+
+```json
+{
+  "name": "add_memory",
+  "arguments": {
+    "content": "Use backoff for transient failures",
+    "type": "rule",
+    "project_id": "github.com/webrenew/agent-space"
+  }
+}
+```
+
+Use `global: true` for global memories. Do not send both `global` and `project_id`.
 
 ## Available Resources
 

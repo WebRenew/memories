@@ -49,11 +49,14 @@ Store a new memory with optional metadata, path scoping, and categorization.
 |-----------|------|----------|---------|-------------|
 | `content` | string | Yes | — | The memory content |
 | `type` | `"rule" \| "decision" \| "fact" \| "note" \| "skill"` | No | `"note"` | Memory type |
-| `project_id` | string | No | — | Project identifier to scope this memory to a specific project |
+| `global` | boolean | No | `false` | Store as global memory |
+| `project_id` | string | No | — | Explicit project identifier (e.g., `github.com/org/repo`) to force project scope when outside that repo |
 | `tags` | string[] | No | — | Tags for categorization |
 | `paths` | string[] | No | — | Glob patterns for path-scoped rules (e.g., `["src/api/**"]`) |
 | `category` | string | No | — | Grouping key (becomes rule filename or skill directory) |
 | `metadata` | object | No | — | Extended attributes (JSON, primarily for skills) |
+
+`global` and `project_id` are mutually exclusive in a single request.
 
 **Returns:** Confirmation with memory ID, type label, and scope.
 
@@ -68,9 +71,10 @@ Store a new memory with optional metadata, path scoping, and categorization.
 add_memory({
   content: "API rate limit is 100 requests per minute",
   type: "fact",
+  project_id: "github.com/webrenew/agent-space",
   tags: ["api", "limits"]
 })
-→ Stored fact (global): API rate limit is 100 requests per minute
+→ Stored fact (project: github.com/webrenew/agent-space): API rate limit is 100 requests per minute
 ```
 
 ---
@@ -176,8 +180,11 @@ Start a new collection stream.
 | `type` | string | No | `"note"` | Memory type |
 | `tags` | string[] | No | — | Tags |
 | `global` | boolean | No | `false` | Global scope |
+| `project_id` | string | No | — | Explicit project identifier to force project scope |
 
 **Returns:** `stream_id` string.
+
+`global` and `project_id` are mutually exclusive in a single request.
 
 ### append_memory_chunk
 
@@ -211,7 +218,7 @@ Cancel without creating a memory. Discards all chunks.
 ### Streaming Workflow
 
 ```
-1. start_memory_stream({ type: "note", tags: ["v0"] })
+1. start_memory_stream({ type: "note", tags: ["v0"], project_id: "github.com/webrenew/agent-space" })
    → stream_abc123
 
 2. append_memory_chunk({ stream_id: "stream_abc123", chunk: "First part..." })
