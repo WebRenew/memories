@@ -3,6 +3,8 @@ import { parseContextResponse, parseMemoryListResponse } from "./parsers"
 import { buildSystemPrompt } from "./system-prompt"
 import type {
   BuildSystemPromptInput,
+  BulkForgetFilter,
+  BulkForgetResult,
   ContextGetInput,
   ContextGetOptions,
   ContextMode,
@@ -28,6 +30,7 @@ import type {
   MemoryRecord,
   MemorySearchOptions,
   MutationResult,
+  VacuumResult,
 } from "./types"
 
 export interface MemoriesClientOptions {
@@ -141,6 +144,22 @@ const skillFilesStructuredSchema = z.object({
 
 const mutationEnvelopeDataSchema = z.object({
   message: z.string().optional(),
+})
+
+const bulkForgetResultSchema = z.object({
+  count: z.number().int().nonnegative(),
+  ids: z.array(z.string()).optional(),
+  memories: z.array(z.object({
+    id: z.string(),
+    type: z.string(),
+    contentPreview: z.string(),
+  })).optional(),
+  message: z.string(),
+})
+
+const vacuumResultSchema = z.object({
+  purged: z.number().int().nonnegative(),
+  message: z.string(),
 })
 
 const managementKeyStatusSchema = z.object({
@@ -795,6 +814,86 @@ export class MemoriesClient {
       const message = (messageFromEnvelope(result.envelope) ?? result.raw) || `Deleted memory ${id}`
       return {
         ok: true,
+        message,
+        raw: result.raw,
+        envelope: result.envelope ?? undefined,
+      }
+    },
+
+    bulkForget: async (filters: BulkForgetFilter, options?: { dryRun?: boolean }): Promise<BulkForgetResult> => {
+      const rawScope = this.withDefaultScopeSdk({ projectId: filters.projectId })
+      const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
+      const dryRun = options?.dryRun ?? false
+
+      const result = this.transport === "sdk_http"
+        ? await this.callSdkEndpoint("/api/sdk/v1/memories/bulk-forget", {
+            filters: {
+              types: filters.types,
+              tags: filters.tags,
+              olderThanDays: filters.olderThanDays,
+              pattern: filters.pattern,
+              projectId: filters.projectId,
+              all: filters.all,
+            },
+            dryRun,
+            scope: sdkScope,
+          })
+        : await this.callTool("bulk_forget_memories", {
+            types: filters.types,
+            tags: filters.tags,
+            older_than_days: filters.olderThanDays,
+            pattern: filters.pattern,
+            project_id: filters.projectId,
+            all: filters.all,
+            dry_run: dryRun,
+          })
+
+      const structured = bulkForgetResultSchema.safeParse(result.structured)
+      if (structured.success) {
+        return {
+          ok: true,
+          count: structured.data.count,
+          ids: structured.data.ids,
+          memories: structured.data.memories,
+          message: structured.data.message,
+          raw: result.raw,
+          envelope: result.envelope ?? undefined,
+        }
+      }
+
+      const message = (messageFromEnvelope(result.envelope) ?? result.raw) || "Bulk forget completed"
+      return {
+        ok: true,
+        count: 0,
+        message,
+        raw: result.raw,
+        envelope: result.envelope ?? undefined,
+      }
+    },
+
+    vacuum: async (): Promise<VacuumResult> => {
+      const rawScope = this.withDefaultScopeSdk()
+      const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
+
+      const result = this.transport === "sdk_http"
+        ? await this.callSdkEndpoint("/api/sdk/v1/memories/vacuum", { scope: sdkScope })
+        : await this.callTool("vacuum_memories", {})
+
+      const structured = vacuumResultSchema.safeParse(result.structured)
+      if (structured.success) {
+        return {
+          ok: true,
+          purged: structured.data.purged,
+          message: structured.data.message,
+          raw: result.raw,
+          envelope: result.envelope ?? undefined,
+        }
+      }
+
+      const message = (messageFromEnvelope(result.envelope) ?? result.raw) || "Vacuum completed"
+      return {
+        ok: true,
+        purged: 0,
         message,
         raw: result.raw,
         envelope: result.envelope ?? undefined,

@@ -30,6 +30,8 @@ https://memories.sh
 | Runtime | `/api/sdk/v1/memories/list` | `POST` | Bearer API key (`mem_...`) |
 | Runtime | `/api/sdk/v1/memories/edit` | `POST` | Bearer API key (`mem_...`) |
 | Runtime | `/api/sdk/v1/memories/forget` | `POST` | Bearer API key (`mem_...`) |
+| Runtime | `/api/sdk/v1/memories/bulk-forget` | `POST` | Bearer API key (`mem_...`) |
+| Runtime | `/api/sdk/v1/memories/vacuum` | `POST` | Bearer API key (`mem_...`) |
 | Runtime | `/api/sdk/v1/skills/files/upsert` | `POST` | Bearer API key (`mem_...`) |
 | Runtime | `/api/sdk/v1/skills/files/list` | `POST` | Bearer API key (`mem_...`) |
 | Runtime | `/api/sdk/v1/skills/files/delete` | `POST` | Bearer API key (`mem_...`) |
@@ -346,6 +348,63 @@ Response `data`:
 - `deleted: true`
 - `message`
 
+### `POST /api/sdk/v1/memories/bulk-forget`
+
+Bulk soft-delete memories matching filters.
+
+Request:
+
+```json
+{
+  "filters": {
+    "types": ["note", "fact"],
+    "tags": ["temporary"],
+    "olderThanDays": 90,
+    "pattern": "TODO%",
+    "projectId": "github.com/acme/platform"
+  },
+  "dryRun": false,
+  "scope": {
+    "tenantId": "acme-prod",
+    "userId": "user_123"
+  }
+}
+```
+
+Provide at least one filter (`types`, `tags`, `olderThanDays`, or `pattern`), or use `all: true` (cannot combine `all` with other filters).
+
+Response `data` (`dryRun: false`):
+
+- `count`
+- `ids[]`
+- `message`
+
+Response `data` (`dryRun: true`):
+
+- `count`
+- `memories[]` (each with `id`, `type`, `contentPreview`)
+- `message`
+
+### `POST /api/sdk/v1/memories/vacuum`
+
+Permanently purge all soft-deleted memories to reclaim storage space.
+
+Request:
+
+```json
+{
+  "scope": {
+    "tenantId": "acme-prod",
+    "userId": "user_123"
+  }
+}
+```
+
+Response `data`:
+
+- `purged`
+- `message`
+
 ### `POST /api/sdk/v1/skills/files/upsert`
 
 Create or update a scoped skill file.
@@ -603,6 +662,30 @@ curl -sS https://memories.sh/api/sdk/v1/memories/add \
     "content":"Always run smoke tests before deploy",
     "type":"rule",
     "scope":{"tenantId":"acme-prod","userId":"user_123","projectId":"github.com/acme/platform"}
+  }'
+```
+
+### Bulk forget (dry run)
+
+```bash
+curl -sS https://memories.sh/api/sdk/v1/memories/bulk-forget \
+  -H "Authorization: Bearer $MEMORIES_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filters":{"types":["note"],"olderThanDays":90},
+    "dryRun":true,
+    "scope":{"tenantId":"acme-prod","userId":"user_123"}
+  }'
+```
+
+### Vacuum
+
+```bash
+curl -sS https://memories.sh/api/sdk/v1/memories/vacuum \
+  -H "Authorization: Bearer $MEMORIES_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scope":{"tenantId":"acme-prod","userId":"user_123"}
   }'
 ```
 

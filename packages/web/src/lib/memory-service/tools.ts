@@ -16,7 +16,7 @@ import {
   listMemoriesPayload,
   searchMemoriesPayload,
 } from "./queries"
-import { addMemoryPayload, editMemoryPayload, forgetMemoryPayload } from "./mutations"
+import { addMemoryPayload, editMemoryPayload, forgetMemoryPayload, bulkForgetMemoriesPayload, vacuumMemoriesPayload } from "./mutations"
 
 export {
   apiError,
@@ -168,6 +168,22 @@ export async function executeMemoryTool(
       return {
         content: [{ type: "text", text: payload.text }],
         structuredContent: buildToolEnvelope("list_memories", payload.data, responseSchemaVersion),
+      }
+    }
+
+    case "bulk_forget_memories": {
+      const payload = await bulkForgetMemoriesPayload({ turso, args, userId, nowIso })
+      return {
+        content: [{ type: "text", text: payload.text }],
+        structuredContent: buildToolEnvelope("bulk_forget_memories", payload.data, responseSchemaVersion),
+      }
+    }
+
+    case "vacuum_memories": {
+      const payload = await vacuumMemoriesPayload({ turso, userId })
+      return {
+        content: [{ type: "text", text: payload.text }],
+        structuredContent: buildToolEnvelope("vacuum_memories", payload.data, responseSchemaVersion),
       }
     }
 

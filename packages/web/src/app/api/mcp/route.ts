@@ -352,6 +352,35 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "bulk_forget_memories",
+    description: "Bulk soft-delete memories matching filters. Use dry_run:true to preview which memories would be deleted. Requires at least one filter, or all:true to delete everything.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        types: { type: "array", items: { type: "string", enum: ["rule", "decision", "fact", "note", "skill"] }, description: "Filter by memory types" },
+        tags: { type: "array", items: { type: "string" }, description: "Filter by tags (partial match)" },
+        older_than_days: { type: "number", description: "Delete memories older than N days" },
+        pattern: { type: "string", description: "Content pattern (* as wildcard)" },
+        project_id: { type: "string", description: "Scope deletion to a specific project" },
+        user_id: { type: "string", description: "User identifier; deletes are constrained to this user's memories" },
+        tenant_id: { type: "string", description: "Tenant identifier to route requests to a tenant-specific memory database" },
+        all: { type: "boolean", description: "Delete all memories (cannot combine with other filters)" },
+        dry_run: { type: "boolean", description: "Preview which memories would be deleted without deleting them (default: false)" },
+      },
+    },
+  },
+  {
+    name: "vacuum_memories",
+    description: "Permanently purge all soft-deleted memories to reclaim storage space. This action is irreversible.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        user_id: { type: "string", description: "User identifier; vacuum is constrained to this user's memories" },
+        tenant_id: { type: "string", description: "Tenant identifier to route requests to a tenant-specific memory database" },
+      },
+    },
+  },
 ]
 
 // SSE endpoint - GET opens the event stream

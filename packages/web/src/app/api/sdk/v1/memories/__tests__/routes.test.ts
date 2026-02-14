@@ -10,6 +10,8 @@ const {
   mockListMemoriesPayload,
   mockEditMemoryPayload,
   mockForgetMemoryPayload,
+  mockBulkForgetMemoriesPayload,
+  mockVacuumMemoriesPayload,
   mockExecute,
 } = vi.hoisted(() => ({
   mockUserSelect: vi.fn(),
@@ -20,6 +22,8 @@ const {
   mockListMemoriesPayload: vi.fn(),
   mockEditMemoryPayload: vi.fn(),
   mockForgetMemoryPayload: vi.fn(),
+  mockBulkForgetMemoriesPayload: vi.fn(),
+  mockVacuumMemoriesPayload: vi.fn(),
   mockExecute: vi.fn(),
 }))
 
@@ -64,6 +68,8 @@ vi.mock("@/lib/memory-service/mutations", () => ({
   addMemoryPayload: mockAddMemoryPayload,
   editMemoryPayload: mockEditMemoryPayload,
   forgetMemoryPayload: mockForgetMemoryPayload,
+  bulkForgetMemoriesPayload: mockBulkForgetMemoriesPayload,
+  vacuumMemoriesPayload: mockVacuumMemoriesPayload,
 }))
 
 vi.mock("@/lib/memory-service/queries", () => ({
@@ -82,6 +88,8 @@ import { POST as searchPOST } from "../search/route"
 import { POST as listPOST } from "../list/route"
 import { POST as editPOST } from "../edit/route"
 import { POST as forgetPOST } from "../forget/route"
+import { POST as bulkForgetPOST } from "../bulk-forget/route"
+import { POST as vacuumPOST } from "../vacuum/route"
 import { GET as healthGET } from "../../health/route"
 
 const VALID_API_KEY = `mem_${"a".repeat(64)}`
@@ -177,6 +185,23 @@ describe("/api/sdk/v1/memories/*", () => {
         id: "mem_1",
         deleted: true,
         message: "Deleted memory mem_1",
+      },
+    })
+
+    mockBulkForgetMemoriesPayload.mockResolvedValue({
+      text: "Bulk deleted 3 memories",
+      data: {
+        count: 3,
+        ids: ["mem_1", "mem_2", "mem_3"],
+        message: "Bulk deleted 3 memories",
+      },
+    })
+
+    mockVacuumMemoriesPayload.mockResolvedValue({
+      text: "Vacuumed 5 soft-deleted memories",
+      data: {
+        purged: 5,
+        message: "Vacuumed 5 soft-deleted memories",
       },
     })
   })
@@ -292,6 +317,155 @@ describe("/api/sdk/v1/memories/*", () => {
     const body = await response.json()
     expect(body.ok).toBe(true)
     expect(body.data.deleted).toBe(true)
+  })
+
+  it("bulk-forget returns count and ids", async () => {
+    const response = await bulkForgetPOST(
+      makePost(
+        "/api/sdk/v1/memories/bulk-forget",
+        {
+          filters: { types: ["note"] },
+          scope: { userId: "end-user-1" },
+        },
+        VALID_API_KEY
+      )
+    )
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.ok).toBe(true)
+    expect(body.data.count).toBe(3)
+    expect(body.data.ids).toEqual(["mem_1", "mem_2", "mem_3"])
+    expect(mockBulkForgetMemoriesPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: expect.objectContaining({
+          types: ["note"],
+          dry_run: false,
+        }),
+        userId: "end-user-1",
+      })
+    )
+  })
+
+  it("bulk-forget dry run returns preview", async () => {
+    mockBulkForgetMemoriesPayload.mockResolvedValue({
+      text: "Dry run: 2 memories would be deleted",
+      data: {
+        count: 2,
+        memories: [
+          { id: "mem_1", type: "note", contentPreview: "Hello world" },
+          { id: "mem_2", type: "fact", contentPreview: "API key is abc..." },
+        ],
+        message: "Dry run: 2 memories would be deleted",
+      },
+    })
+
+    const response = await bulkForgetPOST(
+      makePost(
+        "/api/sdk/v1/memories/bulk-forget",
+        {
+          filters: { tags: ["temp"] },
+          dryRun: true,
+          scope: { userId: "end-user-1" },
+        },
+        VALID_API_KEY
+      )
+    )
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.ok).toBe(true)
+    expect(body.data.count).toBe(2)
+    expect(body.data.memories).toHaveLength(2)
+    expect(mockBulkForgetMemoriesPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: expect.objectContaining({ dry_run: true }),
+      })
+    )
+  })
+
+  it("bulk-forget rejects missing filters", async () => {
+    const response = await bulkForgetPOST(
+      makePost(
+        "/api/sdk/v1/memories/bulk-forget",
+        {
+          filters: {},
+        },
+        VALID_API_KEY
+      )
+    )
+
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.ok).toBe(false)
+    expect(body.error.code).toBe("INVALID_REQUEST")
+  })
+
+  it("bulk-forget rejects all:true combined with other filters", async () => {
+    const response = await bulkForgetPOST(
+      makePost(
+        "/api/sdk/v1/memories/bulk-forget",
+        {
+          filters: { all: true, types: ["note"] },
+        },
+        VALID_API_KEY
+      )
+    )
+
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.ok).toBe(false)
+  })
+
+  it("bulk-forget accepts all:true alone", async () => {
+    const response = await bulkForgetPOST(
+      makePost(
+        "/api/sdk/v1/memories/bulk-forget",
+        {
+          filters: { all: true },
+          scope: { userId: "end-user-1" },
+        },
+        VALID_API_KEY
+      )
+    )
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.ok).toBe(true)
+  })
+
+  it("vacuum returns purged count", async () => {
+    const response = await vacuumPOST(
+      makePost(
+        "/api/sdk/v1/memories/vacuum",
+        {
+          scope: { userId: "end-user-1" },
+        },
+        VALID_API_KEY
+      )
+    )
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.ok).toBe(true)
+    expect(body.data.purged).toBe(5)
+    expect(body.data.message).toContain("Vacuumed")
+    expect(mockVacuumMemoriesPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "end-user-1",
+      })
+    )
+  })
+
+  it("vacuum returns 401 without API key", async () => {
+    const response = await vacuumPOST(
+      makePost("/api/sdk/v1/memories/vacuum", {})
+    )
+
+    expect(response.status).toBe(401)
+    const body = await response.json()
+    expect(body.ok).toBe(false)
+    expect(body.error.code).toBe("MISSING_API_KEY")
   })
 
   it("returns tenant mapping error when tenantId is unknown", async () => {

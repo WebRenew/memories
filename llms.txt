@@ -129,6 +129,8 @@ Core MCP tools:
 - `list_memories`
 - `edit_memory`
 - `forget_memory`
+- `bulk_forget_memories`
+- `vacuum_memories`
 
 Useful MCP resources:
 
@@ -163,6 +165,8 @@ curl "https://memories.sh/api/docs/raw?path=sdk/endpoint-contract"
 | `/api/sdk/v1/memories/search` | POST | Search memories |
 | `/api/sdk/v1/memories/list` | POST | List memories |
 | `/api/sdk/v1/memories/forget` | POST | Forget memory |
+| `/api/sdk/v1/memories/bulk-forget` | POST | Bulk forget memories by filters |
+| `/api/sdk/v1/memories/vacuum` | POST | Vacuum soft-deleted memories |
 | `/api/sdk/v1/graph/status` | GET | Graph status summary |
 | `/api/sdk/v1/graph/trace` | GET | Graph trace view |
 | `/api/sdk/v1/graph/rollout` | GET/POST/PATCH | Graph rollout controls |

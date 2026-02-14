@@ -81,6 +81,8 @@ Core CRUD + search operations. All functions accept optional `projectId` for sco
 - `searchMemories(query, opts)` — FTS5 MATCH with ranking
 - `listMemories(opts)` — Paginated listing with filters
 - `forgetMemory(id)` — Soft-delete (sets deleted_at)
+- `bulkForgetMemories(filters)` — Filtered mass soft-delete by type, tags, age, pattern
+- `vacuumMemories()` — Hard-delete all soft-deleted records
 - `updateMemory(id, opts)` — Update content/type/tags + history
 - `getContext(query, opts)` — Rules + relevant memories (primary API)
 - `getRules(opts)` — All type=rule memories

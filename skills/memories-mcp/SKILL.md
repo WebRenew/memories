@@ -48,6 +48,8 @@ Leave `query` empty to get just rules. Use `limit` to control memory count (defa
 | Get coding standards | `get_rules` | When you only need rules, not memories |
 | Update a memory | `edit_memory` | Fix content, change type, update tags |
 | Remove a memory | `forget_memory` | Soft-delete (recoverable) |
+| Bulk remove memories | `bulk_forget_memories` | Filtered mass soft-delete by type, tags, age, pattern |
+| Reclaim storage | `vacuum_memories` | Permanently purge all soft-deleted records |
 
 ## Memory Types
 

@@ -223,11 +223,11 @@ describe("/api/mcp", () => {
   })
 
   describe("tools/list", () => {
-    it("should return 7 tools", async () => {
+    it("should return 9 tools", async () => {
       setupAuth()
       const response = await POST(makePostRequest(jsonrpc("tools/list")))
       const body = await response.json()
-      expect(body.result.tools).toHaveLength(7)
+      expect(body.result.tools).toHaveLength(9)
 
       const toolNames = body.result.tools.map((t: { name: string }) => t.name)
       expect(toolNames).toContain("get_context")
@@ -237,6 +237,8 @@ describe("/api/mcp", () => {
       expect(toolNames).toContain("forget_memory")
       expect(toolNames).toContain("search_memories")
       expect(toolNames).toContain("list_memories")
+      expect(toolNames).toContain("bulk_forget_memories")
+      expect(toolNames).toContain("vacuum_memories")
     })
   })
 
@@ -1180,6 +1182,200 @@ describe("/api/mcp", () => {
       const body = await response.json()
       expect(body.error.code).toBe(-32009)
       expect(body.error.data.code).toBe("TENANT_DATABASE_NOT_READY")
+    })
+  })
+
+  // --- Tool Execution: bulk_forget_memories ---
+
+  describe("tools/call: bulk_forget_memories", () => {
+    it("should bulk soft-delete memories matching type filter", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("SELECT id FROM memories")) {
+          return { rows: [{ id: "m1" }, { id: "m2" }] }
+        }
+        return { rows: [] }
+      })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "bulk_forget_memories",
+          arguments: { types: ["note", "fact"] },
+        })
+      ))
+      const body = await response.json()
+      expect(body.result.content[0].text).toContain("Bulk deleted 2 memories")
+      expect(body.result.structuredContent.ok).toBe(true)
+      expect(body.result.structuredContent.data.count).toBe(2)
+      expect(body.result.structuredContent.data.ids).toEqual(["m1", "m2"])
+    })
+
+    it("should return dry run preview without deleting", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("COUNT(*)")) {
+          return { rows: [{ cnt: 2 }] }
+        }
+        return {
+          rows: [
+            { id: "m1", type: "note", content: "Short note" },
+            { id: "m2", type: "fact", content: "A fact about something longer than eighty characters that should be truncated for preview purposes in the response" },
+          ],
+        }
+      })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "bulk_forget_memories",
+          arguments: { types: ["note", "fact"], dry_run: true },
+        })
+      ))
+      const body = await response.json()
+      expect(body.result.content[0].text).toContain("Dry run")
+      expect(body.result.structuredContent.data.count).toBe(2)
+      expect(body.result.structuredContent.data.memories).toHaveLength(2)
+      expect(body.result.structuredContent.data.memories[0].contentPreview).toBe("Short note")
+    })
+
+    it("should reject when no filters provided", async () => {
+      setupAuth()
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "bulk_forget_memories",
+          arguments: {},
+        })
+      ))
+      const body = await response.json()
+      expect(body.error.code).toBe(-32602)
+      expect(body.error.data.code).toBe("BULK_FORGET_NO_FILTERS")
+    })
+
+    it("should reject all:true combined with other filters", async () => {
+      setupAuth()
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "bulk_forget_memories",
+          arguments: { all: true, types: ["note"] },
+        })
+      ))
+      const body = await response.json()
+      expect(body.error.code).toBe(-32602)
+      expect(body.error.data.code).toBe("BULK_FORGET_INVALID_FILTERS")
+    })
+
+    it("should accept all:true alone", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("SELECT id FROM memories")) {
+          return { rows: [{ id: "m1" }] }
+        }
+        return { rows: [] }
+      })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "bulk_forget_memories",
+          arguments: { all: true },
+        })
+      ))
+      const body = await response.json()
+      expect(body.result.structuredContent.data.count).toBe(1)
+    })
+
+    it("constrains bulk deletes by user_id when provided", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("SELECT id FROM memories")) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "bulk_forget_memories",
+          arguments: { types: ["note"], user_id: "user-42" },
+        })
+      ))
+      const body = await response.json()
+      expect(body.result.structuredContent.data.count).toBe(0)
+
+      const selectCall = getExecuteCallBySqlFragment("SELECT id FROM memories")
+      expect(selectCall.sql).toContain("user_id = ?")
+      expect(selectCall.args).toContain("user-42")
+    })
+  })
+
+  // --- Tool Execution: vacuum_memories ---
+
+  describe("tools/call: vacuum_memories", () => {
+    it("should purge soft-deleted memories", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("changes()")) {
+          return { rows: [{ cnt: 5 }] }
+        }
+        return { rows: [] }
+      })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "vacuum_memories",
+          arguments: {},
+        })
+      ))
+      const body = await response.json()
+      expect(body.result.content[0].text).toContain("Vacuumed 5")
+      expect(body.result.structuredContent.ok).toBe(true)
+      expect(body.result.structuredContent.data.purged).toBe(5)
+    })
+
+    it("should return zero when nothing to vacuum", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("changes()")) {
+          return { rows: [{ cnt: 0 }] }
+        }
+        return { rows: [] }
+      })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "vacuum_memories",
+          arguments: {},
+        })
+      ))
+      const body = await response.json()
+      expect(body.result.structuredContent.data.purged).toBe(0)
+      expect(body.result.content[0].text).toContain("No soft-deleted")
+    })
+
+    it("constrains vacuum by user_id when provided", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("changes()")) {
+          return { rows: [{ cnt: 0 }] }
+        }
+        return { rows: [] }
+      })
+
+      await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "vacuum_memories",
+          arguments: { user_id: "user-42" },
+        })
+      ))
+
+      const deleteCall = getExecuteCallBySqlFragment("DELETE FROM memories")
+      expect(deleteCall.sql).toContain("user_id = ?")
+      expect(deleteCall.args).toContain("user-42")
     })
   })
 

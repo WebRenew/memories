@@ -352,3 +352,209 @@ export async function forgetMemoryPayload(params: {
     },
   }
 }
+
+const BULK_FORGET_BATCH_SIZE = 500
+
+export async function bulkForgetMemoriesPayload(params: {
+  turso: TursoClient
+  args: Record<string, unknown>
+  userId: string | null
+  nowIso: string
+}): Promise<{
+  text: string
+  data: {
+    count: number
+    ids?: string[]
+    memories?: { id: string; type: string; contentPreview: string }[]
+    message: string
+  }
+}> {
+  const { turso, args, userId, nowIso } = params
+
+  const types = Array.isArray(args.types) ? (args.types as string[]).filter((t) => VALID_TYPES.has(t)) : undefined
+  const tags = Array.isArray(args.tags) ? (args.tags as string[]).filter(Boolean) : undefined
+  const olderThanDays = typeof args.older_than_days === "number" && Number.isFinite(args.older_than_days) && args.older_than_days > 0 ? Math.floor(args.older_than_days) : undefined
+  const pattern = typeof args.pattern === "string" ? args.pattern.trim() : undefined
+  const projectId = typeof args.project_id === "string" ? args.project_id.trim() : undefined
+  const all = args.all === true
+  const dryRun = args.dry_run === true
+
+  if (all && (types || tags || olderThanDays || pattern)) {
+    throw new ToolExecutionError(
+      apiError({
+        type: "validation_error",
+        code: "BULK_FORGET_INVALID_FILTERS",
+        message: "Cannot combine all:true with other filters",
+        status: 400,
+        retryable: false,
+      }),
+      { rpcCode: -32602 }
+    )
+  }
+
+  if (!all && !types && !tags && !olderThanDays && !pattern) {
+    throw new ToolExecutionError(
+      apiError({
+        type: "validation_error",
+        code: "BULK_FORGET_NO_FILTERS",
+        message: "Provide at least one filter (types, tags, older_than_days, pattern), or use all:true",
+        status: 400,
+        retryable: false,
+      }),
+      { rpcCode: -32602 }
+    )
+  }
+
+  const whereClauses: string[] = ["deleted_at IS NULL"]
+  const whereArgs: (string | number)[] = []
+
+  if (userId) {
+    whereClauses.push("user_id = ?")
+    whereArgs.push(userId)
+  } else {
+    whereClauses.push("user_id IS NULL")
+  }
+
+  if (types && types.length > 0) {
+    whereClauses.push(`type IN (${types.map(() => "?").join(", ")})`)
+    whereArgs.push(...types)
+  }
+
+  if (tags && tags.length > 0) {
+    const tagClauses = tags.map(() => "tags LIKE ? ESCAPE '\\'")
+    whereClauses.push(`(${tagClauses.join(" OR ")})`)
+    for (const tag of tags) {
+      const escaped = tag.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_")
+      whereArgs.push(`%${escaped}%`)
+    }
+  }
+
+  if (olderThanDays) {
+    const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString()
+    whereClauses.push("created_at < ?")
+    whereArgs.push(cutoff)
+  }
+
+  if (pattern) {
+    const escaped = pattern.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_").replace(/\*/g, "%")
+    whereClauses.push("content LIKE ? ESCAPE '\\'")
+    whereArgs.push(escaped)
+  }
+
+  if (projectId) {
+    whereClauses.push("project_id = ?")
+    whereArgs.push(projectId)
+  }
+
+  const whereSQL = whereClauses.join(" AND ")
+
+  if (dryRun) {
+    const countResult = await turso.execute({
+      sql: `SELECT COUNT(*) as cnt FROM memories WHERE ${whereSQL}`,
+      args: whereArgs,
+    })
+    const totalCount = Number((countResult.rows[0] as unknown as { cnt: number }).cnt) || 0
+
+    const result = await turso.execute({
+      sql: `SELECT id, type, content FROM memories WHERE ${whereSQL} ORDER BY created_at DESC LIMIT 1000`,
+      args: whereArgs,
+    })
+
+    const memories = (result.rows as unknown as { id: string; type: string; content: string }[]).map((row) => ({
+      id: row.id,
+      type: row.type,
+      contentPreview: row.content.length > 80 ? `${row.content.slice(0, 80).trim()}...` : row.content,
+    }))
+
+    const message = totalCount > 1000
+      ? `Dry run: ${totalCount} memories would be deleted (showing first 1000)`
+      : `Dry run: ${totalCount} memories would be deleted`
+    return {
+      text: message,
+      data: { count: totalCount, memories, message },
+    }
+  }
+
+  // Fetch IDs to delete in batches
+  const selectResult = await turso.execute({
+    sql: `SELECT id FROM memories WHERE ${whereSQL}`,
+    args: whereArgs,
+  })
+
+  const ids = (selectResult.rows as unknown as { id: string }[]).map((row) => row.id)
+
+  if (ids.length === 0) {
+    const message = "No memories matched the filters"
+    return {
+      text: message,
+      data: { count: 0, ids: [], message },
+    }
+  }
+
+  // Batch soft-delete
+  for (let i = 0; i < ids.length; i += BULK_FORGET_BATCH_SIZE) {
+    const batch = ids.slice(i, i + BULK_FORGET_BATCH_SIZE)
+    const placeholders = batch.map(() => "?").join(", ")
+    await turso.execute({
+      sql: `UPDATE memories SET deleted_at = ?, updated_at = ? WHERE id IN (${placeholders})`,
+      args: [nowIso, nowIso, ...batch],
+    })
+  }
+
+  // Clean up graph mappings
+  if (GRAPH_MAPPING_ENABLED) {
+    for (const id of ids) {
+      try {
+        await removeMemoryGraphMapping(turso, id)
+      } catch (err) {
+        console.error("Graph mapping cleanup failed on bulk_forget:", err)
+      }
+    }
+  }
+
+  const message = `Bulk deleted ${ids.length} memories`
+  return {
+    text: message,
+    data: { count: ids.length, ids, message },
+  }
+}
+
+export async function vacuumMemoriesPayload(params: {
+  turso: TursoClient
+  userId: string | null
+}): Promise<{ text: string; data: { purged: number; message: string } }> {
+  const { turso, userId } = params
+
+  const whereClauses: string[] = ["deleted_at IS NOT NULL"]
+  const whereArgs: (string | number)[] = []
+
+  if (userId) {
+    whereClauses.push("user_id = ?")
+    whereArgs.push(userId)
+  } else {
+    whereClauses.push("user_id IS NULL")
+  }
+
+  const whereSQL = whereClauses.join(" AND ")
+
+  await turso.execute({
+    sql: `DELETE FROM memories WHERE ${whereSQL}`,
+    args: whereArgs,
+  })
+
+  const changesResult = await turso.execute({
+    sql: `SELECT changes() as cnt`,
+    args: [],
+  })
+
+  const purged = Number((changesResult.rows[0] as unknown as { cnt: number }).cnt) || 0
+
+  const message = purged > 0
+    ? `Vacuumed ${purged} soft-deleted memories`
+    : "No soft-deleted memories to vacuum"
+
+  return {
+    text: message,
+    data: { purged, message },
+  }
+}

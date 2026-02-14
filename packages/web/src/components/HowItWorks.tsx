@@ -560,7 +560,7 @@ export function HowItWorks() {
                       <div className={`text-xs text-muted-foreground/60 pt-4 border-t border-border transition-opacity duration-300 ${
                         typing.completedSteps >= mcpSteps.length ? "opacity-100" : "opacity-0"
                       }`}>
-                        + 4 more tools: search_memories, list_memories, edit_memory, forget_memory
+                        + 6 more tools: search_memories, list_memories, edit_memory, forget_memory, bulk_forget_memories, vacuum_memories
                       </div>
                     </>
                   )}

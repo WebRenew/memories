@@ -20,7 +20,7 @@ const { text } = await generateText({
 })
 ```
 
-`memoriesTools()` returns all six tools as a single object you can spread into your tools config.
+`memoriesTools()` returns all tools as a single object you can spread into your tools config.
 
 ## Scope Model
 
@@ -68,6 +68,8 @@ import {
   editMemory,
   forgetMemory,
   listMemories,
+  bulkForgetMemories,
+  vacuumMemories,
 } from "@memories.sh/ai-sdk"
 
 const { text } = await generateText({
@@ -79,6 +81,8 @@ const { text } = await generateText({
     edit: editMemory({ tenantId: "acme-prod" }),
     forget: forgetMemory({ tenantId: "acme-prod" }),
     list: listMemories({ tenantId: "acme-prod" }),
+    bulkForget: bulkForgetMemories({ tenantId: "acme-prod" }),
+    vacuum: vacuumMemories({ tenantId: "acme-prod" }),
   },
   prompt: userMessage,
 })
@@ -107,6 +111,14 @@ Soft-deletes a memory by ID.
 ### `listMemories(config?)`
 
 Lists memories with optional filters for type, tags, and scope.
+
+### `bulkForgetMemories(config?)`
+
+Bulk soft-delete memories matching filters. Accepts `types`, `tags`, `olderThanDays`, `pattern`, `projectId`, `all`, and `dryRun`.
+
+### `vacuumMemories(config?)`
+
+Permanently purge all soft-deleted memories to reclaim storage space.
 
 ## System Prompt Helper
 

@@ -4,6 +4,8 @@ export { parseContextResponse, parseMemoryListResponse } from "./parsers"
 export type { MemoriesClientOptions } from "./client"
 export type {
   BuildSystemPromptInput,
+  BulkForgetFilter,
+  BulkForgetResult,
   ContextGetInput,
   ContextMode,
   ContextStrategy,
@@ -36,4 +38,5 @@ export type {
   MemorySearchOptions,
   MemoryType,
   MutationResult,
+  VacuumResult,
 } from "./types"

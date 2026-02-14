@@ -3,7 +3,7 @@ title: Tools Reference
 description: Complete reference for all MCP tools exposed by the memories.sh server.
 ---
 
-The memories.sh MCP server exposes 7 tools that AI agents can call to interact with your memory store.
+The memories.sh MCP server exposes 9 tools that AI agents can call to interact with your memory store.
 
 <Callout>
 SaaS apps that already call SDK endpoints (`/api/sdk/v1/*`) do not need these MCP tools unless they serve MCP-native clients.
@@ -177,3 +177,52 @@ Soft-delete a memory by ID.
 | `id` | `string` | Yes | Memory ID to forget |
 | `user_id` | `string` | No | End-user scope identifier inside `tenant_id` |
 | `tenant_id` | `string` | No | AI SDK Project identifier for security/database routing |
+
+## bulk_forget_memories
+
+Bulk soft-delete memories matching filters. Use `dry_run: true` to preview what would be deleted before committing.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `types` | `string[]` | No | Filter by memory types (`rule`, `decision`, `fact`, `note`, `skill`) |
+| `tags` | `string[]` | No | Filter by tags (substring match) |
+| `older_than_days` | `number` | No | Delete memories older than N days |
+| `pattern` | `string` | No | Content pattern match (SQL LIKE syntax) |
+| `project_id` | `string` | No | Filter by project identifier |
+| `user_id` | `string` | No | End-user scope identifier inside `tenant_id` |
+| `tenant_id` | `string` | No | AI SDK Project identifier for security/database routing |
+| `all` | `boolean` | No | Delete all memories (cannot combine with other filters) |
+| `dry_run` | `boolean` | No | Preview matching memories without deleting (default: false) |
+
+Provide at least one filter (`types`, `tags`, `older_than_days`, or `pattern`), or use `all: true`. The `all` flag cannot be combined with other filters.
+
+```json
+{
+  "name": "bulk_forget_memories",
+  "arguments": {
+    "types": ["note", "fact"],
+    "older_than_days": 90,
+    "dry_run": true
+  }
+}
+```
+
+With `dry_run: true`, returns a preview with `count` and `memories[]` (each with `id`, `type`, `contentPreview`). With `dry_run: false`, returns `count` and `ids[]` of deleted memories. Deletes are batched in groups of 500.
+
+## vacuum_memories
+
+Permanently purge all soft-deleted memories to reclaim storage space. This hard-deletes every row where `deleted_at IS NOT NULL`.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `user_id` | `string` | No | End-user scope identifier inside `tenant_id` |
+| `tenant_id` | `string` | No | AI SDK Project identifier for security/database routing |
+
+```json
+{
+  "name": "vacuum_memories",
+  "arguments": {}
+}
+```
+
+Returns `purged` (count of permanently removed records) and a `message` string.

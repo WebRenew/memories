@@ -82,7 +82,7 @@ memories serve
 }
 ```
 
-**Tools**: `get_context`, `add_memory`, `search_memories`, `get_rules`, `list_memories`, `edit_memory`, `forget_memory`
+**Tools**: `get_context`, `add_memory`, `search_memories`, `get_rules`, `list_memories`, `edit_memory`, `forget_memory`, `bulk_forget_memories`, `vacuum_memories`
 
 If your MCP client runs outside the repo directory, force project scope with `project_id`:
 

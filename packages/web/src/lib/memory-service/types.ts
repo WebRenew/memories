@@ -33,6 +33,8 @@ export type ToolName =
   | "forget_memory"
   | "search_memories"
   | "list_memories"
+  | "bulk_forget_memories"
+  | "vacuum_memories"
 
 export type ApiErrorType =
   | "auth_error"

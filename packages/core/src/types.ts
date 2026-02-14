@@ -165,6 +165,33 @@ export interface MutationResult {
   envelope?: MemoriesResponseEnvelope<unknown>
 }
 
+export interface BulkForgetFilter {
+  types?: MemoryType[]
+  tags?: string[]
+  olderThanDays?: number
+  pattern?: string
+  projectId?: string
+  all?: boolean
+}
+
+export interface BulkForgetResult {
+  ok: true
+  count: number
+  ids?: string[]
+  memories?: { id: string; type: string; contentPreview: string }[]
+  message: string
+  raw: string
+  envelope?: MemoriesResponseEnvelope<unknown>
+}
+
+export interface VacuumResult {
+  ok: true
+  purged: number
+  message: string
+  raw: string
+  envelope?: MemoriesResponseEnvelope<unknown>
+}
+
 export interface ManagementKeyStatus {
   hasKey: boolean
   keyPreview?: string

@@ -69,6 +69,8 @@ const { text } = await generateText({
 - `listMemories`
 - `editMemory`
 - `forgetMemory`
+- `bulkForgetMemories`
+- `vacuumMemories`
 
 ## Scoping Model
 

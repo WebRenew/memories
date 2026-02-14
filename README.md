@@ -147,7 +147,7 @@ Or configure in your tool's MCP settings:
 }
 ```
 
-**7 tools**: `get_context`, `add_memory`, `search_memories`, `get_rules`, `list_memories`, `edit_memory`, `forget_memory`
+**9 tools**: `get_context`, `add_memory`, `search_memories`, `get_rules`, `list_memories`, `edit_memory`, `forget_memory`, `bulk_forget_memories`, `vacuum_memories`
 
 **3 resources**: `memories://rules`, `memories://recent`, `memories://project/{id}`
 

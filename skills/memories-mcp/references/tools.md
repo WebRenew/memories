@@ -11,6 +11,8 @@ Complete reference for all memories.sh MCP tools.
 - [list_memories](#list_memories)
 - [edit_memory](#edit_memory)
 - [forget_memory](#forget_memory)
+- [bulk_forget_memories](#bulk_forget_memories)
+- [vacuum_memories](#vacuum_memories)
 - [Streaming Tools](#streaming-tools)
 
 ---
@@ -162,6 +164,54 @@ Soft-delete a memory by ID (recoverable).
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `id` | string | Yes | — | Memory ID to forget |
+
+---
+
+## bulk_forget_memories
+
+Bulk soft-delete memories matching filters. Use `dry_run: true` to preview matches before committing.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `types` | string[] | No | — | Filter by memory types (`rule`, `decision`, `fact`, `note`, `skill`) |
+| `tags` | string[] | No | — | Filter by tags (substring match) |
+| `older_than_days` | number | No | — | Delete memories older than N days |
+| `pattern` | string | No | — | Content pattern match (SQL LIKE syntax) |
+| `project_id` | string | No | — | Filter by project identifier |
+| `all` | boolean | No | false | Delete all memories (cannot combine with other filters) |
+| `dry_run` | boolean | No | false | Preview matching memories without deleting |
+
+Provide at least one filter, or use `all: true`. The `all` flag cannot be combined with other filters.
+
+**Returns:**
+- `dry_run: true` — `count` and `memories[]` (each with `id`, `type`, `contentPreview`)
+- `dry_run: false` — `count` and `ids[]` of deleted memories
+
+```
+bulk_forget_memories({
+  types: ["note", "fact"],
+  older_than_days: 90,
+  dry_run: true
+})
+→ Found 23 memories matching filters (dry run — nothing deleted)
+```
+
+---
+
+## vacuum_memories
+
+Permanently purge all soft-deleted memories to reclaim storage space.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| *(none required)* | — | — | — | — |
+
+**Returns:** `purged` count and `message` string.
+
+```
+vacuum_memories({})
+→ Vacuumed 15 soft-deleted memories
+```
 
 ---
 

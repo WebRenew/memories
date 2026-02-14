@@ -1,4 +1,6 @@
 import type {
+  BulkForgetFilter,
+  BulkForgetResult,
   ContextGetInput,
   ContextMode,
   ContextStrategy,
@@ -23,6 +25,7 @@ import type {
   MemoryRecord,
   MemorySearchOptions,
   MutationResult,
+  VacuumResult,
 } from "@memories.sh/core"
 
 export interface MemoriesBaseOptions extends Omit<MemoriesClientOptions, "userId"> {
@@ -63,6 +66,8 @@ export interface MemoriesTools {
   upsertSkillFile: (input: SkillFileUpsertInput) => Promise<MutationResult>
   listSkillFiles: (input?: SkillFileListOptions) => Promise<SkillFileRecord[]>
   deleteSkillFile: (input: SkillFileDeleteInput) => Promise<MutationResult>
+  bulkForgetMemories: (input: { filters: BulkForgetFilter; dryRun?: boolean }) => Promise<BulkForgetResult>
+  vacuumMemories: () => Promise<VacuumResult>
 }
 
 export interface MemoriesManagement {

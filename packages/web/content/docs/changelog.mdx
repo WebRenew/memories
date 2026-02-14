@@ -3,6 +3,14 @@ title: Changelog
 description: Product and documentation updates.
 ---
 
+## February 13, 2026
+
+- Added `bulk_forget_memories` tool and `POST /api/sdk/v1/memories/bulk-forget` endpoint for filtered mass soft-deletion of memories by type, tags, age, content pattern, or project. Supports `dry_run` mode for previewing matches before deleting.
+- Added `vacuum_memories` tool and `POST /api/sdk/v1/memories/vacuum` endpoint for permanently purging all soft-deleted records to reclaim storage space.
+- Added `client.memories.bulkForget()` and `client.memories.vacuum()` methods to `@memories.sh/core`.
+- Added `bulkForgetMemories()` and `vacuumMemories()` tool wrappers to `@memories.sh/ai-sdk`.
+- MCP server now exposes 9 tools (up from 7).
+
 ## February 12, 2026
 
 - Added workspace-level graph rollout controls with `off`, `shadow`, and `canary` modes.

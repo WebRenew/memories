@@ -1,4 +1,4 @@
-import type { ContextGetInput, MemoryAddInput, MemoryEditInput, MemoryListOptions, MemorySearchOptions, MemoryType } from "@memories.sh/core"
+import type { ContextGetInput, MemoryAddInput, MemoryEditInput, MemoryListOptions, MemorySearchOptions, MemoryType, BulkForgetFilter } from "@memories.sh/core"
 import { resolveClient } from "./client"
 import type { MemoriesBaseOptions, MemoriesTools } from "./types"
 
@@ -107,6 +107,23 @@ export function deleteSkillFile(options: MemoriesBaseOptions = {}) {
     })
 }
 
+export function bulkForgetMemories(options: MemoriesBaseOptions = {}) {
+  const client = resolveClient(options)
+  return async (input: { filters: BulkForgetFilter; dryRun?: boolean }) =>
+    client.memories.bulkForget(
+      {
+        ...input.filters,
+        projectId: input.filters.projectId ?? options.projectId,
+      },
+      { dryRun: input.dryRun }
+    )
+}
+
+export function vacuumMemories(options: MemoriesBaseOptions = {}) {
+  const client = resolveClient(options)
+  return async () => client.memories.vacuum()
+}
+
 export function memoriesTools(options: MemoriesBaseOptions = {}): MemoriesTools {
   return {
     getContext: getContext(options),
@@ -118,5 +135,7 @@ export function memoriesTools(options: MemoriesBaseOptions = {}): MemoriesTools 
     upsertSkillFile: upsertSkillFile(options),
     listSkillFiles: listSkillFiles(options),
     deleteSkillFile: deleteSkillFile(options),
+    bulkForgetMemories: bulkForgetMemories(options),
+    vacuumMemories: vacuumMemories(options),
   }
 }

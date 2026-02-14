@@ -183,7 +183,7 @@ export const TOOLS: Tool[] = [
     logo: "/logos/mcp.svg",
     slug: "mcp",
     status: "Available",
-    desc: "7 tools at full CLI parity with FTS5 search. For bolt.new, Lovable, and any MCP client.",
+    desc: "9 tools at full CLI parity with FTS5 search. For bolt.new, Lovable, and any MCP client.",
     docsUrl: "/docs/integrations/mcp",
   },
 ];

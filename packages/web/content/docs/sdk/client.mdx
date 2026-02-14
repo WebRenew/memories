@@ -185,6 +185,37 @@ Soft-delete a memory.
 await client.memories.forget("mem_abc123")
 ```
 
+### `client.memories.bulkForget(filters, options?)`
+
+Bulk soft-delete memories matching filters.
+
+```typescript
+// Preview what would be deleted
+const preview = await client.memories.bulkForget(
+  { types: ["note", "fact"], olderThanDays: 90 },
+  { dryRun: true }
+)
+console.log(preview.count, preview.memories) // preview list
+
+// Actually delete
+const result = await client.memories.bulkForget({
+  tags: ["temporary"],
+  pattern: "TODO%",
+})
+console.log(result.count, result.ids) // deleted IDs
+```
+
+Filter options: `types`, `tags`, `olderThanDays`, `pattern`, `projectId`, `all`. Provide at least one filter, or use `all: true` (cannot combine with other filters).
+
+### `client.memories.vacuum()`
+
+Permanently purge all soft-deleted memories to reclaim storage space.
+
+```typescript
+const result = await client.memories.vacuum()
+console.log(result.purged) // number of permanently removed records
+```
+
 ### `client.buildSystemPrompt(context)`
 
 Format rules and memories into a system prompt block.
