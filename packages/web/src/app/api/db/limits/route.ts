@@ -47,8 +47,8 @@ export async function GET(request: Request) {
       "SELECT COUNT(*) as count FROM memories WHERE deleted_at IS NULL"
     )
     memoryCount = Number(result.rows[0]?.count ?? 0)
-  } catch {
-    // If we can't connect, return 0
+  } catch (error) {
+    console.error("Failed to query memory count from Turso:", error)
   }
 
   return NextResponse.json({

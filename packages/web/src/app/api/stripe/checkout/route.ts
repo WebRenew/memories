@@ -41,7 +41,8 @@ async function getOrCreateUserCustomerId(
       .from("users")
       .update({ stripe_customer_id: customerId })
       .eq("id", userId)
-  } catch {
+  } catch (error) {
+    console.error("Failed to create Stripe customer for user:", error)
     const { data: refreshed } = await admin
       .from("users")
       .select("stripe_customer_id")
@@ -86,7 +87,8 @@ async function getOrCreateOrganizationCustomerId(
       .from("organizations")
       .update({ stripe_customer_id: customerId })
       .eq("id", orgId)
-  } catch {
+  } catch (error) {
+    console.error("Failed to create Stripe customer for organization:", error)
     const { data: refreshed } = await admin
       .from("organizations")
       .select("stripe_customer_id")

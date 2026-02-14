@@ -77,7 +77,8 @@ export async function getTeamSeatCount(stripeSubscriptionId: string): Promise<nu
     const stripe = getStripe()
     const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId)
     return subscription.items.data[0]?.quantity || 0
-  } catch {
+  } catch (error) {
+    console.error("Failed to retrieve team seat count:", error)
     return 0
   }
 }
