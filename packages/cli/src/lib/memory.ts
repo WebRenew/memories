@@ -714,3 +714,18 @@ export async function bulkForgetByIds(ids: string[]): Promise<number> {
 
   return ids.length;
 }
+
+/**
+ * Permanently delete all soft-deleted memories (vacuum).
+ * Returns the count of purged rows.
+ */
+export async function vacuumMemories(): Promise<number> {
+  const db = await getDb();
+
+  const [, changesResult] = await db.batch([
+    { sql: `DELETE FROM memories WHERE deleted_at IS NOT NULL`, args: [] },
+    { sql: `SELECT changes() as cnt`, args: [] },
+  ]);
+
+  return Number((changesResult.rows[0] as unknown as { cnt: number }).cnt) || 0;
+}

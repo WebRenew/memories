@@ -360,8 +360,8 @@ const TOOLS = [
       properties: {
         types: { type: "array", items: { type: "string", enum: ["rule", "decision", "fact", "note", "skill"] }, description: "Filter by memory types" },
         tags: { type: "array", items: { type: "string" }, description: "Filter by tags (partial match)" },
-        older_than_days: { type: "number", description: "Delete memories older than N days" },
-        pattern: { type: "string", description: "Content pattern (* as wildcard)" },
+        older_than_days: { type: "integer", description: "Delete memories older than N days (must be >= 1)" },
+        pattern: { type: "string", description: "Content pattern (* as wildcard, ? as single-char wildcard, wraps in contains match)" },
         project_id: { type: "string", description: "Scope deletion to a specific project" },
         user_id: { type: "string", description: "User identifier; deletes are constrained to this user's memories" },
         tenant_id: { type: "string", description: "Tenant identifier to route requests to a tenant-specific memory database" },

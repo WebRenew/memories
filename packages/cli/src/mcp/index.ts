@@ -11,6 +11,9 @@ import {
   updateMemory,
   getContext,
   getRules,
+  findMemoriesToForget,
+  bulkForgetByIds,
+  vacuumMemories,
   startMemoryStream,
   appendMemoryChunk,
   finalizeMemoryStream,
@@ -459,6 +462,111 @@ Find the memory ID first with search_memories or list_memories.`,
       } catch (error) {
         return {
           content: [{ type: "text", text: `Failed to forget memory: ${error instanceof Error ? error.message : "Unknown error"}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool: bulk_forget_memories
+  server.tool(
+    "bulk_forget_memories",
+    `Bulk soft-delete memories matching filters. Use dry_run:true to preview which memories would be deleted.
+Requires at least one filter, or all:true to delete everything. Cannot combine all:true with other filters.`,
+    {
+      types: z.array(z.enum(["rule", "decision", "fact", "note", "skill"])).optional().describe("Filter by memory types"),
+      tags: z.array(z.string()).optional().describe("Filter by tags (substring match)"),
+      older_than_days: z.number().int().positive().optional().describe("Delete memories older than N days"),
+      pattern: z.string().optional().describe("Content pattern (* as wildcard, ? as single-char wildcard)"),
+      project_id: z.string().optional().describe("Scope deletion to a specific project"),
+      all: z.boolean().optional().describe("Delete all memories (cannot combine with other filters)"),
+      dry_run: z.boolean().optional().describe("Preview which memories would be deleted without deleting them (default: false)"),
+    },
+    async ({ types, tags, older_than_days, pattern, project_id, all, dry_run }) => {
+      try {
+        const isAll = all === true;
+        const hasFilters = !!(types?.length || tags?.length || older_than_days || pattern);
+
+        if (isAll && hasFilters) {
+          return {
+            content: [{ type: "text", text: "Cannot combine all:true with other filters." }],
+            isError: true,
+          };
+        }
+        if (!isAll && !hasFilters) {
+          return {
+            content: [{ type: "text", text: "Provide at least one filter (types, tags, older_than_days, pattern), or use all:true." }],
+            isError: true,
+          };
+        }
+
+        const scopeOpts = resolveMemoryScopeInput({ project_id });
+        const filter = {
+          types: types as MemoryType[] | undefined,
+          tags,
+          olderThanDays: older_than_days,
+          pattern,
+          all: isAll,
+          projectId: scopeOpts.projectId,
+        };
+
+        const matches = await findMemoriesToForget(filter);
+
+        if (dry_run) {
+          if (matches.length === 0) {
+            return {
+              content: [{ type: "text", text: "Dry run: 0 memories would be deleted" }],
+            };
+          }
+          const preview = matches.slice(0, 1000).map((m) => {
+            const preview = m.content.length > 80 ? `${m.content.slice(0, 80).trim()}...` : m.content;
+            return `  ${m.id} [${m.type}] ${preview}`;
+          }).join("\n");
+          const msg = matches.length > 1000
+            ? `Dry run: ${matches.length} memories would be deleted (showing first 1000):\n${preview}`
+            : `Dry run: ${matches.length} memories would be deleted:\n${preview}`;
+          return {
+            content: [{ type: "text", text: msg }],
+          };
+        }
+
+        if (matches.length === 0) {
+          return {
+            content: [{ type: "text", text: "No memories matched the filters" }],
+          };
+        }
+
+        const ids = matches.map((m) => m.id);
+        const count = await bulkForgetByIds(ids);
+        return {
+          content: [{ type: "text", text: `Bulk deleted ${count} memories` }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `Failed to bulk forget: ${error instanceof Error ? error.message : "Unknown error"}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Tool: vacuum_memories
+  server.tool(
+    "vacuum_memories",
+    "Permanently purge all soft-deleted memories to reclaim storage space. This action is irreversible.",
+    {},
+    async () => {
+      try {
+        const purged = await vacuumMemories();
+        const message = purged > 0
+          ? `Vacuumed ${purged} soft-deleted memories`
+          : "No soft-deleted memories to vacuum";
+        return {
+          content: [{ type: "text", text: message }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `Failed to vacuum: ${error instanceof Error ? error.message : "Unknown error"}` }],
           isError: true,
         };
       }

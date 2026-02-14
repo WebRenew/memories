@@ -175,8 +175,8 @@ Bulk soft-delete memories matching filters. Use `dry_run: true` to preview match
 |-----------|------|----------|---------|-------------|
 | `types` | string[] | No | — | Filter by memory types (`rule`, `decision`, `fact`, `note`, `skill`) |
 | `tags` | string[] | No | — | Filter by tags (substring match) |
-| `older_than_days` | number | No | — | Delete memories older than N days |
-| `pattern` | string | No | — | Content pattern match (SQL LIKE syntax) |
+| `older_than_days` | integer | No | — | Delete memories older than N days (must be >= 1) |
+| `pattern` | string | No | — | Content pattern match (`*` = any chars, `?` = single char; matches anywhere in content) |
 | `project_id` | string | No | — | Filter by project identifier |
 | `all` | boolean | No | false | Delete all memories (cannot combine with other filters) |
 | `dry_run` | boolean | No | false | Preview matching memories without deleting |

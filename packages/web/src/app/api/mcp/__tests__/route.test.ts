@@ -40,9 +40,11 @@ vi.mock("@/lib/active-memory-context", () => ({
 
 // Mock Turso
 const mockExecute = vi.fn()
+const mockBatch = vi.fn()
 vi.mock("@libsql/client", () => ({
   createClient: vi.fn(() => ({
     execute: mockExecute,
+    batch: mockBatch,
   })),
 }))
 
@@ -1339,7 +1341,7 @@ describe("/api/mcp", () => {
 
       const selectCall = getExecuteCallBySqlFragment("SELECT id FROM memories")
       expect(selectCall.sql).toContain("content LIKE ? ESCAPE")
-      expect(selectCall.args).toContain("TODO%")
+      expect(selectCall.args).toContain("%TODO%%")
     })
 
     it("should build WHERE clause with project_id filter", async () => {
@@ -1489,13 +1491,10 @@ describe("/api/mcp", () => {
   describe("tools/call: vacuum_memories", () => {
     it("should purge soft-deleted memories", async () => {
       setupAuth()
-      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
-        const sql = typeof input === "string" ? input : input.sql
-        if (sql.includes("changes()")) {
-          return { rows: [{ cnt: 5 }] }
-        }
-        return { rows: [] }
-      })
+      mockBatch.mockResolvedValue([
+        { rows: [] },
+        { rows: [{ cnt: 5 }] },
+      ])
 
       const response = await POST(makePostRequest(
         jsonrpc("tools/call", {
@@ -1511,13 +1510,10 @@ describe("/api/mcp", () => {
 
     it("should return zero when nothing to vacuum", async () => {
       setupAuth()
-      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
-        const sql = typeof input === "string" ? input : input.sql
-        if (sql.includes("changes()")) {
-          return { rows: [{ cnt: 0 }] }
-        }
-        return { rows: [] }
-      })
+      mockBatch.mockResolvedValue([
+        { rows: [] },
+        { rows: [{ cnt: 0 }] },
+      ])
 
       const response = await POST(makePostRequest(
         jsonrpc("tools/call", {
@@ -1532,13 +1528,10 @@ describe("/api/mcp", () => {
 
     it("constrains vacuum by user_id when provided", async () => {
       setupAuth()
-      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
-        const sql = typeof input === "string" ? input : input.sql
-        if (sql.includes("changes()")) {
-          return { rows: [{ cnt: 0 }] }
-        }
-        return { rows: [] }
-      })
+      mockBatch.mockResolvedValue([
+        { rows: [] },
+        { rows: [{ cnt: 0 }] },
+      ])
 
       await POST(makePostRequest(
         jsonrpc("tools/call", {
@@ -1547,24 +1540,20 @@ describe("/api/mcp", () => {
         })
       ))
 
-      const deleteCall = getExecuteCallBySqlFragment("DELETE FROM memories")
-      expect(deleteCall.sql).toContain("user_id = ?")
-      expect(deleteCall.args).toContain("user-42")
+      expect(mockBatch).toHaveBeenCalledTimes(1)
+      const stmts = mockBatch.mock.calls[0][0] as { sql: string; args: unknown[] }[]
+      const deleteStmt = stmts.find((s) => s.sql.includes("DELETE FROM memories"))
+      expect(deleteStmt).toBeDefined()
+      expect(deleteStmt!.sql).toContain("user_id = ?")
+      expect(deleteStmt!.args).toContain("user-42")
     })
 
-    it("should issue DELETE before changes() — no separate COUNT query", async () => {
+    it("should use batch() for atomic DELETE + changes()", async () => {
       setupAuth()
-      const sqlSequence: string[] = []
-      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
-        const sql = typeof input === "string" ? input : input.sql
-        if (sql.includes("DELETE FROM memories") || sql.includes("changes()")) {
-          sqlSequence.push(sql)
-        }
-        if (sql.includes("changes()")) {
-          return { rows: [{ cnt: 3 }] }
-        }
-        return { rows: [] }
-      })
+      mockBatch.mockResolvedValue([
+        { rows: [] },
+        { rows: [{ cnt: 3 }] },
+      ])
 
       const response = await POST(makePostRequest(
         jsonrpc("tools/call", {
@@ -1574,29 +1563,28 @@ describe("/api/mcp", () => {
       ))
       const body = await response.json()
       expect(body.result.structuredContent.data.purged).toBe(3)
-      // DELETE must come before changes()
-      expect(sqlSequence).toHaveLength(2)
-      expect(sqlSequence[0]).toContain("DELETE FROM memories")
-      expect(sqlSequence[1]).toContain("changes()")
-      // No COUNT(*) query should exist
-      const countCall = mockExecute.mock.calls.find(
+      // Must use batch(), not separate execute() calls
+      expect(mockBatch).toHaveBeenCalledTimes(1)
+      const stmts = mockBatch.mock.calls[0][0] as { sql: string; args: unknown[] }[]
+      expect(stmts).toHaveLength(2)
+      expect(stmts[0].sql).toContain("DELETE FROM memories")
+      expect(stmts[1].sql).toContain("changes()")
+      // No separate execute calls for vacuum (ensureSchema may use execute, but no vacuum queries)
+      const vacuumExecuteCalls = mockExecute.mock.calls.filter(
         (entry: unknown[]) => {
           const s = typeof entry[0] === "string" ? entry[0] : (entry[0] as { sql?: string })?.sql
-          return s?.includes("COUNT(*)") && s?.includes("deleted_at IS NOT NULL")
+          return s?.includes("DELETE FROM memories") || s?.includes("changes()")
         }
       )
-      expect(countCall).toBeUndefined()
+      expect(vacuumExecuteCalls).toHaveLength(0)
     })
 
     it("should constrain vacuum to user_id IS NULL when no user_id provided", async () => {
       setupAuth()
-      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
-        const sql = typeof input === "string" ? input : input.sql
-        if (sql.includes("changes()")) {
-          return { rows: [{ cnt: 0 }] }
-        }
-        return { rows: [] }
-      })
+      mockBatch.mockResolvedValue([
+        { rows: [] },
+        { rows: [{ cnt: 0 }] },
+      ])
 
       await POST(makePostRequest(
         jsonrpc("tools/call", {
@@ -1605,20 +1593,18 @@ describe("/api/mcp", () => {
         })
       ))
 
-      const deleteCall = getExecuteCallBySqlFragment("DELETE FROM memories")
-      expect(deleteCall.sql).toContain("user_id IS NULL")
-      expect(deleteCall.sql).toContain("deleted_at IS NOT NULL")
+      const stmts = mockBatch.mock.calls[0][0] as { sql: string; args: unknown[] }[]
+      const deleteStmt = stmts.find((s) => s.sql.includes("DELETE FROM memories"))
+      expect(deleteStmt!.sql).toContain("user_id IS NULL")
+      expect(deleteStmt!.sql).toContain("deleted_at IS NOT NULL")
     })
 
     it("should only target soft-deleted rows in DELETE", async () => {
       setupAuth()
-      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
-        const sql = typeof input === "string" ? input : input.sql
-        if (sql.includes("changes()")) {
-          return { rows: [{ cnt: 2 }] }
-        }
-        return { rows: [] }
-      })
+      mockBatch.mockResolvedValue([
+        { rows: [] },
+        { rows: [{ cnt: 2 }] },
+      ])
 
       await POST(makePostRequest(
         jsonrpc("tools/call", {
@@ -1627,8 +1613,9 @@ describe("/api/mcp", () => {
         })
       ))
 
-      const deleteCall = getExecuteCallBySqlFragment("DELETE FROM memories")
-      expect(deleteCall.sql).toContain("deleted_at IS NOT NULL")
+      const stmts = mockBatch.mock.calls[0][0] as { sql: string; args: unknown[] }[]
+      const deleteStmt = stmts.find((s) => s.sql.includes("DELETE FROM memories"))
+      expect(deleteStmt!.sql).toContain("deleted_at IS NOT NULL")
     })
   })
 
