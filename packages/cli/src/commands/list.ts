@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { listMemories, type Memory, type MemoryType } from "../lib/memory.js";
+import * as ui from "../lib/ui.js";
 import { getProjectId } from "../lib/git.js";
 
 const TYPE_COLORS: Record<MemoryType, (s: string) => string> = {
@@ -60,7 +61,7 @@ export const listCommand = new Command("list")
       let types: MemoryType[] | undefined;
       if (opts.type) {
         if (!VALID_TYPES.includes(opts.type as MemoryType)) {
-          console.error(chalk.red("✗") + ` Invalid type "${opts.type}". Valid types: ${VALID_TYPES.join(", ")}`);
+          ui.error(`Invalid type "${opts.type}". Valid types: ${VALID_TYPES.join(", ")}`);
           process.exit(1);
         }
         types = [opts.type as MemoryType];
@@ -77,7 +78,7 @@ export const listCommand = new Command("list")
         includeGlobal = false;
         projectId = getProjectId() ?? undefined;
         if (!projectId) {
-          console.log(chalk.yellow("⚠") + " Not in a git repository. No project memories to show.");
+          ui.warn("Not in a git repository. No project memories to show.");
           return;
         }
       }
@@ -113,7 +114,7 @@ export const listCommand = new Command("list")
 
       console.log(chalk.dim(`\n  ${memories.length} memories`));
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed to list memories:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed to list memories: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

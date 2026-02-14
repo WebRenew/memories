@@ -25,6 +25,7 @@ import {
 import { getProjectId } from "../lib/git.js";
 import { setCloudMode } from "../lib/db.js";
 import { CLI_VERSION } from "../lib/version.js";
+import { logger } from "../lib/logger.js";
 import { resolveMemoryScopeInput } from "./scope.js";
 import {
   formatStorageWarningsForText,
@@ -826,7 +827,7 @@ export async function startMcpHttpServer(options: {
 
         await transport.handleRequest(req, res, body);
       } catch (error) {
-        console.error("[memories] Error handling MCP request:", error);
+        logger.error("Error handling MCP request:", error);
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Internal server error" }));
       }

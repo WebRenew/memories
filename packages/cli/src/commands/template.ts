@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { listTemplates, getTemplate, fillTemplate } from "../lib/templates.js";
+import * as ui from "../lib/ui.js";
 import { addMemory } from "../lib/memory.js";
 
 export const templateCommand = new Command("template")
@@ -29,9 +30,9 @@ templateCommand
   .description("Show template details and fields")
   .action((name: string) => {
     const template = getTemplate(name);
-    
+
     if (!template) {
-      console.error(chalk.red("✗") + ` Template "${name}" not found`);
+      ui.error(`Template "${name}" not found`);
       console.log(chalk.dim("Run 'memories template list' to see available templates"));
       process.exit(1);
     }
@@ -58,9 +59,9 @@ templateCommand
   .option("-g, --global", "Store as global memory")
   .action(async (name: string, opts: { global?: boolean }) => {
     const template = getTemplate(name);
-    
+
     if (!template) {
-      console.error(chalk.red("✗") + ` Template "${name}" not found`);
+      ui.error(`Template "${name}" not found`);
       console.log(chalk.dim("Run 'memories template list' to see available templates"));
       process.exit(1);
     }
@@ -79,7 +80,7 @@ templateCommand
       });
       
       console.log("");
-      console.log(chalk.green("✓") + ` Created ${template.type}: ${chalk.dim(memory.id)}`);
+      ui.success(`Created ${template.type}: ${chalk.dim(memory.id)}`);
       console.log(chalk.dim(`  "${content}"`));
     } catch (error) {
       // User likely cancelled with Ctrl+C

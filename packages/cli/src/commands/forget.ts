@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { createInterface } from "node:readline";
 import chalk from "chalk";
+import * as ui from "../lib/ui.js";
 import {
   forgetMemory,
   findMemoriesToForget,
@@ -56,9 +57,9 @@ export const forgetCommand = new Command("forget")
       if (id) {
         const deleted = await forgetMemory(id);
         if (deleted) {
-          console.log(chalk.green("✓") + ` Forgot memory ${chalk.dim(id)}`);
+          ui.success(`Forgot memory ${chalk.dim(id)}`);
         } else {
-          console.error(chalk.red("✗") + ` Memory ${id} not found or already forgotten.`);
+          ui.error(`Memory ${id} not found or already forgotten.`);
           process.exit(1);
         }
         return;
@@ -67,25 +68,25 @@ export const forgetCommand = new Command("forget")
       // Bulk delete — need at least one filter
       const hasBulkFilter = opts.type || opts.tag || opts.olderThan || opts.pattern || opts.all;
       if (!hasBulkFilter) {
-        console.error(chalk.red("✗") + " Provide a memory ID or a bulk filter (--type, --tag, --older-than, --pattern, --all)");
+        ui.error("Provide a memory ID or a bulk filter (--type, --tag, --older-than, --pattern, --all)");
         process.exit(1);
       }
 
       // Reject --all combined with other filters (ambiguous intent)
       if (opts.all && (opts.type || opts.tag || opts.olderThan || opts.pattern)) {
-        console.error(chalk.red("✗") + " --all cannot be combined with other filters. Use --all alone to delete everything.");
+        ui.error("--all cannot be combined with other filters. Use --all alone to delete everything.");
         process.exit(1);
       }
 
       // Validate type
       if (opts.type && !VALID_TYPES.includes(opts.type as MemoryType)) {
-        console.error(chalk.red("✗") + ` Invalid type "${opts.type}". Valid: ${VALID_TYPES.join(", ")}`);
+        ui.error(`Invalid type "${opts.type}". Valid: ${VALID_TYPES.join(", ")}`);
         process.exit(1);
       }
 
       // Validate older-than
       if (opts.olderThan && (isNaN(parseInt(opts.olderThan, 10)) || parseInt(opts.olderThan, 10) <= 0)) {
-        console.error(chalk.red("✗") + " --older-than must be a positive number of days");
+        ui.error("--older-than must be a positive number of days");
         process.exit(1);
       }
 
@@ -137,9 +138,9 @@ export const forgetCommand = new Command("forget")
 
       const ids = matches.map((m) => m.id);
       const count = await bulkForgetByIds(ids);
-      console.log(chalk.green("✓") + ` Forgot ${count} memories.`);
+      ui.success(`Forgot ${count} memories.`);
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed to forget:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed to forget: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

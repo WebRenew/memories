@@ -23,7 +23,7 @@ export function warn(message: string): void {
 }
 
 export function error(message: string): void {
-  console.log(chalk.red("✗") + " " + message);
+  console.error(chalk.red("✗") + " " + message);
 }
 
 export function info(message: string): void {

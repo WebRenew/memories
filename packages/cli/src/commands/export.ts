@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { writeFile } from "node:fs/promises";
+import * as ui from "../lib/ui.js";
 import { listMemories, type Memory, type MemoryType } from "../lib/memory.js";
 import { getProjectId } from "../lib/git.js";
 
@@ -46,7 +47,7 @@ export const exportCommand = new Command("export")
         includeGlobal = false;
         queryProjectId = projectId ?? undefined;
         if (!queryProjectId) {
-          console.error(chalk.red("✗") + " Not in a git repository. No project memories to export.");
+          ui.error("Not in a git repository. No project memories to export.");
           process.exit(1);
         }
       }
@@ -87,12 +88,12 @@ export const exportCommand = new Command("export")
 
       if (opts.output) {
         await writeFile(opts.output, output, "utf-8");
-        console.log(chalk.green("✓") + ` Exported ${memories.length} memories to ${chalk.dim(opts.output)}`);
+        ui.success(`Exported ${memories.length} memories to ${chalk.dim(opts.output)}`);
       } else {
         console.log(output);
       }
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed to export:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed to export: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

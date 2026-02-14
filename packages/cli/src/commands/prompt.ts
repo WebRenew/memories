@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { execFileSync } from "node:child_process";
 import chalk from "chalk";
 import { getRules, listMemories, type Memory, type MemoryType } from "../lib/memory.js";
+import * as ui from "../lib/ui.js";
 import { getProjectId } from "../lib/git.js";
 
 type Format = "markdown" | "xml" | "plain";
@@ -68,7 +69,7 @@ export const promptCommand = new Command("prompt")
     try {
       const format = (opts.format ?? "markdown") as Format;
       if (!["markdown", "xml", "plain"].includes(format)) {
-        console.error(chalk.red("✗") + ` Invalid format "${opts.format}". Use: markdown, xml, plain`);
+        ui.error(`Invalid format "${opts.format}". Use: markdown, xml, plain`);
         process.exit(1);
       }
 
@@ -86,7 +87,7 @@ export const promptCommand = new Command("prompt")
           // Allow plural or singular
           const normalized = t.replace(/s$/, "") as MemoryType;
           if (!VALID_TYPES.includes(normalized)) {
-            console.error(chalk.red("✗") + ` Invalid type "${t}". Valid: decisions, facts, notes`);
+            ui.error(`Invalid type "${t}". Valid: decisions, facts, notes`);
             process.exit(1);
           }
           if (normalized !== "rule") extraTypes.push(normalized);
@@ -146,19 +147,19 @@ export const promptCommand = new Command("prompt")
         if (copied) {
           console.log(output);
           if (!opts.quiet) {
-            console.error(chalk.green("✓") + " Copied to clipboard");
+            ui.success("Copied to clipboard");
           }
         } else {
           console.log(output);
           if (!opts.quiet) {
-            console.error(chalk.yellow("⚠") + " Could not copy to clipboard (unsupported platform)");
+            ui.warn("Could not copy to clipboard (unsupported platform)");
           }
         }
       } else {
         console.log(output);
       }
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed to generate prompt:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed to generate prompt: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

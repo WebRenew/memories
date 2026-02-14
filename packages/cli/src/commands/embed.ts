@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
+import * as ui from "../lib/ui.js";
 import { getDb } from "../lib/db.js";
 import { 
   getEmbedding, 
@@ -29,7 +30,7 @@ export const embedCommand = new Command("embed")
       const memories = result.rows as unknown as { id: string; content: string }[];
       
       if (memories.length === 0) {
-        console.log(chalk.green("✓") + " All memories already have embeddings.");
+        ui.success("All memories already have embeddings.");
         console.log(chalk.dim(`  Model: ${model.id} (${model.dimensions}d)`));
         return;
       }
@@ -73,16 +74,16 @@ export const embedCommand = new Command("embed")
       
       spinner.stop();
       
-      console.log(chalk.green("✓") + ` Embedded ${embedded} memories`);
+      ui.success(`Embedded ${embedded} memories`);
       if (failed > 0) {
-        console.log(chalk.yellow("⚠") + ` ${failed} memories failed to embed`);
+        ui.warn(`${failed} memories failed to embed`);
       }
       
       console.log("");
       console.log(chalk.dim("Now you can use semantic search:"));
       console.log(chalk.cyan("  memories search --semantic \"your query\""));
     } catch (error) {
-      console.error(chalk.red("✗") + " Embedding failed:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Embedding failed: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

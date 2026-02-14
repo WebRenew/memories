@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { readFile } from "node:fs/promises";
+import * as ui from "../lib/ui.js";
 import { addMemory, type MemoryType } from "../lib/memory.js";
 
 interface ImportMemory {
@@ -49,7 +50,7 @@ export const importCommand = new Command("import")
       }
 
       if (!data || typeof data !== "object" || !("memories" in data) || !Array.isArray((data as ImportData).memories)) {
-        console.error(chalk.red("✗") + " Invalid import file: missing 'memories' array");
+        ui.error("Invalid import file: missing 'memories' array");
         process.exit(1);
       }
 
@@ -65,7 +66,7 @@ export const importCommand = new Command("import")
           continue;
         }
         if (m.type && !VALID_TYPES.includes(m.type)) {
-          console.error(chalk.yellow("⚠") + ` Skipping memory with invalid type "${m.type}": ${m.content.slice(0, 50)}`);
+          ui.warn(`Skipping memory with invalid type "${m.type}": ${m.content.slice(0, 50)}`);
           skipped++;
           continue;
         }
@@ -97,20 +98,20 @@ export const importCommand = new Command("import")
           });
           imported++;
         } catch (error) {
-          console.error(chalk.yellow("⚠") + ` Failed to import: ${m.content.slice(0, 50)}...`);
+          ui.warn(`Failed to import: ${m.content.slice(0, 50)}...`);
           failed++;
         }
       }
 
-      console.log(chalk.green("✓") + ` Imported ${imported} memories`);
+      ui.success(`Imported ${imported} memories`);
       if (failed > 0) {
-        console.log(chalk.yellow("⚠") + ` ${failed} memories failed to import`);
+        ui.warn(`${failed} memories failed to import`);
       }
       if (skipped > 0) {
         console.log(chalk.dim(`${skipped} entries skipped (invalid content or type)`));
       }
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed to import:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed to import: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

@@ -7,6 +7,7 @@ import { getDb, getConfigDir, repairFtsSchema } from "../lib/db.js";
 import { getProjectId } from "../lib/git.js";
 import { getApiClient, readAuth } from "../lib/auth.js";
 import { detectTools, toolSupportsMcp } from "../lib/setup.js";
+import * as ui from "../lib/ui.js";
 
 interface Check {
   id: string;
@@ -696,7 +697,7 @@ export const doctorCommand = new Command("doctor")
           ),
         );
       } else {
-        console.error(chalk.red("✗") + " Doctor failed:", error instanceof Error ? error.message : "Unknown error");
+        ui.error("Doctor failed: " + (error instanceof Error ? error.message : "Unknown error"));
       }
       process.exit(1);
     }

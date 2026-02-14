@@ -3,6 +3,7 @@ import chalk from "chalk";
 import { nanoid } from "nanoid";
 import { getDb } from "../lib/db.js";
 import { getMemoryById, type Memory } from "../lib/memory.js";
+import * as ui from "../lib/ui.js";
 
 const LINK_TYPES = ["related", "supports", "supersedes", "contradicts"] as const;
 type LinkType = typeof LINK_TYPES[number];
@@ -87,7 +88,7 @@ export const linkCommand = new Command("link")
       const db = await getDb();
 
       if (!LINK_TYPES.includes(opts.type as LinkType)) {
-        console.error(chalk.red("✗") + ` Invalid link type. Valid: ${LINK_TYPES.join(", ")}`);
+        ui.error(`Invalid link type. Valid: ${LINK_TYPES.join(", ")}`);
         process.exit(1);
       }
 
@@ -96,11 +97,11 @@ export const linkCommand = new Command("link")
       const m2 = await getMemoryById(id2);
 
       if (!m1) {
-        console.error(chalk.red("✗") + ` Memory ${id1} not found`);
+        ui.error(`Memory ${id1} not found`);
         process.exit(1);
       }
       if (!m2) {
-        console.error(chalk.red("✗") + ` Memory ${id2} not found`);
+        ui.error(`Memory ${id2} not found`);
         process.exit(1);
       }
 
@@ -112,7 +113,7 @@ export const linkCommand = new Command("link")
       });
 
       if (existing.rows.length > 0) {
-        console.log(chalk.yellow("!") + " These memories are already linked");
+        ui.info("These memories are already linked");
         return;
       }
 
@@ -125,13 +126,13 @@ export const linkCommand = new Command("link")
 
       const icon1 = TYPE_ICONS[m1.type] || "📝";
       const icon2 = TYPE_ICONS[m2.type] || "📝";
-      
-      console.log(chalk.green("✓") + " Linked memories:");
+
+      ui.success("Linked memories:");
       console.log(`  ${icon1} ${chalk.dim(id1)} "${m1.content.slice(0, 40)}..."`);
       console.log(`    ↓ ${chalk.cyan(opts.type)}`);
       console.log(`  ${icon2} ${chalk.dim(id2)} "${m2.content.slice(0, 40)}..."`);
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });
@@ -152,12 +153,12 @@ export const unlinkCommand = new Command("unlink")
       });
 
       if (result.rowsAffected === 0) {
-        console.log(chalk.yellow("!") + " No link found between these memories");
+        ui.info("No link found between these memories");
       } else {
-        console.log(chalk.green("✓") + ` Unlinked ${id1} and ${id2}`);
+        ui.success(`Unlinked ${id1} and ${id2}`);
       }
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });
@@ -170,7 +171,7 @@ export const showCommand = new Command("show")
     try {
       const memory = await getMemoryById(id);
       if (!memory) {
-        console.error(chalk.red("✗") + ` Memory ${id} not found`);
+        ui.error(`Memory ${id} not found`);
         process.exit(1);
       }
 
@@ -202,7 +203,7 @@ export const showCommand = new Command("show")
       }
       console.log("");
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

@@ -2,6 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { getRules, type Memory } from "../lib/memory.js";
 import { getProjectId } from "../lib/git.js";
+import * as ui from "../lib/ui.js";
 
 // Simple Levenshtein distance
 function levenshtein(a: string, b: string): number {
@@ -134,7 +135,7 @@ export const validateCommand = new Command("validate")
       }
 
       if (issues.length === 0) {
-        console.log(chalk.green("✓") + ` ${rules.length} rules validated, no issues found.`);
+        ui.success(`${rules.length} rules validated, no issues found.`);
         return;
       }
 
@@ -171,7 +172,7 @@ export const validateCommand = new Command("validate")
         console.log(chalk.dim("\n--fix mode not yet implemented. Review issues above manually."));
       }
     } catch (error) {
-      console.error(chalk.red("✗") + " Validation failed:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Validation failed: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

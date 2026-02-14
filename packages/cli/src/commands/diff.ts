@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { readFile } from "node:fs/promises";
+import * as ui from "../lib/ui.js";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { listMemories, type Memory, type MemoryType } from "../lib/memory.js";
@@ -53,7 +54,7 @@ function parseTypes(raw: string | undefined): MemoryType[] {
   const types = raw.split(",").map((s) => s.trim()) as MemoryType[];
   for (const t of types) {
     if (!VALID_TYPES.includes(t)) {
-      console.error(chalk.red("✗") + ` Invalid type "${t}". Valid: ${VALID_TYPES.join(", ")}`);
+      ui.error(`Invalid type "${t}". Valid: ${VALID_TYPES.join(", ")}`);
       process.exit(1);
     }
   }
@@ -111,7 +112,7 @@ export const diffCommand = new Command("diff")
         : TARGETS;
 
       if (target && target !== "all" && targetsToCheck.length === 0) {
-        console.error(chalk.red("✗") + ` Unknown target "${target}". Valid: ${TARGETS.map((t) => t.name).join(", ")}`);
+        ui.error(`Unknown target "${target}". Valid: ${TARGETS.map((t) => t.name).join(", ")}`);
         process.exit(1);
       }
 
@@ -175,7 +176,7 @@ export const diffCommand = new Command("diff")
         console.log(chalk.dim(`\n  Run ${chalk.bold("memories generate")} to update stale files.`));
       }
     } catch (error) {
-      console.error(chalk.red("✗") + " Diff failed:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Diff failed: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

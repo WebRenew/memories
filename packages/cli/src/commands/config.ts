@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { initConfig, readConfig } from "../lib/config.js";
+import * as ui from "../lib/ui.js";
 import { 
   getAvailableModels, 
   getCurrentModelInfo, 
@@ -72,20 +73,20 @@ configCommand
       // Set model
       if (modelId) {
         if (modelId === currentModel.id) {
-          console.log(chalk.yellow("⚠") + ` Already using ${modelId}`);
+          ui.warn(`Already using ${modelId}`);
           return;
         }
         
         const result = setEmbeddingModel(modelId);
-        
-        console.log(chalk.green("✓") + ` Switched to ${chalk.bold(result.model.id)}`);
+
+        ui.success(`Switched to ${chalk.bold(result.model.id)}`);
         console.log(chalk.dim(`  ${result.model.description}`));
         console.log(chalk.dim(`  Dimensions: ${result.model.dimensions}, Speed: ${result.model.speed}, Quality: ${result.model.quality}`));
         
         // Handle dimension change
         if (result.dimensionChanged) {
           console.log("");
-          console.log(chalk.yellow("⚠") + chalk.bold(" Dimension change detected"));
+          ui.warn(chalk.bold("Dimension change detected"));
           console.log(chalk.dim(`  Previous: ${result.previousDimensions}d → New: ${result.model.dimensions}d`));
           console.log(chalk.dim("  Existing embeddings are incompatible and should be regenerated."));
           console.log("");
@@ -97,16 +98,16 @@ configCommand
           
           if (shouldClear) {
             const cleared = await clearAllEmbeddings();
-            console.log(chalk.green("✓") + ` Cleared ${cleared} embeddings`);
+            ui.success(`Cleared ${cleared} embeddings`);
             console.log(chalk.dim("  Run `memories embed` to regenerate embeddings with the new model."));
           } else {
-            console.log(chalk.yellow("⚠") + " Keeping old embeddings. Semantic search may not work correctly.");
+            ui.warn("Keeping old embeddings. Semantic search may not work correctly.");
             console.log(chalk.dim("  Run `memories embed --all` later to regenerate."));
           }
         }
       }
     } catch (error) {
-      console.error(chalk.red("✗") + ` Failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      ui.error(`Failed: ${error instanceof Error ? error.message : "Unknown error"}`);
       process.exit(1);
     }
   });

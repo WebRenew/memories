@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { getDb } from "../lib/db.js";
+import * as ui from "../lib/ui.js";
 import { getMemoryById, updateMemory, type Memory } from "../lib/memory.js";
 
 const TYPE_ICONS: Record<string, string> = {
@@ -77,7 +78,7 @@ export const historyCommand = new Command("history")
       }
       
       if (!memory && history.length === 0) {
-        console.error(chalk.red("✗") + ` Memory ${id} not found`);
+        ui.error(`Memory ${id} not found`);
         process.exit(1);
       }
       
@@ -119,7 +120,7 @@ export const historyCommand = new Command("history")
       console.log(chalk.dim("─".repeat(60)));
       console.log(chalk.dim(`\nUse 'memories revert ${id} --to <version>' to restore a previous version`));
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });
@@ -135,7 +136,7 @@ export const revertCommand = new Command("revert")
       
       const version = parseInt(opts.to.replace("v", ""), 10);
       if (isNaN(version) || version < 1) {
-        console.error(chalk.red("✗") + " Invalid version number");
+        ui.error("Invalid version number");
         process.exit(1);
       }
       
@@ -149,9 +150,9 @@ export const revertCommand = new Command("revert")
       
       const history = result.rows as unknown as HistoryEntry[];
       const targetEntry = history.find(h => h.version === version);
-      
+
       if (!targetEntry) {
-        console.error(chalk.red("✗") + ` Version ${version} not found for memory ${id}`);
+        ui.error(`Version ${version} not found for memory ${id}`);
         process.exit(1);
       }
       
@@ -168,14 +169,14 @@ export const revertCommand = new Command("revert")
       });
       
       if (!updated) {
-        console.error(chalk.red("✗") + ` Failed to revert memory ${id}`);
+        ui.error(`Failed to revert memory ${id}`);
         process.exit(1);
       }
-      
-      console.log(chalk.green("✓") + ` Reverted memory ${chalk.dim(id)} to version ${version}`);
+
+      ui.success(`Reverted memory ${chalk.dim(id)} to version ${version}`);
       console.log(chalk.dim(`  "${targetEntry.content.slice(0, 60)}${targetEntry.content.length > 60 ? "..." : ""}"`));
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

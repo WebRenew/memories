@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { searchMemories, type Memory, type MemoryType } from "../lib/memory.js";
+import * as ui from "../lib/ui.js";
 import { getProjectId } from "../lib/git.js";
 
 const TYPE_ICONS: Record<MemoryType, string> = {
@@ -43,7 +44,7 @@ export const searchCommand = new Command("search")
       let types: MemoryType[] | undefined;
       if (opts.type) {
         if (!VALID_TYPES.includes(opts.type as MemoryType)) {
-          console.error(chalk.red("✗") + ` Invalid type "${opts.type}". Valid types: ${VALID_TYPES.join(", ")}`);
+          ui.error(`Invalid type "${opts.type}". Valid types: ${VALID_TYPES.join(", ")}`);
           process.exit(1);
         }
         types = [opts.type as MemoryType];
@@ -60,7 +61,7 @@ export const searchCommand = new Command("search")
         includeGlobal = false;
         projectId = getProjectId() ?? undefined;
         if (!projectId) {
-          console.log(chalk.yellow("⚠") + " Not in a git repository. No project memories to search.");
+          ui.warn("Not in a git repository. No project memories to search.");
           return;
         }
       }
@@ -71,7 +72,7 @@ export const searchCommand = new Command("search")
           const { semanticSearch, isModelAvailable } = await import("../lib/embeddings.js");
           
           if (!await isModelAvailable()) {
-            console.log(chalk.yellow("⚠") + " Loading embedding model for first time (this may take a moment)...");
+            ui.warn("Loading embedding model for first time (this may take a moment)...");
           }
           
           const results = await semanticSearch(query, {
@@ -107,7 +108,7 @@ export const searchCommand = new Command("search")
           console.log(chalk.dim(`\n${results.length} results (semantic search)`));
           return;
         } catch (error) {
-          console.error(chalk.red("✗") + " Semantic search failed:", error instanceof Error ? error.message : "Unknown error");
+          ui.error("Semantic search failed: " + (error instanceof Error ? error.message : "Unknown error"));
           console.log(chalk.dim("Falling back to keyword search..."));
         }
       }
@@ -139,7 +140,7 @@ export const searchCommand = new Command("search")
       
       console.log(chalk.dim(`\n${memories.length} results`));
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed to search:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed to search: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

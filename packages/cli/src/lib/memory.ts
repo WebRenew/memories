@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { getDb } from "./db.js";
 import { getProjectId } from "./git.js";
+import { logger } from "./logger.js";
 
 /**
  * Record a history entry for a memory change.
@@ -134,7 +135,7 @@ async function generateEmbeddingAsync(memoryId: string, content: string): Promis
     // Log embedding failures - they're optional but we want visibility
     const message = error instanceof Error ? error.message : "Unknown error";
     const cause = error instanceof Error && "cause" in error ? error.cause : undefined;
-    console.error(`[embeddings] Failed to embed memory ${memoryId}: ${message}`, cause ?? "");
+    logger.warn(`Failed to embed memory ${memoryId}: ${message}`, cause ?? "");
   }
 }
 
@@ -219,7 +220,7 @@ export async function searchMemories(
     return result.rows as unknown as Memory[];
   } catch (error) {
     // Fallback to LIKE search if FTS fails (e.g., empty index)
-    console.error("FTS search failed, falling back to LIKE:", error);
+    logger.warn("FTS search failed, falling back to LIKE:", error);
     return searchMemoriesLike(query, opts);
   }
 }
@@ -507,7 +508,7 @@ function cleanupStaleStreams(): void {
   for (const [id, stream] of activeStreams) {
     if (now - stream.lastChunkAt.getTime() > STREAM_TTL_MS) {
       activeStreams.delete(id);
-      console.error(`[streams] Cleaned up stale stream ${id} (no chunks for 1 hour)`);
+      logger.info(`Cleaned up stale stream ${id} (no chunks for 1 hour)`);
     }
   }
 }

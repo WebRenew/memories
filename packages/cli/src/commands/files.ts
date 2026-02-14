@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
+import * as ui from "../lib/ui.js";
 import { getDb, syncDb, readSyncConfig } from "../lib/db.js";
 import { readAuth, getApiClient } from "../lib/auth.js";
 import { getProjectId } from "../lib/git.js";
@@ -829,5 +830,5 @@ filesCommand
       await syncDb();
     }
     
-    console.log(chalk.green(`✓ Removed ${path} from sync`));
+    ui.success(`Removed ${path} from sync`);
   });

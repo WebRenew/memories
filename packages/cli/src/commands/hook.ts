@@ -4,6 +4,7 @@ import { readFile, writeFile, chmod } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+import * as ui from "../lib/ui.js";
 
 const HOOK_MARKER_START = "# >>> memories.sh hook >>>";
 const HOOK_MARKER_END = "# <<< memories.sh hook <<<";
@@ -75,7 +76,7 @@ hookCommand.addCommand(
       try {
         const location = getHookLocation(opts.hook);
         if (!location) {
-          console.error(chalk.red("✗") + " Not in a git repository");
+          ui.error("Not in a git repository");
           process.exit(1);
         }
 
@@ -97,7 +98,7 @@ hookCommand.addCommand(
         await chmod(hookPath, 0o755);
 
         const locationLabel = location.type === "husky" ? "Husky" : ".git/hooks";
-        console.log(chalk.green("✓") + ` Installed memories hook in ${chalk.dim(opts.hook)} (${locationLabel})`);
+        ui.success(`Installed memories hook in ${chalk.dim(opts.hook)} (${locationLabel})`);
         console.log(chalk.dim("  Rule files will auto-generate on each commit."));
 
         // Lint-staged guidance
@@ -108,7 +109,7 @@ hookCommand.addCommand(
           );
         }
       } catch (error) {
-        console.error(chalk.red("✗") + " Failed to install hook:", error instanceof Error ? error.message : "Unknown error");
+        ui.error("Failed to install hook: " + (error instanceof Error ? error.message : "Unknown error"));
         process.exit(1);
       }
     }),
@@ -122,7 +123,7 @@ hookCommand.addCommand(
       try {
         const location = getHookLocation(opts.hook);
         if (!location) {
-          console.error(chalk.red("✗") + " Not in a git repository");
+          ui.error("Not in a git repository");
           process.exit(1);
         }
 
@@ -149,13 +150,13 @@ hookCommand.addCommand(
         if (cleaned.trim() === "#!/bin/sh" || cleaned.trim() === "") {
           const { unlink } = await import("node:fs/promises");
           await unlink(hookPath);
-          console.log(chalk.green("✓") + ` Removed ${chalk.dim(opts.hook)} hook (was memories-only)`);
+          ui.success(`Removed ${chalk.dim(opts.hook)} hook (was memories-only)`);
         } else {
           await writeFile(hookPath, cleaned, "utf-8");
-          console.log(chalk.green("✓") + ` Removed memories section from ${chalk.dim(opts.hook)}`);
+          ui.success(`Removed memories section from ${chalk.dim(opts.hook)}`);
         }
       } catch (error) {
-        console.error(chalk.red("✗") + " Failed to uninstall hook:", error instanceof Error ? error.message : "Unknown error");
+        ui.error("Failed to uninstall hook: " + (error instanceof Error ? error.message : "Unknown error"));
         process.exit(1);
       }
     }),
@@ -169,7 +170,7 @@ hookCommand.addCommand(
       try {
         const hookPath = getHookLocation(opts.hook)?.path;
         if (!hookPath) {
-          console.error(chalk.red("✗") + " Not in a git repository");
+          ui.error("Not in a git repository");
           process.exit(1);
         }
 
@@ -180,12 +181,12 @@ hookCommand.addCommand(
 
         const content = await readFile(hookPath, "utf-8");
         if (content.includes(HOOK_MARKER_START)) {
-          console.log(chalk.green("✓") + ` Installed in ${chalk.dim(hookPath)}`);
+          ui.success(`Installed in ${chalk.dim(hookPath)}`);
         } else {
           console.log(chalk.dim("Not installed") + ` — ${opts.hook} exists but has no memories section`);
         }
       } catch (error) {
-        console.error(chalk.red("✗") + " Failed to check hook:", error instanceof Error ? error.message : "Unknown error");
+        ui.error("Failed to check hook: " + (error instanceof Error ? error.message : "Unknown error"));
         process.exit(1);
       }
     }),

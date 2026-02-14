@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { getDb } from "../lib/db.js";
+import * as ui from "../lib/ui.js";
 import { getProjectId } from "../lib/git.js";
 import { computeStorageMetrics, evaluateStorageWarnings } from "../lib/storage-health.js";
 
@@ -93,7 +94,7 @@ export const statsCommand = new Command("stats")
         console.log(`  ${type}${scope}${Number(row.count)}`);
       }
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed to get stats:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed to get stats: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

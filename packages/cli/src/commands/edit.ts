@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { execFileSync } from "node:child_process";
+import * as ui from "../lib/ui.js";
 import { writeFileSync, readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -50,7 +51,7 @@ export const editCommand = new Command("edit")
       // Interactive picker if no ID provided
       if (!id) {
         if (!process.stdin.isTTY) {
-          console.error(chalk.red("✗") + " Memory ID required in non-interactive mode");
+          ui.error("Memory ID required in non-interactive mode");
           process.exit(1);
         }
         id = await pickMemory();
@@ -64,7 +65,7 @@ export const editCommand = new Command("edit")
       });
 
       if (result.rows.length === 0) {
-        console.error(chalk.red("✗") + ` Memory ${chalk.dim(id)} not found`);
+        ui.error(`Memory ${chalk.dim(id)} not found`);
         process.exit(1);
       }
 
@@ -77,7 +78,7 @@ export const editCommand = new Command("edit")
 
       // Validate type if provided
       if (opts.type && !VALID_TYPES.includes(opts.type as MemoryType)) {
-        console.error(chalk.red("✗") + ` Invalid type "${opts.type}". Valid: ${VALID_TYPES.join(", ")}`);
+        ui.error(`Invalid type "${opts.type}". Valid: ${VALID_TYPES.join(", ")}`);
         process.exit(1);
       }
 
@@ -114,7 +115,7 @@ export const editCommand = new Command("edit")
       const updated = await updateMemory(id, updates);
 
       if (!updated) {
-        console.error(chalk.red("✗") + ` Failed to update memory ${chalk.dim(id)}`);
+        ui.error(`Failed to update memory ${chalk.dim(id)}`);
         process.exit(1);
       }
 
@@ -125,10 +126,10 @@ export const editCommand = new Command("edit")
       if (updates.paths !== undefined) changes.push("paths");
       if (updates.category !== undefined) changes.push("category");
 
-      console.log(chalk.green("✓") + ` Updated ${chalk.dim(id)} (${changes.join(", ")})`);
+      ui.success(`Updated ${chalk.dim(id)} (${changes.join(", ")})`);
     } catch (error) {
       if ((error as Error).name === "ExitPromptError") return;
-      console.error(chalk.red("✗") + " Failed to edit memory:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed to edit memory: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

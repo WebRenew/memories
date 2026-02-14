@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { getDb } from "../lib/db.js";
+import * as ui from "../lib/ui.js";
 import { getProjectId } from "../lib/git.js";
 import type { MemoryType } from "../lib/memory.js";
 
@@ -90,10 +91,10 @@ tagCommand.addCommand(
         if (opts.dryRun) {
           console.log(chalk.dim(`Dry run — would tag ${updated} memories with "${tag}" (${skipped} already tagged)`));
         } else {
-          console.log(chalk.green("✓") + ` Tagged ${updated} memories with "${tag}"` + (skipped > 0 ? chalk.dim(` (${skipped} already tagged)`) : ""));
+          ui.success(`Tagged ${updated} memories with "${tag}"` + (skipped > 0 ? chalk.dim(` (${skipped} already tagged)`) : ""));
         }
       } catch (error) {
-        console.error(chalk.red("✗") + ` Failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+        ui.error(`Failed: ${error instanceof Error ? error.message : "Unknown error"}`);
         process.exit(1);
       }
     }),
@@ -140,10 +141,10 @@ tagCommand.addCommand(
         if (opts.dryRun) {
           console.log(chalk.dim(`Dry run — would remove "${tag}" from ${updated} memories`));
         } else {
-          console.log(chalk.green("✓") + ` Removed "${tag}" from ${updated} memories`);
+          ui.success(`Removed "${tag}" from ${updated} memories`);
         }
       } catch (error) {
-        console.error(chalk.red("✗") + ` Failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+        ui.error(`Failed: ${error instanceof Error ? error.message : "Unknown error"}`);
         process.exit(1);
       }
     }),
@@ -184,7 +185,7 @@ tagCommand.addCommand(
           console.log(`  ${chalk.bold(tag)} ${chalk.dim(`(${count})`)}`);
         }
       } catch (error) {
-        console.error(chalk.red("✗") + ` Failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+        ui.error(`Failed: ${error instanceof Error ? error.message : "Unknown error"}`);
         process.exit(1);
       }
     }),

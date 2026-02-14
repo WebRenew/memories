@@ -2,6 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { getContext, getRules, type Memory, type MemoryType } from "../lib/memory.js";
 import { getProjectId } from "../lib/git.js";
+import * as ui from "../lib/ui.js";
 
 const TYPE_ICONS: Record<MemoryType, string> = {
   rule: "📌",
@@ -102,7 +103,7 @@ export const recallCommand = new Command("recall")
         console.log(chalk.dim("Add some with: memories add \"Your memory here\""));
       }
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed to recall:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed to recall: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import chalk from "chalk";
+import * as ui from "../lib/ui.js";
 import { getDb } from "../lib/db.js";
 import { getProjectId } from "../lib/git.js";
 import { forgetMemory, type MemoryType } from "../lib/memory.js";
@@ -44,7 +45,7 @@ export const staleCommand = new Command("stale")
       const projectId = getProjectId() ?? undefined;
 
       if (isNaN(days) || days <= 0) {
-        console.error(chalk.red("✗") + " --days must be a positive number");
+        ui.error("--days must be a positive number");
         process.exit(1);
       }
 
@@ -73,7 +74,7 @@ export const staleCommand = new Command("stale")
       }
 
       if (stale.length === 0) {
-        console.log(chalk.green("✓") + ` No memories older than ${days} days.`);
+        ui.success(`No memories older than ${days} days.`);
         return;
       }
 
@@ -94,7 +95,7 @@ export const staleCommand = new Command("stale")
       console.log(`${stale.length} stale ${stale.length === 1 ? "memory" : "memories"} found`);
       console.log(chalk.dim("Run 'memories review' to clean up interactively"));
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Failed: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });
@@ -121,7 +122,7 @@ export const reviewCommand = new Command("review")
       const stale = result.rows as unknown as StaleMemory[];
 
       if (stale.length === 0) {
-        console.log(chalk.green("✓") + ` No stale memories to review.`);
+        ui.success(`No stale memories to review.`);
         return;
       }
 
@@ -162,7 +163,7 @@ export const reviewCommand = new Command("review")
       console.log(chalk.bold("\nReview Summary:"));
       console.log(`  Kept: ${kept}, Deleted: ${deleted}, Skipped: ${skipped}`);
     } catch (error) {
-      console.error(chalk.red("✗") + " Review failed:", error instanceof Error ? error.message : "Unknown error");
+      ui.error("Review failed: " + (error instanceof Error ? error.message : "Unknown error"));
       process.exit(1);
     }
   });

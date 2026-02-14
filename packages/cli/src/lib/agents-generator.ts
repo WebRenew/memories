@@ -4,6 +4,7 @@ import { join } from "node:path";
 import chalk from "chalk";
 import { listMemories, type Memory, type MemoryType } from "./memory.js";
 import { getProjectId } from "./git.js";
+import { warn as uiWarn, error as uiError } from "./ui.js";
 
 import { MARKER, makeFooter, hasOurMarker } from "./markers.js";
 
@@ -245,10 +246,7 @@ export async function generateSkills(
 
   // Warn about skills missing category
   for (const m of skipped) {
-    console.warn(
-      chalk.yellow("⚠") +
-        ` Skipping skill memory ${m.id} — missing category (set with: memories edit ${m.id} --category <name>)`,
-    );
+    uiWarn(`Skipping skill memory ${m.id} — missing category (set with: memories edit ${m.id} --category <name>)`);
   }
 
   const created: string[] = [];
@@ -305,7 +303,7 @@ export async function generateSkills(
         }
       }
     } catch (error) {
-      console.error(chalk.red("✗") + " Failed to clean stale skills:", error instanceof Error ? error.message : "Unknown error");
+      uiError("Failed to clean stale skills: " + (error instanceof Error ? error.message : "Unknown error"));
     }
   }
 
@@ -359,10 +357,7 @@ export async function generateAgentsDir(
   try {
     memories = await fetchAllMemories();
   } catch (error) {
-    console.error(
-      chalk.red("✗") + " Failed to fetch memories:",
-      error instanceof Error ? error.message : "Unknown error",
-    );
+    uiError("Failed to fetch memories: " + (error instanceof Error ? error.message : "Unknown error"));
     return result;
   }
 
@@ -374,10 +369,7 @@ export async function generateAgentsDir(
       (m) => INSTRUCTION_TYPES.includes(m.type) && !m.paths,
     ).length;
   } catch (error) {
-    console.error(
-      chalk.red("✗") + " Failed to generate instructions.md:",
-      error instanceof Error ? error.message : "Unknown error",
-    );
+    uiError("Failed to generate instructions.md: " + (error instanceof Error ? error.message : "Unknown error"));
   }
 
   // 3b: rules/*.md
@@ -387,10 +379,7 @@ export async function generateAgentsDir(
     result.filesCleaned.push(...cleaned);
     result.counts.rules = created.length;
   } catch (error) {
-    console.error(
-      chalk.red("✗") + " Failed to generate rules:",
-      error instanceof Error ? error.message : "Unknown error",
-    );
+    uiError("Failed to generate rules: " + (error instanceof Error ? error.message : "Unknown error"));
   }
 
   // 3c: skills/**/SKILL.md
@@ -399,10 +388,7 @@ export async function generateAgentsDir(
     result.filesCreated.push(...created);
     result.counts.skills = created.length;
   } catch (error) {
-    console.error(
-      chalk.red("✗") + " Failed to generate skills:",
-      error instanceof Error ? error.message : "Unknown error",
-    );
+    uiError("Failed to generate skills: " + (error instanceof Error ? error.message : "Unknown error"));
   }
 
   // 3d: settings.json
@@ -413,10 +399,7 @@ export async function generateAgentsDir(
       result.counts.settings = true;
     }
   } catch (error) {
-    console.error(
-      chalk.red("✗") + " Failed to generate settings.json:",
-      error instanceof Error ? error.message : "Unknown error",
-    );
+    uiError("Failed to generate settings.json: " + (error instanceof Error ? error.message : "Unknown error"));
   }
 
   return result;
