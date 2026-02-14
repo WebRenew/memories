@@ -7,7 +7,7 @@ import { success as uiSuccess, warn as uiWarn, error as uiError } from "./ui.js"
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export interface AdaptResult {
+interface AdaptResult {
   filesCreated: string[];
   filesSkipped: string[];
   errors: string[];

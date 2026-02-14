@@ -30,7 +30,7 @@ const HARNESS_HEADER = [
 
 // ── Result Types ─────────────────────────────────────────────────────
 
-export interface GenerateResult {
+interface GenerateResult {
   filesCreated: string[];
   filesCleaned: string[];
   counts: {

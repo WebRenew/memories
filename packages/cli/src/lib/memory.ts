@@ -69,7 +69,7 @@ export interface AddMemoryOpts {
   metadata?: Record<string, unknown>; // Extended attributes (stored as JSON)
 }
 
-export interface QueryMemoryOpts {
+interface QueryMemoryOpts {
   limit?: number;
   tags?: string[];
   projectId?: string; // Override auto-detected project

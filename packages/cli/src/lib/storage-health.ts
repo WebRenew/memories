@@ -1,7 +1,7 @@
 import type { Client } from "@libsql/client";
 import { getDb } from "./db.js";
 
-export interface StorageMetrics {
+interface StorageMetrics {
   activeCount: number;
   deletedCount: number;
   totalCount: number;
@@ -14,7 +14,7 @@ export interface StorageWarning {
   remediation: string[];
 }
 
-export interface StorageWarningThresholds {
+interface StorageWarningThresholds {
   activeCountWarn: number;
   softDeletedCountWarn: number;
   softDeletedRatioWarn: number;

@@ -6,7 +6,7 @@ type SupabaseLikeClient = {
   }
 }
 
-export interface OrgAuditEventInput {
+interface OrgAuditEventInput {
   orgId: string
   actorUserId?: string | null
   action: string

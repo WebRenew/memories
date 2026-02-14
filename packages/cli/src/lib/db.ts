@@ -64,7 +64,7 @@ function getSyncConfigPath(): string {
   return join(resolveConfigDir(), "sync.json");
 }
 
-export interface SyncConfig {
+interface SyncConfig {
   syncUrl: string;
   syncToken: string;
   org: string;

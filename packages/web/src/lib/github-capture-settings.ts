@@ -2,7 +2,7 @@ import type { GithubCaptureCandidate, GithubCaptureEvent } from "@/lib/github-ca
 
 const GITHUB_CAPTURE_EVENT_VALUES = ["pull_request", "issues", "push", "release"] as const
 
-export type GithubCaptureAllowedEvent = (typeof GITHUB_CAPTURE_EVENT_VALUES)[number]
+type GithubCaptureAllowedEvent = (typeof GITHUB_CAPTURE_EVENT_VALUES)[number]
 
 const EVENT_ALIAS_MAP: Record<string, GithubCaptureAllowedEvent> = {
   pr: "pull_request",
@@ -13,7 +13,7 @@ const EVENT_ALIAS_MAP: Record<string, GithubCaptureAllowedEvent> = {
   release: "release",
 }
 
-export interface GithubCaptureSettings {
+interface GithubCaptureSettings {
   allowed_events: GithubCaptureAllowedEvent[]
   repo_allow_list: string[]
   repo_block_list: string[]

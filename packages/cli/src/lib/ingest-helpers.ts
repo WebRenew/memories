@@ -9,7 +9,7 @@ import { MARKER } from "./markers.js";
 
 // ── Frontmatter Parsing ──────────────────────────────────────────────
 
-export interface ParsedFrontmatter {
+interface ParsedFrontmatter {
   frontmatter: Record<string, unknown>;
   body: string;
 }

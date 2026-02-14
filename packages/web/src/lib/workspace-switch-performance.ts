@@ -5,7 +5,7 @@ export const WORKSPACE_SWITCH_BUDGETS = {
   p95Ms: 1000,
 } as const
 
-export type WorkspaceSwitchAlarmCode =
+type WorkspaceSwitchAlarmCode =
   | "WORKSPACE_SWITCH_P50_BUDGET_EXCEEDED"
   | "WORKSPACE_SWITCH_P95_BUDGET_EXCEEDED"
 
@@ -44,7 +44,7 @@ export interface WorkspaceSwitchHealth {
   error: string | null
 }
 
-export interface WorkspaceSwitchEvaluationOptions {
+interface WorkspaceSwitchEvaluationOptions {
   nowIso?: string
   windowHours?: number
   minSamples?: number
