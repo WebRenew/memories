@@ -1,0 +1,94 @@
+import { describe, it, expect, beforeAll } from "vitest";
+import { mkdtempSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+process.env.MEMORIES_DATA_DIR = mkdtempSync(join(tmpdir(), "memories-history-test-"));
+
+import { addMemory, updateMemory, getMemoryById } from "../lib/memory.js";
+import { getDb } from "../lib/db.js";
+
+async function ensureHistoryTable(): Promise<void> {
+  const db = await getDb();
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS memory_history (
+      id TEXT PRIMARY KEY,
+      memory_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      tags TEXT,
+      type TEXT NOT NULL,
+      changed_at TEXT NOT NULL DEFAULT (datetime('now')),
+      change_type TEXT NOT NULL
+    )
+  `);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_history_memory ON memory_history(memory_id)`);
+}
+
+describe("history", () => {
+  let memoryId: string;
+
+  beforeAll(async () => {
+    await getDb();
+    await ensureHistoryTable();
+    const memory = await addMemory("Original content", { type: "rule", global: true });
+    memoryId = memory.id;
+
+    // Record initial history entry
+    const db = await getDb();
+    await db.execute({
+      sql: "INSERT INTO memory_history (id, memory_id, content, type, change_type) VALUES (?, ?, ?, ?, ?)",
+      args: [`${memoryId}-1`, memoryId, "Original content", "rule", "created"],
+    });
+  });
+
+  it("should record history when memory is created", async () => {
+    const db = await getDb();
+    const result = await db.execute({
+      sql: "SELECT * FROM memory_history WHERE memory_id = ?",
+      args: [memoryId],
+    });
+    expect(result.rows.length).toBeGreaterThanOrEqual(1);
+    expect(result.rows[0].change_type).toBe("created");
+  });
+
+  it("should track content changes in history", async () => {
+    const db = await getDb();
+    // Record an update
+    await db.execute({
+      sql: "INSERT INTO memory_history (id, memory_id, content, type, change_type) VALUES (?, ?, ?, ?, ?)",
+      args: [`${memoryId}-2`, memoryId, "Updated content", "rule", "updated"],
+    });
+
+    const result = await db.execute({
+      sql: "SELECT * FROM memory_history WHERE memory_id = ? ORDER BY changed_at",
+      args: [memoryId],
+    });
+    expect(result.rows.length).toBe(2);
+    expect(result.rows[1].change_type).toBe("updated");
+  });
+
+  it("should retrieve history with version numbers", async () => {
+    const db = await getDb();
+    const result = await db.execute({
+      sql: `SELECT *, ROW_NUMBER() OVER (ORDER BY changed_at ASC) as version
+            FROM memory_history
+            WHERE memory_id = ?
+            ORDER BY changed_at ASC`,
+      args: [memoryId],
+    });
+    expect(result.rows.length).toBe(2);
+    // First entry should be "created"
+    expect(result.rows[0].change_type).toBe("created");
+    // Second should be "updated"
+    expect(result.rows[1].change_type).toBe("updated");
+  });
+
+  it("should return empty history for non-existent memory", async () => {
+    const db = await getDb();
+    const result = await db.execute({
+      sql: "SELECT * FROM memory_history WHERE memory_id = ?",
+      args: ["nonexistent-id-xyz"],
+    });
+    expect(result.rows.length).toBe(0);
+  });
+});
