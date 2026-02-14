@@ -1237,6 +1237,180 @@ describe("/api/mcp", () => {
       expect(body.result.structuredContent.data.count).toBe(2)
       expect(body.result.structuredContent.data.memories).toHaveLength(2)
       expect(body.result.structuredContent.data.memories[0].contentPreview).toBe("Short note")
+      // Verify truncation at 80 chars
+      expect(body.result.structuredContent.data.memories[1].contentPreview).toMatch(/\.\.\.$/u)
+      expect(body.result.structuredContent.data.memories[1].contentPreview.length).toBeLessThanOrEqual(84) // 80 trimmed + "..."
+    })
+
+    it("should report accurate count when dry run exceeds 1000 preview limit", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("COUNT(*)")) {
+          return { rows: [{ cnt: 2500 }] }
+        }
+        // Return 1000 rows for the preview SELECT
+        const previewRows = Array.from({ length: 1000 }, (_, i) => ({
+          id: `m${i}`, type: "note", content: `Memory ${i}`,
+        }))
+        return { rows: previewRows }
+      })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "bulk_forget_memories",
+          arguments: { types: ["note"], dry_run: true },
+        })
+      ))
+      const body = await response.json()
+      // count reflects true total, not capped preview
+      expect(body.result.structuredContent.data.count).toBe(2500)
+      expect(body.result.structuredContent.data.memories).toHaveLength(1000)
+      expect(body.result.content[0].text).toContain("showing first 1000")
+    })
+
+    it("should build WHERE clause with tags filter using LIKE", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("SELECT id FROM memories")) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      })
+
+      await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "bulk_forget_memories",
+          arguments: { tags: ["temp", "debug"] },
+        })
+      ))
+
+      const selectCall = getExecuteCallBySqlFragment("SELECT id FROM memories")
+      expect(selectCall.sql).toContain("tags LIKE ? ESCAPE")
+      // Both tags should produce LIKE args with wildcards
+      const likeArgs = (selectCall.args as string[]).filter((a: string) => typeof a === "string" && a.startsWith("%"))
+      expect(likeArgs).toHaveLength(2)
+      expect(likeArgs[0]).toBe("%temp%")
+      expect(likeArgs[1]).toBe("%debug%")
+    })
+
+    it("should build WHERE clause with older_than_days filter", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("SELECT id FROM memories")) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      })
+
+      await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "bulk_forget_memories",
+          arguments: { older_than_days: 30 },
+        })
+      ))
+
+      const selectCall = getExecuteCallBySqlFragment("SELECT id FROM memories")
+      expect(selectCall.sql).toContain("created_at < ?")
+      // The cutoff arg should be an ISO date string
+      const dateArg = (selectCall.args as string[]).find((a: string) => typeof a === "string" && a.includes("T"))
+      expect(dateArg).toBeDefined()
+      expect(new Date(dateArg!).getTime()).toBeLessThan(Date.now())
+    })
+
+    it("should build WHERE clause with pattern filter converting * to %", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("SELECT id FROM memories")) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      })
+
+      await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "bulk_forget_memories",
+          arguments: { pattern: "TODO*" },
+        })
+      ))
+
+      const selectCall = getExecuteCallBySqlFragment("SELECT id FROM memories")
+      expect(selectCall.sql).toContain("content LIKE ? ESCAPE")
+      expect(selectCall.args).toContain("TODO%")
+    })
+
+    it("should build WHERE clause with project_id filter", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("SELECT id FROM memories")) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      })
+
+      await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "bulk_forget_memories",
+          arguments: { types: ["note"], project_id: "github.com/acme/repo" },
+        })
+      ))
+
+      const selectCall = getExecuteCallBySqlFragment("SELECT id FROM memories")
+      expect(selectCall.sql).toContain("project_id = ?")
+      expect(selectCall.args).toContain("github.com/acme/repo")
+    })
+
+    it("should return zero count when no memories match filters", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("SELECT id FROM memories")) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "bulk_forget_memories",
+          arguments: { types: ["skill"] },
+        })
+      ))
+      const body = await response.json()
+      expect(body.result.structuredContent.data.count).toBe(0)
+      expect(body.result.structuredContent.data.ids).toEqual([])
+      expect(body.result.content[0].text).toContain("No memories matched")
+    })
+
+    it("should batch deletes when more than 500 IDs", async () => {
+      setupAuth()
+      const manyIds = Array.from({ length: 750 }, (_, i) => ({ id: `m${i}` }))
+      let updateCallCount = 0
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("SELECT id FROM memories")) {
+          return { rows: manyIds }
+        }
+        if (sql.includes("UPDATE memories SET deleted_at")) {
+          updateCallCount++
+        }
+        return { rows: [] }
+      })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "bulk_forget_memories",
+          arguments: { all: true },
+        })
+      ))
+      const body = await response.json()
+      expect(body.result.structuredContent.data.count).toBe(750)
+      // 750 IDs at batch size 500 = 2 UPDATE calls
+      expect(updateCallCount).toBe(2)
     })
 
     it("should reject when no filters provided", async () => {
@@ -1376,6 +1550,85 @@ describe("/api/mcp", () => {
       const deleteCall = getExecuteCallBySqlFragment("DELETE FROM memories")
       expect(deleteCall.sql).toContain("user_id = ?")
       expect(deleteCall.args).toContain("user-42")
+    })
+
+    it("should issue DELETE before changes() — no separate COUNT query", async () => {
+      setupAuth()
+      const sqlSequence: string[] = []
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("DELETE FROM memories") || sql.includes("changes()")) {
+          sqlSequence.push(sql)
+        }
+        if (sql.includes("changes()")) {
+          return { rows: [{ cnt: 3 }] }
+        }
+        return { rows: [] }
+      })
+
+      const response = await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "vacuum_memories",
+          arguments: {},
+        })
+      ))
+      const body = await response.json()
+      expect(body.result.structuredContent.data.purged).toBe(3)
+      // DELETE must come before changes()
+      expect(sqlSequence).toHaveLength(2)
+      expect(sqlSequence[0]).toContain("DELETE FROM memories")
+      expect(sqlSequence[1]).toContain("changes()")
+      // No COUNT(*) query should exist
+      const countCall = mockExecute.mock.calls.find(
+        (entry: unknown[]) => {
+          const s = typeof entry[0] === "string" ? entry[0] : (entry[0] as { sql?: string })?.sql
+          return s?.includes("COUNT(*)") && s?.includes("deleted_at IS NOT NULL")
+        }
+      )
+      expect(countCall).toBeUndefined()
+    })
+
+    it("should constrain vacuum to user_id IS NULL when no user_id provided", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("changes()")) {
+          return { rows: [{ cnt: 0 }] }
+        }
+        return { rows: [] }
+      })
+
+      await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "vacuum_memories",
+          arguments: {},
+        })
+      ))
+
+      const deleteCall = getExecuteCallBySqlFragment("DELETE FROM memories")
+      expect(deleteCall.sql).toContain("user_id IS NULL")
+      expect(deleteCall.sql).toContain("deleted_at IS NOT NULL")
+    })
+
+    it("should only target soft-deleted rows in DELETE", async () => {
+      setupAuth()
+      mockExecute.mockImplementation(async (input: { sql: string } | string) => {
+        const sql = typeof input === "string" ? input : input.sql
+        if (sql.includes("changes()")) {
+          return { rows: [{ cnt: 2 }] }
+        }
+        return { rows: [] }
+      })
+
+      await POST(makePostRequest(
+        jsonrpc("tools/call", {
+          name: "vacuum_memories",
+          arguments: {},
+        })
+      ))
+
+      const deleteCall = getExecuteCallBySqlFragment("DELETE FROM memories")
+      expect(deleteCall.sql).toContain("deleted_at IS NOT NULL")
     })
   })
 

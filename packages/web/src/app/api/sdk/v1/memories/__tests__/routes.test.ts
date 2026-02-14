@@ -468,6 +468,83 @@ describe("/api/sdk/v1/memories/*", () => {
     expect(body.error.code).toBe("MISSING_API_KEY")
   })
 
+  it("bulk-forget returns 401 without API key", async () => {
+    const response = await bulkForgetPOST(
+      makePost("/api/sdk/v1/memories/bulk-forget", {
+        filters: { types: ["note"] },
+      })
+    )
+
+    expect(response.status).toBe(401)
+    const body = await response.json()
+    expect(body.ok).toBe(false)
+    expect(body.error.code).toBe("MISSING_API_KEY")
+  })
+
+  it("bulk-forget passes older_than_days to payload", async () => {
+    const response = await bulkForgetPOST(
+      makePost(
+        "/api/sdk/v1/memories/bulk-forget",
+        {
+          filters: { olderThanDays: 30 },
+          scope: { userId: "end-user-1" },
+        },
+        VALID_API_KEY
+      )
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockBulkForgetMemoriesPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: expect.objectContaining({
+          older_than_days: 30,
+        }),
+      })
+    )
+  })
+
+  it("bulk-forget passes pattern and project_id to payload", async () => {
+    const response = await bulkForgetPOST(
+      makePost(
+        "/api/sdk/v1/memories/bulk-forget",
+        {
+          filters: { pattern: "TODO*", projectId: "github.com/acme/repo" },
+          scope: { userId: "end-user-1" },
+        },
+        VALID_API_KEY
+      )
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockBulkForgetMemoriesPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: expect.objectContaining({
+          pattern: "TODO*",
+          project_id: "github.com/acme/repo",
+        }),
+      })
+    )
+  })
+
+  it("vacuum passes userId to payload", async () => {
+    const response = await vacuumPOST(
+      makePost(
+        "/api/sdk/v1/memories/vacuum",
+        {
+          scope: { userId: "end-user-1" },
+        },
+        VALID_API_KEY
+      )
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockVacuumMemoriesPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "end-user-1",
+      })
+    )
+  })
+
   it("returns tenant mapping error when tenantId is unknown", async () => {
     const response = await addPOST(
       makePost(
