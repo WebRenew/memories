@@ -309,8 +309,9 @@ export async function forgetMemoryPayload(params: {
   args: Record<string, unknown>
   userId: string | null
   nowIso: string
+  onlyWorkingLayer?: boolean
 }): Promise<{ text: string; data: { id: string; deleted: true; message: string } }> {
-  const { turso, args, userId, nowIso } = params
+  const { turso, args, userId, nowIso, onlyWorkingLayer } = params
 
   const id = args.id as string
   if (!id) {
@@ -330,7 +331,7 @@ export async function forgetMemoryPayload(params: {
   await turso.execute({
     sql: `UPDATE memories SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL${
       userId ? " AND user_id = ?" : " AND user_id IS NULL"
-    }`,
+    }${onlyWorkingLayer ? " AND memory_layer = 'working'" : ""}`,
     args: userId ? [nowIso, id, userId] : [nowIso, id],
   })
 
@@ -360,6 +361,7 @@ export async function bulkForgetMemoriesPayload(params: {
   args: Record<string, unknown>
   userId: string | null
   nowIso: string
+  onlyWorkingLayer?: boolean
 }): Promise<{
   text: string
   data: {
@@ -369,7 +371,7 @@ export async function bulkForgetMemoriesPayload(params: {
     message: string
   }
 }> {
-  const { turso, args, userId, nowIso } = params
+  const { turso, args, userId, nowIso, onlyWorkingLayer } = params
 
   const typesRaw = Array.isArray(args.types) ? (args.types as string[]).filter((t) => VALID_TYPES.has(t)) : undefined
   const types = typesRaw && typesRaw.length > 0 ? typesRaw : undefined
@@ -415,6 +417,10 @@ export async function bulkForgetMemoriesPayload(params: {
     whereArgs.push(userId)
   } else {
     whereClauses.push("user_id IS NULL")
+  }
+
+  if (onlyWorkingLayer) {
+    whereClauses.push("memory_layer = 'working'")
   }
 
   if (types && types.length > 0) {
@@ -522,8 +528,9 @@ export async function bulkForgetMemoriesPayload(params: {
 export async function vacuumMemoriesPayload(params: {
   turso: TursoClient
   userId: string | null
+  onlyWorkingLayer?: boolean
 }): Promise<{ text: string; data: { purged: number; message: string } }> {
-  const { turso, userId } = params
+  const { turso, userId, onlyWorkingLayer } = params
 
   const whereClauses: string[] = ["deleted_at IS NOT NULL"]
   const whereArgs: (string | number)[] = []
@@ -533,6 +540,10 @@ export async function vacuumMemoriesPayload(params: {
     whereArgs.push(userId)
   } else {
     whereClauses.push("user_id IS NULL")
+  }
+
+  if (onlyWorkingLayer) {
+    whereClauses.push("memory_layer = 'working'")
   }
 
   const whereSQL = whereClauses.join(" AND ")

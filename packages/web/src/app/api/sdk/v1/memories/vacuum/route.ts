@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
     const payload = await vacuumMemoriesPayload({
       turso,
       userId,
+      onlyWorkingLayer: true,
     })
 
     return successResponse(ENDPOINT, requestId, payload.data)

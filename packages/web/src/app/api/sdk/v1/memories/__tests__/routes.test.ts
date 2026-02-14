@@ -317,6 +317,12 @@ describe("/api/sdk/v1/memories/*", () => {
     const body = await response.json()
     expect(body.ok).toBe(true)
     expect(body.data.deleted).toBe(true)
+    expect(mockForgetMemoryPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "end-user-1",
+        onlyWorkingLayer: true,
+      })
+    )
   })
 
   it("bulk-forget returns count and ids", async () => {
@@ -343,6 +349,7 @@ describe("/api/sdk/v1/memories/*", () => {
           dry_run: false,
         }),
         userId: "end-user-1",
+        onlyWorkingLayer: true,
       })
     )
   })
@@ -380,6 +387,7 @@ describe("/api/sdk/v1/memories/*", () => {
     expect(mockBulkForgetMemoriesPayload).toHaveBeenCalledWith(
       expect.objectContaining({
         args: expect.objectContaining({ dry_run: true }),
+        onlyWorkingLayer: true,
       })
     )
   })
@@ -453,6 +461,7 @@ describe("/api/sdk/v1/memories/*", () => {
     expect(mockVacuumMemoriesPayload).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "end-user-1",
+        onlyWorkingLayer: true,
       })
     )
   })
@@ -525,6 +534,7 @@ describe("/api/sdk/v1/memories/*", () => {
         args: expect.objectContaining({
           older_than_days: 30,
         }),
+        onlyWorkingLayer: true,
       })
     )
   })
@@ -548,6 +558,7 @@ describe("/api/sdk/v1/memories/*", () => {
           pattern: "TODO*",
           project_id: "github.com/acme/repo",
         }),
+        onlyWorkingLayer: true,
       })
     )
   })
@@ -567,6 +578,7 @@ describe("/api/sdk/v1/memories/*", () => {
     expect(mockVacuumMemoriesPayload).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "end-user-1",
+        onlyWorkingLayer: true,
       })
     )
   })

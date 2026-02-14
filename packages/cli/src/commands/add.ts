@@ -3,6 +3,7 @@ import chalk from "chalk";
 import { addMemory, type MemoryType } from "../lib/memory.js";
 import { readAuth, getApiClient } from "../lib/auth.js";
 import { getTemplate, fillTemplate } from "../lib/templates.js";
+import { getStorageWarnings } from "../lib/storage-health.js";
 import * as ui from "../lib/ui.js";
 
 const VALID_TYPES: MemoryType[] = ["rule", "decision", "fact", "note", "skill"];
@@ -108,6 +109,21 @@ export const addCommand = new Command("add")
       if (type === "rule") {
         console.log("");
         ui.dim(`Run ${chalk.cyan("memories generate")} to update your IDE rule files`);
+      }
+
+      try {
+        const { warnings } = await getStorageWarnings();
+        if (warnings.length > 0) {
+          console.log("");
+        }
+        for (const warning of warnings) {
+          ui.warn(warning.message);
+          if (warning.remediation.length > 0) {
+            ui.dim(warning.remediation[0]);
+          }
+        }
+      } catch {
+        // Non-fatal: storage health warning should never block writes.
       }
     } catch (error) {
       ui.error("Failed to add memory: " + (error instanceof Error ? error.message : "Unknown error"));

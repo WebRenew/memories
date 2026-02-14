@@ -2,6 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { getDb } from "../lib/db.js";
 import { getProjectId } from "../lib/git.js";
+import { computeStorageMetrics, evaluateStorageWarnings } from "../lib/storage-health.js";
 
 export const statsCommand = new Command("stats")
   .description("Show memory statistics")
@@ -30,6 +31,8 @@ export const statsCommand = new Command("stats")
         args: [],
       });
       const deleted = Number(deletedResult.rows[0]?.deleted ?? 0);
+      const storageMetrics = computeStorageMetrics(total, deleted);
+      const warnings = evaluateStorageWarnings(storageMetrics);
 
       // Project count
       const projectCount = projectId
@@ -49,6 +52,7 @@ export const statsCommand = new Command("stats")
           deleted,
           project_id: projectId,
           project_count: projectCount,
+          warnings,
           breakdown: rows.map((r) => ({ type: r.type, scope: r.scope, count: Number(r.count) })),
         };
         console.log(JSON.stringify(data, null, 2));
@@ -66,6 +70,14 @@ export const statsCommand = new Command("stats")
       if (rows.length === 0) {
         console.log(chalk.dim("  No memories yet. Add one with: memories add \"Your memory\""));
         return;
+      }
+
+      if (warnings.length > 0) {
+        console.log(chalk.yellow("  Storage Warnings:"));
+        for (const warning of warnings) {
+          console.log(chalk.yellow(`  WARN ${warning.message}`));
+        }
+        console.log("");
       }
 
       // Build table

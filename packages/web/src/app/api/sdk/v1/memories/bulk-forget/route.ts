@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
       },
       userId,
       nowIso: new Date().toISOString(),
+      onlyWorkingLayer: true,
     })
 
     return successResponse(ENDPOINT, requestId, payload.data)

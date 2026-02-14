@@ -220,6 +220,188 @@ describe("memory mutations graph integration", () => {
     expect(remainingEdges).toBe(0)
   })
 
+  it("scopes forget to working-layer memories when requested", async () => {
+    const db = await setupDb("memories-mutations-forget-working-scope")
+    const { forgetMemoryPayload } = await loadMutationsModule(false)
+
+    await db.execute({
+      sql: `INSERT INTO memories (
+              id, content, type, memory_layer, expires_at, scope, project_id, user_id,
+              tags, paths, category, metadata, deleted_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        "long-1",
+        "Long-term note that should not be deleted by transcript eviction",
+        "note",
+        "long_term",
+        null,
+        "global",
+        null,
+        "user-scope",
+        null,
+        null,
+        null,
+        null,
+        null,
+        "2026-02-11T19:00:00.000Z",
+        "2026-02-11T19:00:00.000Z",
+      ],
+    })
+
+    await forgetMemoryPayload({
+      turso: db,
+      args: { id: "long-1" },
+      userId: "user-scope",
+      nowIso: "2026-02-11T19:05:00.000Z",
+      onlyWorkingLayer: true,
+    })
+
+    const stillActive = await scalarCount(
+      db,
+      "SELECT COUNT(*) as count FROM memories WHERE id = ? AND deleted_at IS NULL",
+      ["long-1"]
+    )
+    expect(stillActive).toBe(1)
+  })
+
+  it("scopes bulk forget to working-layer memories when requested", async () => {
+    const db = await setupDb("memories-mutations-bulk-working-scope")
+    const { bulkForgetMemoriesPayload } = await loadMutationsModule(false)
+
+    await db.execute({
+      sql: `INSERT INTO memories (
+              id, content, type, memory_layer, expires_at, scope, project_id, user_id,
+              tags, paths, category, metadata, deleted_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        "working-1",
+        "Ephemeral chat context",
+        "note",
+        "working",
+        "2026-02-11T20:00:00.000Z",
+        "global",
+        null,
+        "user-scope",
+        null,
+        null,
+        null,
+        null,
+        null,
+        "2026-02-11T19:00:00.000Z",
+        "2026-02-11T19:00:00.000Z",
+      ],
+    })
+    await db.execute({
+      sql: `INSERT INTO memories (
+              id, content, type, memory_layer, expires_at, scope, project_id, user_id,
+              tags, paths, category, metadata, deleted_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        "long-2",
+        "Long-term preference",
+        "note",
+        "long_term",
+        null,
+        "global",
+        null,
+        "user-scope",
+        null,
+        null,
+        null,
+        null,
+        null,
+        "2026-02-11T19:00:00.000Z",
+        "2026-02-11T19:00:00.000Z",
+      ],
+    })
+
+    const result = await bulkForgetMemoriesPayload({
+      turso: db,
+      args: { all: true },
+      userId: "user-scope",
+      nowIso: "2026-02-11T19:10:00.000Z",
+      onlyWorkingLayer: true,
+    })
+
+    expect(result.data.count).toBe(1)
+    const workingDeleted = await scalarCount(
+      db,
+      "SELECT COUNT(*) as count FROM memories WHERE id = ? AND deleted_at IS NOT NULL",
+      ["working-1"]
+    )
+    const longStillActive = await scalarCount(
+      db,
+      "SELECT COUNT(*) as count FROM memories WHERE id = ? AND deleted_at IS NULL",
+      ["long-2"]
+    )
+    expect(workingDeleted).toBe(1)
+    expect(longStillActive).toBe(1)
+  })
+
+  it("scopes vacuum to soft-deleted working-layer memories when requested", async () => {
+    const db = await setupDb("memories-mutations-vacuum-working-scope")
+    const { vacuumMemoriesPayload } = await loadMutationsModule(false)
+
+    await db.execute({
+      sql: `INSERT INTO memories (
+              id, content, type, memory_layer, expires_at, scope, project_id, user_id,
+              tags, paths, category, metadata, deleted_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        "working-deleted",
+        "Deleted ephemeral chat transcript",
+        "note",
+        "working",
+        "2026-02-11T20:00:00.000Z",
+        "global",
+        null,
+        "user-scope",
+        null,
+        null,
+        null,
+        null,
+        "2026-02-11T19:11:00.000Z",
+        "2026-02-11T19:00:00.000Z",
+        "2026-02-11T19:11:00.000Z",
+      ],
+    })
+    await db.execute({
+      sql: `INSERT INTO memories (
+              id, content, type, memory_layer, expires_at, scope, project_id, user_id,
+              tags, paths, category, metadata, deleted_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        "long-deleted",
+        "Deleted long-term memory",
+        "note",
+        "long_term",
+        null,
+        "global",
+        null,
+        "user-scope",
+        null,
+        null,
+        null,
+        null,
+        "2026-02-11T19:11:00.000Z",
+        "2026-02-11T19:00:00.000Z",
+        "2026-02-11T19:11:00.000Z",
+      ],
+    })
+
+    const result = await vacuumMemoriesPayload({
+      turso: db,
+      userId: "user-scope",
+      onlyWorkingLayer: true,
+    })
+
+    expect(result.data.purged).toBe(1)
+    const workingGone = await scalarCount(db, "SELECT COUNT(*) as count FROM memories WHERE id = ?", ["working-deleted"])
+    const longStillExists = await scalarCount(db, "SELECT COUNT(*) as count FROM memories WHERE id = ?", ["long-deleted"])
+    expect(workingGone).toBe(0)
+    expect(longStillExists).toBe(1)
+  })
+
   it("keeps memory writes successful if graph sync fails", async () => {
     const db = await setupDb("memories-mutations-graph-fail-open")
 

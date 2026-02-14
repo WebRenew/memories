@@ -26,6 +26,11 @@ import { getProjectId } from "../lib/git.js";
 import { setCloudMode } from "../lib/db.js";
 import { CLI_VERSION } from "../lib/version.js";
 import { resolveMemoryScopeInput } from "./scope.js";
+import {
+  formatStorageWarningsForText,
+  getStorageWarnings,
+  type StorageWarning,
+} from "../lib/storage-health.js";
 
 // Re-export for use by serve command
 export function setCloudCredentials(url: string, token: string): void {
@@ -57,6 +62,48 @@ function formatRulesSection(rules: Memory[]): string {
 function formatMemoriesSection(memories: Memory[], title: string): string {
   if (memories.length === 0) return "";
   return `## ${title}\n${memories.map(formatMemory).join("\n")}`;
+}
+
+interface ToolTextPart {
+  type: "text";
+  text: string;
+}
+
+interface ToolResponsePayload {
+  content: ToolTextPart[];
+  isError?: boolean;
+  [key: string]: unknown;
+}
+
+export async function withStorageWarnings(
+  result: ToolResponsePayload,
+  warningsOverride?: StorageWarning[]
+): Promise<ToolResponsePayload> {
+  if (result.isError) return result;
+
+  if (result.content.length === 0) return result;
+
+  try {
+    const warnings = warningsOverride ?? (await getStorageWarnings()).warnings;
+    if (warnings.length === 0) return result;
+
+    const warningBlock = formatStorageWarningsForText(warnings);
+    if (!warningBlock) return result;
+
+    const nextContent = [...result.content];
+    const textPart = nextContent[0];
+    nextContent[0] = {
+      ...textPart,
+      text: `${textPart.text}\n\n${warningBlock}`,
+    };
+
+    return {
+      ...result,
+      content: nextContent,
+    };
+  } catch {
+    return result;
+  }
 }
 
 async function createMcpServer(): Promise<McpServer> {
@@ -253,14 +300,14 @@ Use category to group related memories (e.g., "api", "testing").`,
           metadata: metadata as Record<string, unknown> | undefined,
         });
         const typeLabel = TYPE_LABELS[memory.type];
-        return {
+        return withStorageWarnings({
           content: [
             {
               type: "text",
               text: `Stored ${typeLabel} ${memory.id} (${memory.scope}${memory.project_id ? `: ${memory.project_id}` : ""})`,
             },
           ],
-        };
+        });
       } catch (error) {
         return {
           content: [{ type: "text", text: `Failed to add memory: ${error instanceof Error ? error.message : "Unknown error"}` }],
@@ -423,9 +470,9 @@ Find the memory ID first with search_memories or list_memories.`,
         });
         if (updated) {
           const typeLabel = TYPE_LABELS[updated.type];
-          return {
+          return withStorageWarnings({
             content: [{ type: "text", text: `Updated ${typeLabel} ${updated.id}: ${updated.content}` }],
-          };
+          });
         }
         return {
           content: [{ type: "text", text: `Memory ${id} not found or already deleted.` }],
@@ -451,9 +498,9 @@ Find the memory ID first with search_memories or list_memories.`,
       try {
         const deleted = await forgetMemory(id);
         if (deleted) {
-          return {
+          return withStorageWarnings({
             content: [{ type: "text", text: `Forgot memory ${id}` }],
-          };
+          });
         }
         return {
           content: [{ type: "text", text: `Memory ${id} not found or already forgotten.` }],
@@ -525,9 +572,9 @@ Requires at least one filter, or all:true to delete everything. Cannot combine a
           const msg = matches.length > 1000
             ? `Dry run: ${matches.length} memories would be deleted (showing first 1000):\n${preview}`
             : `Dry run: ${matches.length} memories would be deleted:\n${preview}`;
-          return {
+          return withStorageWarnings({
             content: [{ type: "text", text: msg }],
-          };
+          });
         }
 
         if (matches.length === 0) {
@@ -538,9 +585,9 @@ Requires at least one filter, or all:true to delete everything. Cannot combine a
 
         const ids = matches.map((m) => m.id);
         const count = await bulkForgetByIds(ids);
-        return {
+        return withStorageWarnings({
           content: [{ type: "text", text: `Bulk deleted ${count} memories` }],
-        };
+        });
       } catch (error) {
         return {
           content: [{ type: "text", text: `Failed to bulk forget: ${error instanceof Error ? error.message : "Unknown error"}` }],
@@ -561,9 +608,9 @@ Requires at least one filter, or all:true to delete everything. Cannot combine a
         const message = purged > 0
           ? `Vacuumed ${purged} soft-deleted memories`
           : "No soft-deleted memories to vacuum";
-        return {
+        return withStorageWarnings({
           content: [{ type: "text", text: message }],
-        };
+        });
       } catch (error) {
         return {
           content: [{ type: "text", text: `Failed to vacuum: ${error instanceof Error ? error.message : "Unknown error"}` }],
@@ -665,12 +712,12 @@ The stream is cleaned up after finalization.`,
         }
         
         const typeLabel = TYPE_LABELS[memory.type];
-        return {
+        return withStorageWarnings({
           content: [{ 
             type: "text", 
             text: `Created ${typeLabel} ${memory.id} from ${state?.chunkCount ?? 0} chunks (${memory.content.length} chars). Embedding generation started.` 
           }],
-        };
+        });
       } catch (error) {
         return {
           content: [{ type: "text", text: `Failed to finalize stream: ${error instanceof Error ? error.message : "Unknown error"}` }],
