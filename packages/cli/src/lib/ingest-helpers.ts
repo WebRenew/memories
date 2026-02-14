@@ -194,13 +194,24 @@ export async function ingestRulesFromDir(
 
         if (opts.dryRun) {
           console.log(`    ${chalk.blue("rule".padEnd(9))} ${text}` + (paths.length > 0 ? chalk.dim(` [${paths.join(", ")}]`) : ""));
+          // Maintain prior behavior: update set even during dry-run to avoid duplicate previews
+          opts.existingSet.add(key);
         } else {
           const addOpts: AddMemoryOpts = { type, category };
           if (paths.length > 0) addOpts.paths = paths;
-          await addMemory(text, addOpts);
-          result.imported++;
+          // Reserve the key before async work to make dedup atomic across parallel ingests
+          opts.existingSet.add(key);
+          try {
+            await addMemory(text, addOpts);
+            result.imported++;
+          } catch (error) {
+            // Roll back reservation on failure
+            opts.existingSet.delete(key);
+            const msg = `Failed to import rule "${text.slice(0, 80)}": ${error instanceof Error ? error.message : "Unknown error"}`;
+            result.errors.push(msg);
+            console.error(chalk.red("  ✗") + ` ${msg}`);
+          }
         }
-        opts.existingSet.add(key);
       }
     } catch (error) {
       const msg = `Failed to process ${file}: ${error instanceof Error ? error.message : "Unknown error"}`;
@@ -295,13 +306,24 @@ export async function ingestCursorRules(
         if (opts.dryRun) {
           const pathsLabel = alwaysApply ? chalk.dim(" [global]") : paths.length > 0 ? chalk.dim(` [${paths.join(", ")}]`) : "";
           console.log(`    ${chalk.blue("rule".padEnd(9))} ${text}${pathsLabel}`);
+          // Maintain prior behavior: update set even during dry-run to avoid duplicate previews
+          opts.existingSet.add(key);
         } else {
           const addOpts: AddMemoryOpts = { type, category };
           if (paths.length > 0) addOpts.paths = paths;
-          await addMemory(text, addOpts);
-          result.imported++;
+          // Reserve the key before async work to make dedup atomic across parallel ingests
+          opts.existingSet.add(key);
+          try {
+            await addMemory(text, addOpts);
+            result.imported++;
+          } catch (error) {
+            // Roll back reservation on failure
+            opts.existingSet.delete(key);
+            const msg = `Failed to import cursor rule "${text.slice(0, 80)}": ${error instanceof Error ? error.message : "Unknown error"}`;
+            result.errors.push(msg);
+            console.error(chalk.red("  ✗") + ` ${msg}`);
+          }
         }
-        opts.existingSet.add(key);
       }
     } catch (error) {
       const msg = `Failed to process ${file}: ${error instanceof Error ? error.message : "Unknown error"}`;
@@ -372,15 +394,26 @@ export async function ingestSkills(
           if (!opts.silent) {
             console.log(`    ${chalk.magenta("skill".padEnd(9))} ${name}` + (description ? chalk.dim(` — ${description}`) : ""));
           }
+          // Maintain prior behavior: update set even during dry-run to avoid duplicate previews
+          opts.existingSet.add(key);
         } else {
-          await addMemory(bodyContent, {
-            type: "skill",
-            category,
-            metadata,
-          });
-          result.imported++;
+          // Reserve the key before async work to make dedup atomic across parallel ingests
+          opts.existingSet.add(key);
+          try {
+            await addMemory(bodyContent, {
+              type: "skill",
+              category,
+              metadata,
+            });
+            result.imported++;
+          } catch (error) {
+            // Roll back reservation on failure
+            opts.existingSet.delete(key);
+            const msg = `Failed to import skill "${name}": ${error instanceof Error ? error.message : "Unknown error"}`;
+            result.errors.push(msg);
+            console.error(chalk.red("  ✗") + ` ${msg}`);
+          }
         }
-        opts.existingSet.add(key);
       } catch (error) {
         const msg = `Failed to process ${filePath}: ${error instanceof Error ? error.message : "Unknown error"}`;
         result.errors.push(msg);
@@ -454,11 +487,22 @@ export async function ingestAgentsDir(
 
             if (opts.dryRun) {
               console.log(`    ${chalk.blue("rule".padEnd(9))} ${text}`);
+              // Maintain prior behavior: update set even during dry-run to avoid duplicate previews
+              opts.existingSet.add(key);
             } else {
-              await addMemory(text, { type });
-              result.imported++;
+              // Reserve the key before async work to make dedup atomic across parallel ingests
+              opts.existingSet.add(key);
+              try {
+                await addMemory(text, { type });
+                result.imported++;
+              } catch (error) {
+                // Roll back reservation on failure
+                opts.existingSet.delete(key);
+                const msg = `Failed to import agents rule "${text.slice(0, 80)}": ${error instanceof Error ? error.message : "Unknown error"}`;
+                result.errors.push(msg);
+                console.error(chalk.red("  ✗") + ` ${msg}`);
+              }
             }
-            opts.existingSet.add(key);
           }
         }
       } else {
