@@ -114,7 +114,7 @@ async function loadOrgSettingsRow(
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ orgId: string }> },
-) {
+): Promise<Response> {
   const { orgId } = await params
   const supabase = await createClient()
   const {
@@ -170,7 +170,7 @@ export async function GET(
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ orgId: string }> },
-) {
+): Promise<Response> {
   const { orgId } = await params
   const supabase = await createClient()
   const {

@@ -112,7 +112,7 @@ function toOrganizationSummary(
   }
 }
 
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   const startedAt = Date.now()
   const auth = await authenticateRequest(request)
   if (!auth) {

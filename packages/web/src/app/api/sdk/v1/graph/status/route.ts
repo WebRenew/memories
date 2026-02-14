@@ -114,15 +114,15 @@ async function handleStatusRequest(
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   return handleStatusRequest(request, async () => parseGetQuery(request))
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   return handleStatusRequest(request, async () => requestSchema.parse(await request.json()))
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<Response> {
   return new Response(null, {
     status: 204,
     headers: {

@@ -7,7 +7,7 @@ import { resolveWorkspaceContext } from "@/lib/workspace"
 
 const TURSO_ORG = "webrenew"
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const preAuthRateLimited = await checkPreAuthApiRateLimit(request)
   if (preAuthRateLimited) return preAuthRateLimited
 

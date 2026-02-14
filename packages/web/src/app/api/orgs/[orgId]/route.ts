@@ -22,7 +22,7 @@ function isMissingColumnError(error: unknown, columnName: string): boolean {
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ orgId: string }> }
-) {
+): Promise<Response> {
   const { orgId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -63,7 +63,7 @@ export async function GET(
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ orgId: string }> }
-) {
+): Promise<Response> {
   const { orgId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -211,7 +211,7 @@ export async function PATCH(
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ orgId: string }> }
-) {
+): Promise<Response> {
   const { orgId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

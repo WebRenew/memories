@@ -4,7 +4,7 @@ import { apiRateLimit, checkPreAuthApiRateLimit, checkRateLimit } from "@/lib/ra
 import { buildIntegrationHealthPayload } from "@/lib/integration-health"
 import { NextResponse } from "next/server"
 
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   const preAuthRateLimited = await checkPreAuthApiRateLimit(request)
   if (preAuthRateLimited) return preAuthRateLimited
 

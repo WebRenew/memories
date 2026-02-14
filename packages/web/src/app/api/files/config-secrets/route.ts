@@ -169,7 +169,7 @@ function buildVaultSecretDescription(params: {
   return `memories config secret; integration=${params.integration}; path=${params.configPath}; key=${params.secretKey}; scope=${params.scope}${projectText}`
 }
 
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   const preAuthRateLimited = await checkPreAuthApiRateLimit(request)
   if (preAuthRateLimited) return preAuthRateLimited
 
@@ -276,7 +276,7 @@ export async function GET(request: Request) {
   })
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const preAuthRateLimited = await checkPreAuthApiRateLimit(request)
   if (preAuthRateLimited) return preAuthRateLimited
 

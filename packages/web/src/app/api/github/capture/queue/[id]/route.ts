@@ -107,7 +107,7 @@ async function resolveWorkspaceCredentials(
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+): Promise<Response> {
   const { id } = await params
   const supabase = await createClient()
   const {

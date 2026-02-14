@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto"
 import { checkRateLimit, getClientIp, publicRateLimit } from "@/lib/rate-limit"
 import { parseBody, cliAuthPollSchema, cliAuthApproveSchema } from "@/lib/validations"
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const rateLimited = await checkRateLimit(publicRateLimit, getClientIp(request))
   if (rateLimited) return rateLimited
 

@@ -56,7 +56,7 @@ async function readGraphStatus(
   })
 }
 
-export async function GET() {
+export async function GET(): Promise<Response> {
   try {
     const resolved = await resolveWorkspaceTurso()
     if (resolved instanceof NextResponse) {
@@ -117,10 +117,10 @@ async function updateRolloutMode(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   return updateRolloutMode(request)
 }
 
-export async function PATCH(request: NextRequest) {
+export async function PATCH(request: NextRequest): Promise<Response> {
   return updateRolloutMode(request)
 }

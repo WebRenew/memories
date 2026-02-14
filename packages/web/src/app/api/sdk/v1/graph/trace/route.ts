@@ -38,7 +38,7 @@ function modeMemories(
   return data.memories
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   const requestId = crypto.randomUUID()
 
   const apiKey = getApiKey(request)
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<Response> {
   return new Response(null, {
     status: 204,
     headers: {

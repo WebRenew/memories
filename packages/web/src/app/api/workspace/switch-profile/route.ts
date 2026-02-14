@@ -21,7 +21,7 @@ function toInteger(value: number | undefined): number | null {
   return Math.max(0, Math.floor(value))
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const auth = await authenticateRequest(request)
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

@@ -54,7 +54,7 @@ async function resolveWorkspaceTurso() {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const resolved = await resolveWorkspaceTurso()
     if (resolved instanceof NextResponse) return resolved

@@ -10,7 +10,7 @@ import { getTeamInviteExpiresAt } from "@/lib/team-invites"
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ orgId: string }> }
-) {
+): Promise<Response> {
   const { orgId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -60,7 +60,7 @@ export async function GET(
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ orgId: string }> }
-) {
+): Promise<Response> {
   const { orgId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -210,7 +210,7 @@ export async function POST(
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ orgId: string }> }
-) {
+): Promise<Response> {
   const { orgId } = await params
   const { searchParams } = new URL(request.url)
   const inviteId = searchParams.get("inviteId")

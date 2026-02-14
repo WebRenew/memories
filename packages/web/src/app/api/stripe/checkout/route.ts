@@ -101,7 +101,7 @@ async function getOrCreateOrganizationCustomerId(
   return customerId ?? null
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const auth = await authenticateRequest(request)
 
   if (!auth) {

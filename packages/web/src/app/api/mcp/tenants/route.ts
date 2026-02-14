@@ -93,7 +93,7 @@ async function getActiveApiKeyHash(
   return { apiKeyHash: data.mcp_api_key_hash as string }
 }
 
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   logDeprecatedAccess("GET")
   const auth = await authenticateRequest(request)
   if (!auth) {
@@ -128,7 +128,7 @@ export async function GET(request: Request) {
   })
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   logDeprecatedAccess("POST")
   const auth = await authenticateRequest(request)
   if (!auth) {
@@ -257,7 +257,7 @@ export async function POST(request: Request) {
   })
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: Request): Promise<Response> {
   logDeprecatedAccess("DELETE")
   const auth = await authenticateRequest(request)
   if (!auth) {

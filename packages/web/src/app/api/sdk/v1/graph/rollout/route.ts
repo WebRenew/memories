@@ -135,7 +135,7 @@ async function buildRolloutResponse(params: {
   })
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   const requestId = crypto.randomUUID()
   let parsedRequest: z.infer<typeof readRequestSchema>
   try {
@@ -170,7 +170,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   const requestId = crypto.randomUUID()
   let parsedRequest: z.infer<typeof updateRequestSchema>
   try {
@@ -233,11 +233,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PATCH(request: NextRequest) {
+export async function PATCH(request: NextRequest): Promise<Response> {
   return POST(request)
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<Response> {
   return new Response(null, {
     status: 204,
     headers: {
