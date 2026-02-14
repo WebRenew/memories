@@ -6,7 +6,7 @@ import { apiRateLimit, checkPreAuthApiRateLimit, checkRateLimit } from "@/lib/ra
 import { parseBody, createOrgSchema } from "@/lib/validations"
 
 // GET /api/orgs - List user's organizations
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   const preAuthRateLimited = await checkPreAuthApiRateLimit(request)
   if (preAuthRateLimited) return preAuthRateLimited
 
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
 }
 
 // POST /api/orgs - Create a new organization
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const preAuthRateLimited = await checkPreAuthApiRateLimit(request)
   if (preAuthRateLimited) return preAuthRateLimited
 

@@ -5,7 +5,7 @@ import { authenticateRequest } from "@/lib/auth"
 import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 import { hashMcpApiKey, isValidMcpApiKey } from "@/lib/mcp-api-key"
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   const authHeader = request.headers.get("authorization")
   if (!authHeader?.startsWith("Bearer ")) {
     return NextResponse.json({ error: "Missing or invalid Authorization header" }, { status: 401 })

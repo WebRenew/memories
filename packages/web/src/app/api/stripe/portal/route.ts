@@ -9,7 +9,7 @@ function jsonError(message: string, status: number, code: string) {
   return NextResponse.json({ error: message, code }, { status })
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const auth = await authenticateRequest(request)
 
   if (!auth) {

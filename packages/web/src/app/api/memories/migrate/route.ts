@@ -63,7 +63,7 @@ function isMissingColumnError(error: unknown, columnName: string): boolean {
  * Copy memories between a user's personal Turso database and an organization's
  * Turso database. This is a non-destructive copy — source records are never deleted.
  */
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const auth = await authenticateRequest(request)
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

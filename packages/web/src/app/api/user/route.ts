@@ -91,7 +91,7 @@ async function recordWorkspaceSwitchEvent(admin: AdminClient, event: WorkspaceSw
   }
 }
 
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   const preAuthRateLimited = await checkPreAuthApiRateLimit(request)
   if (preAuthRateLimited) return preAuthRateLimited
 
@@ -134,7 +134,7 @@ export async function GET(request: Request) {
   })
 }
 
-export async function PATCH(request: Request) {
+export async function PATCH(request: Request): Promise<Response> {
   const preAuthRateLimited = await checkPreAuthApiRateLimit(request)
   if (preAuthRateLimited) return preAuthRateLimited
 

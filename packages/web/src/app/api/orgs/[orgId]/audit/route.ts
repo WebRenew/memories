@@ -42,7 +42,7 @@ function parseLimit(raw: string | null): number {
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ orgId: string }> }
-) {
+): Promise<Response> {
   const { orgId } = await params
   const { searchParams } = new URL(request.url)
   const limit = parseLimit(searchParams.get("limit"))

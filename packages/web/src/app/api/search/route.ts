@@ -23,7 +23,7 @@ const { GET: searchHandler } = createFromSource(source, {
 
 const CACHE_CONTROL_SEARCH = "public, s-maxage=300, stale-while-revalidate=3600";
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   const rateLimited = await checkRateLimit(publicRateLimit, getClientIp(request));
   if (rateLimited) {
     return rateLimited;

@@ -6,7 +6,7 @@ import { enterpriseContactSchema, parseBody } from "@/lib/validations"
 const CACHE_CONTROL_NO_STORE = "no-store"
 const SUCCESS_MESSAGE = "Thanks. We received your request and will follow up shortly."
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const rateLimited = await checkRateLimit(publicRateLimit, getClientIp(request))
   if (rateLimited) return rateLimited
 

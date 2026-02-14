@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 
-export async function GET() {
+export async function GET(): Promise<Response> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

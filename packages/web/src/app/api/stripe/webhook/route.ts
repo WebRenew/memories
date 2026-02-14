@@ -65,7 +65,7 @@ async function updateOrgSubscriptionStatus(
   return true
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const body = await request.text()
   const signature = request.headers.get("stripe-signature")
 

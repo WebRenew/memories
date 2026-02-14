@@ -28,19 +28,19 @@ async function wrapLegacyResponse(requestId: string, response: Response) {
   return legacyErrorResponse(ENDPOINT, requestId, response.status, message, "LEGACY_MCP_KEY_ERROR", details)
 }
 
-export async function GET() {
+export async function GET(): Promise<Response> {
   const requestId = crypto.randomUUID()
   const response = await legacyGet()
   return wrapLegacyResponse(requestId, response)
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const requestId = crypto.randomUUID()
   const response = await legacyPost(request)
   return wrapLegacyResponse(requestId, response)
 }
 
-export async function DELETE() {
+export async function DELETE(): Promise<Response> {
   const requestId = crypto.randomUUID()
   const response = await legacyDelete()
   return wrapLegacyResponse(requestId, response)

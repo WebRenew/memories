@@ -8,7 +8,7 @@ import { parseBody, acceptInviteSchema } from "@/lib/validations"
 import { getInviteTokenCandidates } from "@/lib/team-invites"
 
 // POST /api/invites/accept - Accept an invite
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

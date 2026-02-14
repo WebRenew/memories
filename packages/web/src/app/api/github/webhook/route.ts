@@ -126,7 +126,7 @@ async function loadCaptureSettingsForTarget(
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const secret = process.env.GITHUB_WEBHOOK_SECRET
   if (!secret) {
     return NextResponse.json({ error: "GitHub webhook is not configured" }, { status: 503 })

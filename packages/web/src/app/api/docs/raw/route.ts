@@ -6,7 +6,7 @@ import { checkRateLimit, getClientIp, publicRateLimit } from "@/lib/rate-limit";
 const CACHE_CONTROL_DOCS = "public, s-maxage=300, stale-while-revalidate=86400";
 const CACHE_CONTROL_NOT_FOUND = "public, s-maxage=60, stale-while-revalidate=300";
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   const rateLimited = await checkRateLimit(publicRateLimit, getClientIp(request));
   if (rateLimited) {
     return rateLimited;

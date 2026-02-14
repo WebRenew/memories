@@ -7,7 +7,7 @@ import { resolveWorkspaceContext } from "@/lib/workspace"
 
 const FREE_LIMIT = 5000
 
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   const preAuthRateLimited = await checkPreAuthApiRateLimit(request)
   if (preAuthRateLimited) return preAuthRateLimited
 

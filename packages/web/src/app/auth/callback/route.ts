@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { reconcileUserAccountByEmail } from "@/lib/account-reconciliation"
 import { autoJoinOrganizationsForEmails, extractUserEmails } from "@/lib/domain-auto-join"
 
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get("code")
   const rawNext = searchParams.get("next") ?? "/app"

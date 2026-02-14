@@ -5,7 +5,7 @@ import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 import { parseBody, createMemorySchema, updateMemorySchema, deleteMemorySchema } from "@/lib/validations"
 import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 
-export async function GET() {
+export async function GET(): Promise<Response> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -38,7 +38,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PATCH(request: NextRequest) {
+export async function PATCH(request: NextRequest): Promise<Response> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -160,7 +160,7 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<Response> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

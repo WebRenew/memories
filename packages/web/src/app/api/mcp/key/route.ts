@@ -135,7 +135,7 @@ async function cleanupOldTenantMappingsForKeyRotation(
 }
 
 // GET - Get current API key
-export async function GET() {
+export async function GET(): Promise<Response> {
   logDeprecatedAccess("GET")
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -173,7 +173,7 @@ export async function GET() {
 }
 
 // POST - Generate new API key
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   logDeprecatedAccess("POST")
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -261,7 +261,7 @@ export async function POST(request: Request) {
 }
 
 // DELETE - Revoke API key
-export async function DELETE() {
+export async function DELETE(): Promise<Response> {
   logDeprecatedAccess("DELETE")
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

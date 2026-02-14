@@ -4,7 +4,7 @@ import { getStripe } from "@/lib/stripe"
 import { NextResponse } from "next/server"
 import { checkRateLimit, strictRateLimit } from "@/lib/rate-limit"
 
-export async function DELETE() {
+export async function DELETE(): Promise<Response> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

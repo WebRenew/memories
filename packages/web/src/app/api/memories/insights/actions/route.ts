@@ -6,7 +6,7 @@ import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 import { parseBody, applyMemoryInsightActionSchema } from "@/lib/validations"
 import { applyMemoryInsightAction } from "@/lib/memory-insight-actions"
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   const supabase = await createClient()
   const {
     data: { user },

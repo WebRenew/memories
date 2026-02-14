@@ -116,7 +116,7 @@ async function loadRowsForOrgTargets(
   return (data ?? []) as QueueRow[]
 }
 
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   const supabase = await createClient()
   const {
     data: { user },

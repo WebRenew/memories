@@ -384,7 +384,7 @@ const TOOLS = [
 ]
 
 // SSE endpoint - GET opens the event stream
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   const apiKey = getApiKey(request)
   
   if (!apiKey) {
@@ -471,7 +471,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Handle MCP JSON-RPC messages via POST
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   pruneExpiredConnections()
 
   const url = new URL(request.url)
@@ -738,7 +738,7 @@ export async function POST(request: NextRequest) {
 }
 
 // CORS
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<Response> {
   return new Response(null, {
     status: 204,
     headers: {

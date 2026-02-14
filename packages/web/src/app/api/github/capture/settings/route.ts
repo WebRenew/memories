@@ -102,7 +102,7 @@ async function loadUserSettingsRow(
   return { row, error: null }
 }
 
-export async function GET() {
+export async function GET(): Promise<Response> {
   const supabase = await createClient()
   const {
     data: { user },
@@ -142,7 +142,7 @@ export async function GET() {
   })
 }
 
-export async function PATCH(request: Request) {
+export async function PATCH(request: Request): Promise<Response> {
   const supabase = await createClient()
   const {
     data: { user },

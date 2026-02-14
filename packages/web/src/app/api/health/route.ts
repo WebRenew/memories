@@ -4,7 +4,7 @@ import { checkRateLimit, getClientIp, publicRateLimit } from "@/lib/rate-limit";
 export const runtime = "edge";
 const CACHE_CONTROL_HEALTH = "public, s-maxage=30, stale-while-revalidate=120";
 
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   const rateLimited = await checkRateLimit(publicRateLimit, getClientIp(request));
   if (rateLimited) {
     return rateLimited;
