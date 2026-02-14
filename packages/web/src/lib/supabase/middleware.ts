@@ -41,9 +41,12 @@ export async function updateSession(request: NextRequest) {
 
   // Redirect authenticated users away from /login
   if (user && request.nextUrl.pathname === "/login") {
-    const url = request.nextUrl.clone()
-    url.pathname = "/app"
-    return NextResponse.redirect(url)
+    const rawNext = request.nextUrl.searchParams.get("next") ?? "/app"
+    const safeNext =
+      rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/app"
+    // Build a fresh URL to avoid leaking the original ?next=... param
+    const redirectUrl = new URL(safeNext, request.nextUrl.origin)
+    return NextResponse.redirect(redirectUrl)
   }
 
   return supabaseResponse
