@@ -22,6 +22,7 @@ import {
 import { getProjectId } from "../lib/git.js";
 import { setCloudMode } from "../lib/db.js";
 import { CLI_VERSION } from "../lib/version.js";
+import { resolveMemoryScopeInput } from "./scope.js";
 
 // Re-export for use by serve command
 export function setCloudCredentials(url: string, token: string): void {
@@ -224,6 +225,7 @@ Use this at the start of tasks to understand project conventions and recall past
 - skill: Agent skill definition (e.g., deploy, review workflows)
 
 By default, memories are project-scoped when in a git repo. Use global: true for user-wide preferences.
+Use project_id to force project scope when running outside the target repository.
 Use paths to scope rules to specific files (e.g., ["src/api/**", "**/*.test.ts"]).
 Use category to group related memories (e.g., "api", "testing").`,
     {
@@ -231,15 +233,17 @@ Use category to group related memories (e.g., "api", "testing").`,
       type: z.enum(["rule", "decision", "fact", "note", "skill"]).optional().describe("Memory type (default: note)"),
       tags: z.array(z.string()).optional().describe("Tags to categorize the memory"),
       global: z.boolean().optional().describe("Store as global memory instead of project-scoped"),
+      project_id: z.string().optional().describe("Explicit project id (e.g., github.com/org/repo)"),
       paths: z.array(z.string()).optional().describe("Glob patterns for path-scoped rules (e.g., ['src/api/**', '**/*.test.ts'])"),
       category: z.string().optional().describe("Grouping key for organizing memories (e.g., 'api', 'testing')"),
       metadata: z.record(z.string(), z.unknown()).optional().describe("Extended attributes as key-value pairs"),
     },
-    async ({ content, type, tags, global: isGlobal, paths, category, metadata }) => {
+    async ({ content, type, tags, global: isGlobal, project_id, paths, category, metadata }) => {
       try {
+        const scopeOpts = resolveMemoryScopeInput({ global: isGlobal, project_id });
         const memory = await addMemory(content, {
           tags,
-          global: isGlobal,
+          ...scopeOpts,
           type: type as MemoryType | undefined,
           paths,
           category,
@@ -478,13 +482,15 @@ Use this when you're receiving content in chunks via Server-Sent Events:
       type: z.enum(["rule", "decision", "fact", "note", "skill"]).optional().describe("Memory type (default: note)"),
       tags: z.array(z.string()).optional().describe("Tags to categorize the memory"),
       global: z.boolean().optional().describe("Store as global memory instead of project-scoped"),
+      project_id: z.string().optional().describe("Explicit project id (e.g., github.com/org/repo)"),
     },
-    async ({ type, tags, global: isGlobal }) => {
+    async ({ type, tags, global: isGlobal, project_id }) => {
       try {
+        const scopeOpts = resolveMemoryScopeInput({ global: isGlobal, project_id });
         const streamId = startMemoryStream({
           type: type as MemoryType | undefined,
           tags,
-          global: isGlobal,
+          ...scopeOpts,
         });
         return {
           content: [{ 
