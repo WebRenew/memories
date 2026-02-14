@@ -112,4 +112,41 @@ describe("db graph migrations", () => {
     });
     expect(Number(result.rows[0]?.count)).toBe(FTS_TRIGGERS.length);
   });
+
+  it("guards FTS delete/update triggers against soft-deleted rows", async () => {
+    const db = await getDb();
+    const result = await db.execute({
+      sql: "SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name IN (?, ?)",
+      args: ["memories_ad", "memories_au"],
+    });
+
+    const triggerSql = new Map<string, string>();
+    for (const row of result.rows) {
+      triggerSql.set(String(row.name), String(row.sql ?? "").toLowerCase());
+    }
+
+    expect(triggerSql.get("memories_ad")).toContain("when old.deleted_at is null");
+    expect(triggerSql.get("memories_au")).toContain("where old.deleted_at is null");
+    expect(triggerSql.get("memories_au")).toContain("where new.deleted_at is null");
+  });
+
+  it("can hard-delete soft-deleted rows without FTS corruption", async () => {
+    const db = await getDb();
+    const id = `purge-soft-${Date.now()}`;
+
+    await db.execute({
+      sql: "INSERT INTO memories (id, content, scope, type) VALUES (?, ?, 'global', 'note')",
+      args: [id, "soft-delete me"],
+    });
+    await db.execute({
+      sql: "UPDATE memories SET deleted_at = datetime('now') WHERE id = ?",
+      args: [id],
+    });
+
+    const purge = await db.execute("DELETE FROM memories WHERE deleted_at IS NOT NULL");
+    expect(Number(purge.rowsAffected)).toBeGreaterThan(0);
+
+    const integrity = await db.execute("PRAGMA integrity_check");
+    expect(String(integrity.rows[0]?.integrity_check)).toBe("ok");
+  });
 });

@@ -1,5 +1,11 @@
 # @memories.sh/cli
 
+## 0.7.2
+
+### Patch Changes
+
+- Fix FTS trigger logic to avoid `SQLITE_CORRUPT_VTAB` when hard-deleting soft-deleted memories, and auto-refresh outdated trigger definitions during migrations.
+
 ## 0.7.0
 
 ### Minor Changes

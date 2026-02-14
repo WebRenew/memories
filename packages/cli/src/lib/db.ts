@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 interface FtsTriggerDefinition {
   name: string;
   createSql: string;
+  validationNeedles: string[];
 }
 
 const FTS_TRIGGER_DEFINITIONS: FtsTriggerDefinition[] = [
@@ -19,24 +20,31 @@ const FTS_TRIGGER_DEFINITIONS: FtsTriggerDefinition[] = [
         INSERT INTO memories_fts(rowid, content, tags) VALUES (NEW.rowid, NEW.content, NEW.tags);
       END
     `,
+    validationNeedles: ["when new.deleted_at is null"],
   },
   {
     name: "memories_ad",
     createSql: `
-      CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+      CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories
+      WHEN OLD.deleted_at IS NULL
+      BEGIN
         INSERT INTO memories_fts(memories_fts, rowid, content, tags) VALUES('delete', OLD.rowid, OLD.content, OLD.tags);
       END
     `,
+    validationNeedles: ["when old.deleted_at is null"],
   },
   {
     name: "memories_au",
     createSql: `
       CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
-        INSERT INTO memories_fts(memories_fts, rowid, content, tags) VALUES('delete', OLD.rowid, OLD.content, OLD.tags);
+        INSERT INTO memories_fts(memories_fts, rowid, content, tags)
+          SELECT 'delete', OLD.rowid, OLD.content, OLD.tags
+          WHERE OLD.deleted_at IS NULL;
         INSERT INTO memories_fts(rowid, content, tags)
           SELECT NEW.rowid, NEW.content, NEW.tags WHERE NEW.deleted_at IS NULL;
       END
     `,
+    validationNeedles: ["where old.deleted_at is null", "where new.deleted_at is null"],
   },
 ];
 
@@ -310,8 +318,33 @@ async function createFtsTable(db: Client): Promise<void> {
 }
 
 async function ensureFtsTriggers(db: Client): Promise<void> {
-  // Use IF NOT EXISTS so parallel CLI processes don't fail startup when both run migrations.
+  const triggerNames = FTS_TRIGGER_DEFINITIONS.map((trigger) => `'${trigger.name}'`).join(", ");
+  const existing = await db.execute(`
+    SELECT name, sql
+    FROM sqlite_master
+    WHERE type = 'trigger'
+      AND name IN (${triggerNames})
+  `);
+  const existingByName = new Map<string, string>();
+  for (const row of existing.rows) {
+    existingByName.set(String(row.name), String(row.sql ?? ""));
+  }
+
+  // Keep trigger creation idempotent while repairing outdated definitions in place.
   for (const trigger of FTS_TRIGGER_DEFINITIONS) {
+    const sql = existingByName.get(trigger.name);
+    if (!sql) {
+      await db.execute(trigger.createSql);
+      continue;
+    }
+
+    const normalizedSql = sql.toLowerCase().replace(/\s+/g, " ");
+    const needsRefresh = trigger.validationNeedles.some(
+      (needle) => !normalizedSql.includes(needle.toLowerCase()),
+    );
+    if (!needsRefresh) continue;
+
+    await db.execute(`DROP TRIGGER IF EXISTS ${trigger.name}`);
     await db.execute(trigger.createSql);
   }
 }
