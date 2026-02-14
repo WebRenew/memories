@@ -19,14 +19,14 @@ export async function GET(request: Request): Promise<Response> {
         } = await supabase.auth.getUser()
 
         if (user) {
-          const tasks: Promise<unknown>[] = [reconcileUserAccountByEmail(user)]
+          // Ensure the user row exists before attempting org auto-join updates.
+          await reconcileUserAccountByEmail(user)
           if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-            tasks.push(autoJoinOrganizationsForEmails({
+            await autoJoinOrganizationsForEmails({
               userId: user.id,
               emails: extractUserEmails(user),
-            }))
+            })
           }
-          await Promise.all(tasks)
         }
       } catch (postLoginError) {
         // Do not block login on post-auth account hydration failures.
