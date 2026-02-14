@@ -11,7 +11,7 @@ interface CloudCredentials {
   turso_db_token: string;
 }
 
-async function fetchCloudCredentials(apiKey: string): Promise<CloudCredentials> {
+export async function fetchCloudCredentials(apiKey: string): Promise<CloudCredentials> {
   const res = await fetch(`${MEMORIES_API}/api/db/credentials`, {
     headers: {
       Authorization: `Bearer ${apiKey}`,

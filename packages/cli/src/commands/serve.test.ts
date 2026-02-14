@@ -1,36 +1,41 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fetchCloudCredentials } from "./serve.js";
 
-// Test the serve command's pure logic (not the actual server start)
-describe("serve", () => {
-  it("should parse port string to number", () => {
-    const port = parseInt("3030", 10);
-    expect(port).toBe(3030);
-    expect(typeof port).toBe("number");
+const originalFetch = globalThis.fetch;
+
+describe("serve - fetchCloudCredentials", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it("should handle invalid port gracefully", () => {
-    const port = parseInt("abc", 10);
-    expect(isNaN(port)).toBe(true);
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
   });
 
-  it("should default host to localhost", () => {
-    const opts: { host?: string } = {};
-    const host = opts.host || "127.0.0.1";
-    expect(host).toBe("127.0.0.1");
+  it("fetches cloud credentials and returns values", async () => {
+    const body = { turso_db_url: "libsql://db.turso.io", turso_db_token: "tok_123" };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 200 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await fetchCloudCredentials("test-api-key-123");
+    expect(result).toEqual({ turso_db_url: "libsql://db.turso.io", turso_db_token: "tok_123" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toMatch(/\/api\/db\/credentials$/);
+    const headers = new Headers(init.headers);
+    expect(headers.get("authorization")).toBe("Bearer test-api-key-123");
   });
 
-  it("should construct SSE server URL correctly", () => {
-    const host = "127.0.0.1";
-    const port = 3030;
-    const url = `http://${host}:${port}/mcp`;
-    expect(url).toBe("http://127.0.0.1:3030/mcp");
+  it("throws when server responds with error", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("forbidden", { status: 403 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    await expect(fetchCloudCredentials("bad")).rejects.toThrow(/Failed to fetch credentials: 403/i);
   });
 
-  it("should construct auth header for API key", () => {
-    const apiKey = "test-api-key-123";
-    const headers = {
-      Authorization: `Bearer ${apiKey}`,
-    };
-    expect(headers.Authorization).toBe("Bearer test-api-key-123");
+  it("throws when credentials are incomplete", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    await expect(fetchCloudCredentials("any")).rejects.toThrow(/Database not provisioned/i);
   });
 });

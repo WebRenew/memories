@@ -20,7 +20,7 @@ interface CredentialResponse {
   turso_db_name?: string | null;
 }
 
-function inferDbName(syncUrl: string | undefined): string | null {
+export function inferDbName(syncUrl: string | undefined): string | null {
   if (!syncUrl) return null;
   try {
     const host = new URL(syncUrl.replace("libsql://", "https://")).hostname;

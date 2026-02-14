@@ -1,16 +1,5 @@
 import { describe, it, expect } from "vitest";
-
-// Re-implement pure utility from sync.ts for testing
-function inferDbName(syncUrl: string | undefined): string | null {
-  if (!syncUrl) return null;
-  try {
-    const host = new URL(syncUrl.replace("libsql://", "https://")).hostname;
-    const firstLabel = host.split(".")[0];
-    return firstLabel || null;
-  } catch {
-    return null;
-  }
-}
+import { inferDbName } from "./sync.js";
 
 describe("sync", () => {
   it("should infer database name from libsql URL", () => {

@@ -73,12 +73,12 @@ function normalizeWorkspaceTarget(target: string): string {
   return target.trim().toLowerCase();
 }
 
-function isPersonalWorkspaceTarget(target: string): boolean {
+export function isPersonalWorkspaceTarget(target: string): boolean {
   const normalized = normalizeWorkspaceTarget(target);
   return normalized === "personal" || normalized === "none";
 }
 
-function resolveWorkspaceTarget(
+export function resolveWorkspaceTarget(
   organizations: SetupOrganization[],
   rawTarget: string,
 ): ResolvedWorkspaceTarget {
@@ -144,7 +144,7 @@ function workspaceLabel(organizations: SetupOrganization[], orgId: string | null
   return `${org.name} (${org.slug})`;
 }
 
-function parseSetupMode(rawMode: string | undefined): SetupMode {
+export function parseSetupMode(rawMode: string | undefined): SetupMode {
   if (!rawMode) return "auto";
   const normalized = rawMode.trim().toLowerCase();
   if (normalized === "auto" || normalized === "local" || normalized === "cloud") {
@@ -153,7 +153,7 @@ function parseSetupMode(rawMode: string | undefined): SetupMode {
   throw new Error(`Invalid setup mode "${rawMode}". Use one of: auto, local, cloud.`);
 }
 
-function parseSetupScope(rawScope: string | undefined): SetupScope {
+export function parseSetupScope(rawScope: string | undefined): SetupScope {
   if (!rawScope) return "auto";
   const normalized = rawScope.trim().toLowerCase();
   if (normalized === "auto" || normalized === "project" || normalized === "global") {
