@@ -1,62 +1,11 @@
 import { describe, it, expect } from "vitest";
-
-// Re-implement pure utility functions from init.ts for testing
-
-type SetupMode = "auto" | "local" | "cloud";
-type SetupScope = "auto" | "project" | "global";
-
-function parseSetupMode(rawMode: string | undefined): SetupMode {
-  if (!rawMode) return "auto";
-  const normalized = rawMode.trim().toLowerCase();
-  if (normalized === "auto" || normalized === "local" || normalized === "cloud") {
-    return normalized;
-  }
-  throw new Error(`Invalid setup mode "${rawMode}". Use one of: auto, local, cloud.`);
-}
-
-function parseSetupScope(rawScope: string | undefined): SetupScope {
-  if (!rawScope) return "auto";
-  const normalized = rawScope.trim().toLowerCase();
-  if (normalized === "auto" || normalized === "project" || normalized === "global") {
-    return normalized;
-  }
-  throw new Error(`Invalid scope "${rawScope}". Use one of: auto, project, global.`);
-}
-
-interface SetupOrganization {
-  id: string;
-  name: string;
-  slug: string;
-  role: "owner" | "admin" | "member";
-}
-
-function normalizeWorkspaceTarget(target: string): string {
-  return target.trim().toLowerCase();
-}
-
-function isPersonalWorkspaceTarget(target: string): boolean {
-  const normalized = normalizeWorkspaceTarget(target);
-  return normalized === "personal" || normalized === "none";
-}
-
-function resolveWorkspaceTarget(
-  organizations: SetupOrganization[],
-  rawTarget: string,
-): { orgId: string | null; label: string } {
-  if (isPersonalWorkspaceTarget(rawTarget)) {
-    return { orgId: null, label: "Personal workspace" };
-  }
-
-  const target = normalizeWorkspaceTarget(rawTarget);
-  const directMatch = organizations.find(
-    (org) => org.id === rawTarget || normalizeWorkspaceTarget(org.slug) === target,
-  );
-  if (directMatch) {
-    return { orgId: directMatch.id, label: `${directMatch.name} (${directMatch.slug})` };
-  }
-
-  throw new Error(`Organization "${rawTarget}" not found.`);
-}
+import {
+  parseSetupMode,
+  parseSetupScope,
+  isPersonalWorkspaceTarget,
+  resolveWorkspaceTarget,
+  type SetupOrganization,
+} from "./init-helpers.js";
 
 describe("init", () => {
   it("should parse setup mode correctly", () => {

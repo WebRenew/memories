@@ -11,8 +11,6 @@ import {
   setupMcp,
   toolSupportsGeneration,
   toolSupportsMcp,
-  type DetectedTool,
-  type Tool,
 } from "../lib/setup.js";
 import { initConfig } from "../lib/config.js";
 import {
@@ -26,141 +24,34 @@ import * as ui from "../lib/ui.js";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import {
+  DEFAULT_API_URL,
+  PERSONAL_WORKSPACE_VALUE,
+  type SetupMode,
+  type SetupOrganization,
+  parseSetupMode,
+  parseSetupScope,
+  normalizeWorkspaceTarget,
+  isPersonalWorkspaceTarget,
+  resolveWorkspaceTarget,
+  workspaceLabel,
+  selectedTool,
+  fetchOrganizationsAndProfile,
+  switchWorkspace,
+  fetchIntegrationHealth,
+  provisionWorkspaceDatabase,
+} from "./init-helpers.js";
 
-const DEFAULT_API_URL = "https://memories.sh";
-const PERSONAL_WORKSPACE_VALUE = "__personal_workspace__";
-type SetupMode = "auto" | "local" | "cloud";
-type SetupScope = "auto" | "project" | "global";
-
-interface SetupOrganization {
-  id: string;
-  name: string;
-  slug: string;
-  role: "owner" | "admin" | "member";
-}
-
-interface SetupUserProfile {
-  id: string;
-  email: string;
-  current_org_id: string | null;
-}
-
-interface SetupOrganizationsResponse {
-  organizations: SetupOrganization[];
-}
-
-interface SetupUserResponse {
-  user: SetupUserProfile;
-}
-
-interface ResolvedWorkspaceTarget {
-  orgId: string | null;
-  label: string;
-}
-
-interface IntegrationHealthResponse {
-  health?: {
-    workspace?: {
-      label?: string;
-      hasDatabase?: boolean;
-      canProvision?: boolean;
-      ownerType?: "user" | "organization" | null;
-    };
-  };
-}
-
-function normalizeWorkspaceTarget(target: string): string {
-  return target.trim().toLowerCase();
-}
-
-function isPersonalWorkspaceTarget(target: string): boolean {
-  const normalized = normalizeWorkspaceTarget(target);
-  return normalized === "personal" || normalized === "none";
-}
-
-function resolveWorkspaceTarget(
-  organizations: SetupOrganization[],
-  rawTarget: string,
-): ResolvedWorkspaceTarget {
-  if (isPersonalWorkspaceTarget(rawTarget)) {
-    return {
-      orgId: null,
-      label: "Personal workspace",
-    };
-  }
-
-  const target = normalizeWorkspaceTarget(rawTarget);
-  const directMatch = organizations.find(
-    (org) => org.id === rawTarget || normalizeWorkspaceTarget(org.slug) === target,
-  );
-  if (directMatch) {
-    return {
-      orgId: directMatch.id,
-      label: `${directMatch.name} (${directMatch.slug})`,
-    };
-  }
-
-  const exactNameMatches = organizations.filter(
-    (org) => normalizeWorkspaceTarget(org.name) === target,
-  );
-  if (exactNameMatches.length === 1) {
-    const org = exactNameMatches[0];
-    return {
-      orgId: org.id,
-      label: `${org.name} (${org.slug})`,
-    };
-  }
-
-  if (exactNameMatches.length > 1) {
-    throw new Error(
-      `Multiple organizations match "${rawTarget}". Use the organization slug or ID.`,
-    );
-  }
-
-  const prefixSlugMatches = organizations.filter((org) =>
-    normalizeWorkspaceTarget(org.slug).startsWith(target),
-  );
-  if (prefixSlugMatches.length === 1) {
-    const org = prefixSlugMatches[0];
-    return {
-      orgId: org.id,
-      label: `${org.name} (${org.slug})`,
-    };
-  }
-
-  if (prefixSlugMatches.length > 1) {
-    throw new Error(`Multiple organizations match "${rawTarget}". Be more specific.`);
-  }
-
-  throw new Error(
-    `Organization "${rawTarget}" not found. Run ${chalk.cyan("memories org list")} for available targets.`,
-  );
-}
-
-function workspaceLabel(organizations: SetupOrganization[], orgId: string | null): string {
-  if (!orgId) return "Personal workspace";
-  const org = organizations.find((item) => item.id === orgId);
-  if (!org) return `Organization (${orgId})`;
-  return `${org.name} (${org.slug})`;
-}
-
-function parseSetupMode(rawMode: string | undefined): SetupMode {
-  if (!rawMode) return "auto";
-  const normalized = rawMode.trim().toLowerCase();
-  if (normalized === "auto" || normalized === "local" || normalized === "cloud") {
-    return normalized;
-  }
-  throw new Error(`Invalid setup mode "${rawMode}". Use one of: auto, local, cloud.`);
-}
-
-function parseSetupScope(rawScope: string | undefined): SetupScope {
-  if (!rawScope) return "auto";
-  const normalized = rawScope.trim().toLowerCase();
-  if (normalized === "auto" || normalized === "project" || normalized === "global") {
-    return normalized;
-  }
-  throw new Error(`Invalid scope "${rawScope}". Use one of: auto, project, global.`);
-}
+// Re-export for backward compatibility
+export {
+  parseSetupMode,
+  parseSetupScope,
+  normalizeWorkspaceTarget,
+  isPersonalWorkspaceTarget,
+  resolveWorkspaceTarget,
+  workspaceLabel,
+  selectedTool,
+} from "./init-helpers.js";
 
 async function buildExistingMemoryDedupSet(): Promise<Set<string>> {
   const set = new Set<string>();
@@ -186,77 +77,6 @@ async function buildExistingMemoryDedupSet(): Promise<Set<string>> {
 async function importProjectSkillsAsMemories(cwd: string): Promise<IngestResult> {
   const existingSet = await buildExistingMemoryDedupSet();
   return ingestSkills(cwd, PROJECT_SKILLS_DIRS, { existingSet, silent: true });
-}
-
-function selectedTool(tool: Tool): DetectedTool {
-  return {
-    tool,
-    hasConfig: false,
-    hasMcp: false,
-    hasInstructions: false,
-    globalConfig: false,
-  };
-}
-
-async function fetchOrganizationsAndProfile(apiFetch: ReturnType<typeof getApiClient>): Promise<{
-  organizations: SetupOrganization[];
-  user: SetupUserProfile;
-}> {
-  const [orgsRes, userRes] = await Promise.all([
-    apiFetch("/api/orgs"),
-    apiFetch("/api/user"),
-  ]);
-
-  if (!orgsRes.ok) {
-    const text = await orgsRes.text();
-    throw new Error(`Failed to fetch organizations: ${text || orgsRes.statusText}`);
-  }
-
-  if (!userRes.ok) {
-    const text = await userRes.text();
-    throw new Error(`Failed to fetch user profile: ${text || userRes.statusText}`);
-  }
-
-  const orgsBody = (await orgsRes.json()) as SetupOrganizationsResponse;
-  const userBody = (await userRes.json()) as SetupUserResponse;
-
-  return {
-    organizations: orgsBody.organizations ?? [],
-    user: userBody.user,
-  };
-}
-
-async function switchWorkspace(
-  apiFetch: ReturnType<typeof getApiClient>,
-  orgId: string | null,
-): Promise<void> {
-  const response = await apiFetch("/api/user", {
-    method: "PATCH",
-    body: JSON.stringify({ current_org_id: orgId }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Failed to switch workspace: ${text || response.statusText}`);
-  }
-}
-
-async function fetchIntegrationHealth(
-  apiFetch: ReturnType<typeof getApiClient>,
-): Promise<IntegrationHealthResponse | null> {
-  const response = await apiFetch("/api/integration/health", { method: "GET" });
-  if (!response.ok) return null;
-  return (await response.json()) as IntegrationHealthResponse;
-}
-
-async function provisionWorkspaceDatabase(
-  apiFetch: ReturnType<typeof getApiClient>,
-): Promise<boolean> {
-  const response = await apiFetch("/api/db/provision", {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-  return response.ok;
 }
 
 export const initCommand = new Command("init")
@@ -292,7 +112,7 @@ export const initCommand = new Command("init")
   }) => {
     try {
       ui.banner();
-      
+
       console.log(chalk.dim("  One place for your rules. Works with every tool.\n"));
 
       let setupMode = parseSetupMode(opts.mode);
@@ -478,8 +298,8 @@ export const initCommand = new Command("init")
                   d.tool.globalMcpConfigPath || (d.tool.globalDetectPaths ?? []).length > 0,
                 );
                 const writeGlobal = d.globalConfig || ((preferGlobalMcpSetup || useGlobal) && supportsGlobalMcp);
-                const result = await setupMcp(d.tool, { 
-                  cwd, 
+                const result = await setupMcp(d.tool, {
+                  cwd,
                   global: writeGlobal,
                 });
                 if (result.success) {
@@ -574,9 +394,9 @@ export const initCommand = new Command("init")
       if (opts.rule?.length) {
         ui.info("Adding rules...");
         for (const rule of opts.rule) {
-          await addMemory(rule, { 
-            type: "rule", 
-            global: useGlobal 
+          await addMemory(rule, {
+            type: "rule",
+            global: useGlobal
           });
           ui.dim(`+ ${rule}`);
         }
@@ -631,7 +451,7 @@ export const initCommand = new Command("init")
           try {
             const { organizations, user } = await fetchOrganizationsAndProfile(apiFetch);
 
-            let target: ResolvedWorkspaceTarget | null = null;
+            let target: { orgId: string | null; label: string } | null = null;
 
             if (!effectiveSkipWorkspace && opts.workspace) {
               target = resolveWorkspaceTarget(organizations, opts.workspace);
