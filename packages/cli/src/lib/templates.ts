@@ -1,12 +1,12 @@
 import { input } from "@inquirer/prompts";
 
-export interface TemplateField {
+interface TemplateField {
   name: string;
   prompt: string;
   required: boolean;
 }
 
-export interface Template {
+interface Template {
   name: string;
   description: string;
   type: "rule" | "decision" | "fact" | "note" | "skill";

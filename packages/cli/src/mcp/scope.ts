@@ -1,6 +1,6 @@
 import type { AddMemoryOpts } from "../lib/memory.js";
 
-export interface MemoryScopeInput {
+interface MemoryScopeInput {
   global?: boolean;
   project_id?: string | null;
 }

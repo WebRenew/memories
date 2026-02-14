@@ -1,4 +1,4 @@
-export type SyntaxTokenStyle =
+type SyntaxTokenStyle =
   | "default"
   | "keyword"
   | "string"

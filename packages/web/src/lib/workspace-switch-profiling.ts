@@ -48,7 +48,7 @@ export interface WorkspaceSwitchProfilingHealth {
   error: string | null
 }
 
-export interface WorkspaceSwitchProfilingOptions {
+interface WorkspaceSwitchProfilingOptions {
   minSamples?: number
   p95ClientTotalBudgetMs?: number
   p95LargeTenantClientTotalBudgetMs?: number

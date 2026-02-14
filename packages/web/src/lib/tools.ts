@@ -1,4 +1,4 @@
-export interface Tool {
+interface Tool {
   name: string;
   logo: string;
   slug: string;

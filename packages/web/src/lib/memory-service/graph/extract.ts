@@ -16,14 +16,14 @@ export interface GraphNodeRef {
   nodeKey: string
 }
 
-export interface GraphNodeCandidate {
+interface GraphNodeCandidate {
   nodeType: string
   nodeKey: string
   label: string
   metadata: Record<string, unknown> | null
 }
 
-export interface GraphEdgeCandidate {
+interface GraphEdgeCandidate {
   from: GraphNodeRef
   to: GraphNodeRef
   edgeType: string
@@ -32,12 +32,12 @@ export interface GraphEdgeCandidate {
   expiresAt: string | null
 }
 
-export interface GraphLinkCandidate {
+interface GraphLinkCandidate {
   node: GraphNodeRef
   role: string
 }
 
-export interface DeterministicGraphExtract {
+interface DeterministicGraphExtract {
   nodes: GraphNodeCandidate[]
   edges: GraphEdgeCandidate[]
   links: GraphLinkCandidate[]

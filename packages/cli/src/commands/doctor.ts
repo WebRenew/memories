@@ -27,14 +27,14 @@ interface DoctorCheckOutcome {
   details?: Record<string, unknown>;
 }
 
-export interface DoctorCheckResult extends DoctorCheckOutcome {
+interface DoctorCheckResult extends DoctorCheckOutcome {
   id: string;
   code: string;
   category: DoctorCheckCategory;
   name: string;
 }
 
-export interface DoctorReport {
+interface DoctorReport {
   schemaVersion: "1.1";
   generatedAt: string;
   ok: boolean;
@@ -52,7 +52,7 @@ export interface DoctorReport {
   };
 }
 
-export interface RunDoctorChecksOptions {
+interface RunDoctorChecksOptions {
   fix?: boolean;
 }
 

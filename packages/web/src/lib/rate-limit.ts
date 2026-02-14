@@ -9,7 +9,7 @@ interface RateLimitResult {
   reset: number
 }
 
-export interface RateLimiter {
+interface RateLimiter {
   limit: (identifier: string) => Promise<RateLimitResult>
 }
 

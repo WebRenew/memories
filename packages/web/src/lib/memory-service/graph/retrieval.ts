@@ -17,7 +17,7 @@ interface CandidateScore extends NodeReason {
   linkedViaNode: string
 }
 
-export interface GraphExpansionReason {
+interface GraphExpansionReason {
   whyIncluded: "graph_expansion"
   linkedViaNode: string
   edgeType: string
@@ -25,7 +25,7 @@ export interface GraphExpansionReason {
   seedMemoryId: string
 }
 
-export interface GraphExpansionResult {
+interface GraphExpansionResult {
   memoryIds: string[]
   reasons: Map<string, GraphExpansionReason>
   totalCandidates: number

@@ -1,10 +1,10 @@
-export interface GraphUrlNodeSelection {
+interface GraphUrlNodeSelection {
   nodeType: string
   nodeKey: string
   label: string
 }
 
-export interface GraphUrlState {
+interface GraphUrlState {
   selectedNode: GraphUrlNodeSelection | null
   selectedEdgeId: string | null
   isFocusMode: boolean

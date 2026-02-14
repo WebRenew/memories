@@ -8,7 +8,7 @@ export interface GraphRolloutConfig {
   updatedBy: string | null
 }
 
-export interface GraphRolloutMetricInput {
+interface GraphRolloutMetricInput {
   nowIso: string
   mode: GraphRolloutMode
   requestedStrategy: "baseline" | "hybrid_graph"
