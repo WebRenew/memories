@@ -408,12 +408,23 @@ export async function PATCH(
   }
 
   // Can't change owner's role
-  const { data: targetMembership } = await supabase
+  const { data: targetMembership, error: targetMembershipError } = await supabase
     .from("org_members")
     .select("role")
     .eq("org_id", orgId)
     .eq("user_id", userId)
     .single()
+
+  if (targetMembershipError) {
+    console.error("Failed to verify target membership before updating org member role:", {
+      error: targetMembershipError,
+      orgId,
+      actorUserId: user.id,
+      targetUserId: userId,
+      targetRole: role,
+    })
+    return NextResponse.json({ error: "Failed to update member role" }, { status: 500 })
+  }
 
   if (!targetMembership) {
     return NextResponse.json({ error: "User is not a member" }, { status: 404 })
