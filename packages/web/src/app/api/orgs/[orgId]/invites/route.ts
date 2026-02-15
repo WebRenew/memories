@@ -323,7 +323,13 @@ export async function DELETE(
     .eq("org_id", orgId)
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Failed to delete org invite row:", {
+      error,
+      orgId,
+      userId: user.id,
+      inviteId,
+    })
+    return NextResponse.json({ error: "Failed to revoke invite" }, { status: 500 })
   }
 
   if (inviteToRevoke) {
