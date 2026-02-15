@@ -103,6 +103,64 @@ describe("/api/orgs/[orgId]/members", () => {
     })
   })
 
+  it("returns 500 when user profile lookup fails", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "org_members") {
+        return {
+          select: vi.fn((columns: string) => {
+            if (columns === "role") {
+              const single = vi.fn().mockResolvedValue({ data: { role: "owner" }, error: null })
+              const eqUser = vi.fn().mockReturnValue({ single })
+              const eqOrg = vi.fn().mockReturnValue({ eq: eqUser })
+              return { eq: eqOrg }
+            }
+
+            const order = vi.fn().mockResolvedValue({
+              data: [
+                {
+                  id: "member-1",
+                  user_id: "user-1",
+                  role: "owner",
+                  created_at: "2026-02-12T00:00:00.000Z",
+                },
+              ],
+              error: null,
+            })
+            const eqOrg = vi.fn().mockReturnValue({ order })
+            return { eq: eqOrg }
+          }),
+        }
+      }
+
+      if (table === "users") {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn().mockResolvedValue({
+              data: null,
+              error: { message: "DB read failed" },
+            }),
+          })),
+        }
+      }
+
+      return {
+        select: vi.fn(() => ({ eq: vi.fn(), in: vi.fn(), single: vi.fn(), order: vi.fn() })),
+      }
+    })
+
+    const response = await GET(
+      new Request("https://example.com/api/orgs/org-1/members"),
+      { params: Promise.resolve({ orgId: "org-1" }) }
+    )
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Failed to load organization members",
+    })
+  })
+
   it("returns member list including owner", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
 

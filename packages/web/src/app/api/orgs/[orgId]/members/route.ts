@@ -166,7 +166,13 @@ export async function GET(
       .in("id", userIds)
 
     if (usersError) {
-      return NextResponse.json({ error: usersError.message }, { status: 500 })
+      console.error("Failed to load member user profiles:", {
+        error: usersError,
+        orgId,
+        actorUserId: user.id,
+        userIds,
+      })
+      return NextResponse.json({ error: "Failed to load organization members" }, { status: 500 })
     }
 
     usersById = new Map((users as UserRow[] | null | undefined)?.map((row) => [row.id, row]) ?? [])
