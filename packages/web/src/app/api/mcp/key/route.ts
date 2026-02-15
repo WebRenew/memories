@@ -218,8 +218,10 @@ export async function POST(request: Request): Promise<Response> {
 
   const previousApiKeyHash = existingUser?.mcp_api_key_hash as string | null
 
+  let copiedTenantMappings = 0
   try {
-    await cloneTenantMappingsForKeyRotation(admin, user.id, previousApiKeyHash ?? "", apiKeyHash)
+    const { copied } = await cloneTenantMappingsForKeyRotation(admin, user.id, previousApiKeyHash ?? "", apiKeyHash)
+    copiedTenantMappings = copied
   } catch (error) {
     console.error("Failed to remap tenant mappings for key rotation:", error)
     return legacyJson({ error: "Failed to rotate key due to tenant mapping remap failure" }, { status: 500 })
@@ -238,6 +240,14 @@ export async function POST(request: Request): Promise<Response> {
     .eq("id", user.id)
 
   if (error) {
+    if (copiedTenantMappings > 0) {
+      try {
+        await cleanupOldTenantMappingsForKeyRotation(admin, apiKeyHash)
+      } catch (rollbackError) {
+        console.error("Failed to rollback tenant mappings after key rotation failure:", rollbackError)
+      }
+    }
+
     return legacyJson({ error: "Failed to generate key" }, { status: 500 })
   }
 
