@@ -275,6 +275,19 @@ export async function DELETE(): Promise<Response> {
   if (rateLimited) return applyLegacyHeaders(rateLimited)
 
   const admin = createAdminClient()
+  const { data: existingUser, error: existingUserError } = await admin
+    .from("users")
+    .select("mcp_api_key_hash")
+    .eq("id", user.id)
+    .single()
+
+  if (existingUserError) {
+    console.error("Failed to load existing API key metadata for revoke:", existingUserError)
+    return legacyJson({ error: "Failed to load existing API key metadata" }, { status: 500 })
+  }
+
+  const previousApiKeyHash = existingUser?.mcp_api_key_hash as string | null
+
   const { error } = await admin
     .from("users")
     .update({
@@ -289,6 +302,15 @@ export async function DELETE(): Promise<Response> {
 
   if (error) {
     return legacyJson({ error: "Failed to revoke key" }, { status: 500 })
+  }
+
+  if (previousApiKeyHash) {
+    try {
+      await cleanupOldTenantMappingsForKeyRotation(admin, previousApiKeyHash)
+    } catch (cleanupError) {
+      // Non-fatal: the API key has already been revoked.
+      console.error("Failed to cleanup tenant mappings after key revoke:", cleanupError)
+    }
   }
 
   return legacyJson({ ok: true })
