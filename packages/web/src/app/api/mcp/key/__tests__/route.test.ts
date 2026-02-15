@@ -86,11 +86,20 @@ describe("/api/mcp/key", () => {
 
     it("adds deprecation headers on DELETE responses", async () => {
       mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
-      const mockEq = vi.fn().mockResolvedValue({ error: null })
-      const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
+      const usersSelectSingle = vi.fn().mockResolvedValue({
+        data: { mcp_api_key_hash: null },
+        error: null,
+      })
+      const usersUpdateEq = vi.fn().mockResolvedValue({ error: null })
+      const usersUpdate = vi.fn().mockReturnValue({ eq: usersUpdateEq })
       mockAdminFrom.mockImplementation((table: string) => {
         if (table !== "users") return {}
-        return { update: mockUpdate }
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({ single: usersSelectSingle }),
+          }),
+          update: usersUpdate,
+        }
       })
 
       const response = await DELETE()
@@ -403,18 +412,27 @@ describe("/api/mcp/key", () => {
     it("should revoke API key", async () => {
       mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
 
-      const mockEq = vi.fn().mockResolvedValue({ error: null })
-      const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
+      const usersSelectSingle = vi.fn().mockResolvedValue({
+        data: { mcp_api_key_hash: null },
+        error: null,
+      })
+      const usersUpdateEq = vi.fn().mockResolvedValue({ error: null })
+      const usersUpdate = vi.fn().mockReturnValue({ eq: usersUpdateEq })
       mockAdminFrom.mockImplementation((table: string) => {
         if (table !== "users") return {}
-        return { update: mockUpdate }
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({ single: usersSelectSingle }),
+          }),
+          update: usersUpdate,
+        }
       })
 
       const response = await DELETE()
       const body = await response.json()
       expect(body.ok).toBe(true)
 
-      const payload = mockUpdate.mock.calls[0]?.[0]
+      const payload = usersUpdate.mock.calls[0]?.[0]
       expect(payload).toMatchObject({
         mcp_api_key: null,
         mcp_api_key_hash: null,
@@ -425,11 +443,90 @@ describe("/api/mcp/key", () => {
       })
     })
 
+    it("should cleanup tenant mappings when revoking a previously-issued key", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+
+      const usersSelectSingle = vi.fn().mockResolvedValue({
+        data: { mcp_api_key_hash: "old_hash_123" },
+        error: null,
+      })
+      const usersUpdateEq = vi.fn().mockResolvedValue({ error: null })
+      const usersUpdate = vi.fn().mockReturnValue({ eq: usersUpdateEq })
+
+      const tenantDeleteEq = vi.fn().mockResolvedValue({ error: null })
+      const tenantDelete = vi.fn().mockReturnValue({ eq: tenantDeleteEq })
+
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table === "users") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({ single: usersSelectSingle }),
+            }),
+            update: usersUpdate,
+          }
+        }
+
+        if (table === "sdk_tenant_databases") {
+          return { delete: tenantDelete }
+        }
+
+        return {}
+      })
+
+      const response = await DELETE()
+      expect(response.status).toBe(200)
+      expect(tenantDelete).toHaveBeenCalledOnce()
+      expect(tenantDeleteEq).toHaveBeenCalledWith("api_key_hash", "old_hash_123")
+    })
+
+    it("should still return ok when tenant mapping cleanup fails after revoke", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+
+      const usersSelectSingle = vi.fn().mockResolvedValue({
+        data: { mcp_api_key_hash: "old_hash_123" },
+        error: null,
+      })
+      const usersUpdateEq = vi.fn().mockResolvedValue({ error: null })
+      const usersUpdate = vi.fn().mockReturnValue({ eq: usersUpdateEq })
+      const tenantDeleteEq = vi.fn().mockResolvedValue({ error: { message: "delete failed" } })
+      const tenantDelete = vi.fn().mockReturnValue({ eq: tenantDeleteEq })
+
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table === "users") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({ single: usersSelectSingle }),
+            }),
+            update: usersUpdate,
+          }
+        }
+
+        if (table === "sdk_tenant_databases") {
+          return { delete: tenantDelete }
+        }
+
+        return {}
+      })
+
+      const response = await DELETE()
+      const body = await response.json()
+      expect(response.status).toBe(200)
+      expect(body.ok).toBe(true)
+    })
+
     it("should return 500 on revoke failure", async () => {
       mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
       mockAdminFrom.mockImplementation((table: string) => {
         if (table !== "users") return {}
         return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { mcp_api_key_hash: null },
+                error: null,
+              }),
+            }),
+          }),
           update: vi.fn().mockReturnValue({
             eq: vi.fn().mockResolvedValue({ error: { message: "DB error" } }),
           }),
@@ -438,6 +535,29 @@ describe("/api/mcp/key", () => {
 
       const response = await DELETE()
       expect(response.status).toBe(500)
+    })
+
+    it("should return 500 when loading existing key metadata fails", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table !== "users") return {}
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: null,
+                error: { message: "select failed" },
+              }),
+            }),
+          }),
+          update: vi.fn(),
+        }
+      })
+
+      const response = await DELETE()
+      expect(response.status).toBe(500)
+      const body = await response.json()
+      expect(body.error).toContain("existing API key metadata")
     })
   })
 })

@@ -104,6 +104,8 @@ export async function checkRateLimit(
   const { success, limit, remaining, reset } = await limiter.limit(identifier)
 
   if (!success) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((reset - Date.now()) / 1000))
+
     return NextResponse.json(
       { error: "Too many requests" },
       {
@@ -112,7 +114,7 @@ export async function checkRateLimit(
           "X-RateLimit-Limit": limit.toString(),
           "X-RateLimit-Remaining": remaining.toString(),
           "X-RateLimit-Reset": reset.toString(),
-          "Retry-After": Math.ceil((reset - Date.now()) / 1000).toString(),
+          "Retry-After": retryAfterSeconds.toString(),
         },
       }
     )
@@ -133,9 +135,22 @@ export async function checkPreAuthApiRateLimit(request: Request): Promise<NextRe
  * Extract client IP from request headers for public endpoint rate limiting.
  */
 export function getClientIp(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "unknown"
-  )
+  const forwardedFor = request.headers.get("x-forwarded-for")
+  if (forwardedFor) {
+    const primaryForwardedIp = forwardedFor
+      .split(",")
+      .map((segment) => segment.trim())
+      .find((segment) => segment.length > 0)
+
+    if (primaryForwardedIp) {
+      return primaryForwardedIp
+    }
+  }
+
+  const realIp = request.headers.get("x-real-ip")?.trim()
+  if (realIp && realIp.length > 0) {
+    return realIp
+  }
+
+  return "unknown"
 }

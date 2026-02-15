@@ -71,6 +71,25 @@ describe("checkRateLimit", () => {
     expect(result!.headers.get("X-RateLimit-Reset")).toBe(resetTime.toString())
     expect(result!.headers.get("Retry-After")).toBeDefined()
   })
+
+  it("should clamp Retry-After to at least one second", async () => {
+    const limiter = new Ratelimit({
+      redis: {} as never,
+      limiter: Ratelimit.slidingWindow(60, "60 s"),
+      prefix: "test",
+    })
+    vi.mocked(limiter.limit).mockResolvedValue({
+      success: false,
+      limit: 60,
+      remaining: 0,
+      reset: Date.now() - 1000,
+      pending: Promise.resolve(),
+      reason: "timeout",
+    })
+
+    const result = await checkRateLimit(limiter, "user-1")
+    expect(result!.headers.get("Retry-After")).toBe("1")
+  })
 })
 
 describe("getClientIp", () => {
@@ -97,6 +116,23 @@ describe("getClientIp", () => {
 
   it("should return 'unknown' when no IP headers present", () => {
     const request = new Request("https://example.com")
+    expect(getClientIp(request)).toBe("unknown")
+  })
+
+  it("should ignore empty x-forwarded-for values and fall back to x-real-ip", () => {
+    const request = new Request("https://example.com", {
+      headers: {
+        "x-forwarded-for": " ,  ",
+        "x-real-ip": "10.0.0.1",
+      },
+    })
+    expect(getClientIp(request)).toBe("10.0.0.1")
+  })
+
+  it("should return unknown when x-real-ip is empty", () => {
+    const request = new Request("https://example.com", {
+      headers: { "x-real-ip": "   " },
+    })
     expect(getClientIp(request)).toBe("unknown")
   })
 
