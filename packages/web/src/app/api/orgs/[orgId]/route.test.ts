@@ -24,7 +24,7 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
 }))
 
-import { PATCH } from "./route"
+import { DELETE, GET, PATCH } from "./route"
 
 describe("/api/orgs/[orgId] PATCH", () => {
   beforeEach(() => {
@@ -214,5 +214,81 @@ describe("/api/orgs/[orgId] PATCH", () => {
         domain_auto_join_domain: "webrenew.io",
       }),
     )
+  })
+})
+
+describe("/api/orgs/[orgId] GET", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+    mockCheckRateLimit.mockResolvedValue(null)
+  })
+
+  it("returns 500 when membership lookup fails", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "org_members") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { message: "DB read failed" },
+                }),
+              }),
+            }),
+          })),
+        }
+      }
+      return {}
+    })
+
+    const response = await GET(
+      new Request("https://example.com/api/orgs/org-1"),
+      { params: Promise.resolve({ orgId: "org-1" }) },
+    )
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Failed to fetch organization",
+    })
+  })
+})
+
+describe("/api/orgs/[orgId] DELETE", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+    mockCheckRateLimit.mockResolvedValue(null)
+  })
+
+  it("returns 500 when ownership lookup fails", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "org_members") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { message: "DB read failed" },
+                }),
+              }),
+            }),
+          })),
+        }
+      }
+      return {}
+    })
+
+    const response = await DELETE(
+      new Request("https://example.com/api/orgs/org-1", { method: "DELETE" }),
+      { params: Promise.resolve({ orgId: "org-1" }) },
+    )
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Failed to delete organization",
+    })
   })
 })

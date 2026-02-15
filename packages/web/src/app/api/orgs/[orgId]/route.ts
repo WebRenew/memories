@@ -35,12 +35,21 @@ export async function GET(
   if (rateLimited) return rateLimited
 
   // Check user is member
-  const { data: membership } = await supabase
+  const { data: membership, error: membershipError } = await supabase
     .from("org_members")
     .select("role")
     .eq("org_id", orgId)
     .eq("user_id", user.id)
     .single()
+
+  if (membershipError) {
+    console.error("Failed to verify organization membership for read:", {
+      error: membershipError,
+      orgId,
+      userId: user.id,
+    })
+    return NextResponse.json({ error: "Failed to fetch organization" }, { status: 500 })
+  }
 
   if (!membership) {
     return NextResponse.json({ error: "Not a member of this organization" }, { status: 403 })
@@ -233,12 +242,21 @@ export async function DELETE(
   if (rateLimited) return rateLimited
 
   // Only users with owner role can delete.
-  const { data: membership } = await supabase
+  const { data: membership, error: membershipError } = await supabase
     .from("org_members")
     .select("role")
     .eq("org_id", orgId)
     .eq("user_id", user.id)
     .single()
+
+  if (membershipError) {
+    console.error("Failed to verify organization ownership for delete:", {
+      error: membershipError,
+      orgId,
+      userId: user.id,
+    })
+    return NextResponse.json({ error: "Failed to delete organization" }, { status: 500 })
+  }
 
   if (!membership || membership.role !== "owner") {
     return NextResponse.json({ error: "Only the owner can delete this organization" }, { status: 403 })
