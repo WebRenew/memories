@@ -406,6 +406,75 @@ describe("/api/mcp/key", () => {
       const response = await POST(request)
       expect(response.status).toBe(500)
     })
+
+    it("should rollback newly copied tenant mappings when user update fails", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+
+      const usersSelectSingle = vi.fn().mockResolvedValue({
+        data: { mcp_api_key_hash: "old_hash_123" },
+        error: null,
+      })
+      const usersUpdateEq = vi.fn().mockResolvedValue({ error: { message: "DB error" } })
+      const usersUpdate = vi.fn().mockReturnValue({ eq: usersUpdateEq })
+      const tenantSelectEq = vi.fn().mockResolvedValue({
+        data: [
+          {
+            tenant_id: "tenant-a",
+            turso_db_url: "libsql://tenant-a.turso.io",
+            turso_db_token: "token-a",
+            turso_db_name: "memories-tenant-a",
+            status: "ready",
+            metadata: {},
+            created_by_user_id: "user-1",
+            created_at: "2026-02-10T00:00:00.000Z",
+            updated_at: "2026-02-10T00:00:00.000Z",
+            last_verified_at: "2026-02-10T00:00:00.000Z",
+          },
+        ],
+        error: null,
+      })
+      const tenantUpsert = vi.fn().mockResolvedValue({ error: null })
+      const tenantDeleteEq = vi.fn().mockResolvedValue({ error: null })
+      const tenantDelete = vi.fn().mockReturnValue({ eq: tenantDeleteEq })
+
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table === "users") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({ single: usersSelectSingle }),
+            }),
+            update: usersUpdate,
+          }
+        }
+
+        if (table === "sdk_tenant_databases") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: tenantSelectEq,
+            }),
+            upsert: tenantUpsert,
+            delete: tenantDelete,
+          }
+        }
+
+        return {}
+      })
+
+      const request = new Request("http://localhost/api/mcp/key", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ expiresAt: validExpiry }),
+      })
+
+      const response = await POST(request)
+      expect(response.status).toBe(500)
+      expect(tenantDelete).toHaveBeenCalledOnce()
+      expect(tenantDeleteEq).toHaveBeenCalledWith(
+        "api_key_hash",
+        expect.stringMatching(/^[a-f0-9]{64}$/)
+      )
+      expect(tenantDeleteEq).not.toHaveBeenCalledWith("api_key_hash", "old_hash_123")
+    })
   })
 
   describe("DELETE", () => {
