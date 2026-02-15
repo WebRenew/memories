@@ -483,4 +483,61 @@ describe("/api/orgs/[orgId]/invites DELETE", () => {
       error: "Failed to revoke invite",
     })
   })
+
+  it("returns 500 when invite deletion fails", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "org_members") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { role: "owner" },
+                  error: null,
+                }),
+              }),
+            }),
+          })),
+        }
+      }
+
+      if (table === "org_invites") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: null,
+                }),
+              }),
+            }),
+          })),
+          delete: vi.fn(() => ({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({
+                error: { message: "DB write failed" },
+              }),
+            }),
+          })),
+        }
+      }
+
+      return {
+        select: vi.fn(() => ({ eq: vi.fn(), single: vi.fn(), maybeSingle: vi.fn() })),
+      }
+    })
+
+    const response = await DELETE(
+      new Request("https://example.com/api/orgs/org-1/invites?inviteId=inv-1", { method: "DELETE" }),
+      { params: Promise.resolve({ orgId: "org-1" }) },
+    )
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Failed to revoke invite",
+    })
+  })
 })
