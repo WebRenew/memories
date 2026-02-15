@@ -99,7 +99,7 @@ describe("/api/stripe/portal", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: { stripe_customer_id: "cus_org_123" },
                 error: null,
               }),
@@ -144,7 +144,7 @@ describe("/api/stripe/portal", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: { stripe_customer_id: "cus_user_123" },
                 error: null,
               }),
@@ -189,7 +189,7 @@ describe("/api/stripe/portal", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: null,
                 error: { message: "db read failed" },
               }),
@@ -227,7 +227,7 @@ describe("/api/stripe/portal", () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: null,
                 error: { message: "db read failed" },
               }),
