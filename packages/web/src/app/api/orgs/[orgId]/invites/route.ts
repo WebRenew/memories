@@ -148,14 +148,24 @@ export async function POST(
   }
 
   // Check for existing pending invite
-  const { data: existingInvite } = await supabase
+  const { data: existingInvite, error: existingInviteError } = await supabase
     .from("org_invites")
     .select("id")
     .eq("org_id", orgId)
     .eq("email", email.toLowerCase())
     .is("accepted_at", null)
     .gt("expires_at", new Date().toISOString())
-    .single()
+    .maybeSingle()
+
+  if (existingInviteError) {
+    console.error("Failed to look up existing pending invite:", {
+      error: existingInviteError,
+      orgId,
+      email: email.toLowerCase(),
+      userId: user.id,
+    })
+    return NextResponse.json({ error: "Failed to create invite" }, { status: 500 })
+  }
 
   if (existingInvite) {
     return NextResponse.json({ error: "Invite already pending for this email" }, { status: 400 })
