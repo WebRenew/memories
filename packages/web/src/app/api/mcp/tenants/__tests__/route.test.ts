@@ -9,6 +9,7 @@ const {
   mockInitSchema,
   mockTursoExecute,
   mockEnforceSdkProjectProvisionLimit,
+  mockResolveSdkProjectBillingContext,
   mockCountActiveProjectsForBillingContext,
   mockRecordGrowthProjectMeterEvent,
 } = vi.hoisted(() => ({
@@ -20,6 +21,7 @@ const {
   mockInitSchema: vi.fn(),
   mockTursoExecute: vi.fn(),
   mockEnforceSdkProjectProvisionLimit: vi.fn(),
+  mockResolveSdkProjectBillingContext: vi.fn(),
   mockCountActiveProjectsForBillingContext: vi.fn(),
   mockRecordGrowthProjectMeterEvent: vi.fn(),
 }))
@@ -54,6 +56,11 @@ vi.mock("@libsql/client", () => ({
 
 vi.mock("@/lib/sdk-project-billing", () => ({
   enforceSdkProjectProvisionLimit: mockEnforceSdkProjectProvisionLimit,
+  resolveSdkProjectBillingContext: mockResolveSdkProjectBillingContext,
+  buildSdkTenantOwnerScopeKey: vi.fn(
+    (input: { ownerType: "user" | "organization"; ownerUserId: string; orgId: string | null }) =>
+      input.ownerType === "organization" && input.orgId ? `org:${input.orgId}` : `user:${input.ownerUserId}`
+  ),
   countActiveProjectsForBillingContext: mockCountActiveProjectsForBillingContext,
   recordGrowthProjectMeterEvent: mockRecordGrowthProjectMeterEvent,
 }))
@@ -82,12 +89,24 @@ describe("/api/mcp/tenants", () => {
         ownerType: "user",
         ownerUserId: "user-1",
         orgId: null,
+        ownerScopeKey: "user:user-1",
         stripeCustomerId: "cus_user_123",
         includedProjects: 500,
         overageUsdPerProject: 0.05,
         maxProjectsPerMonth: null,
       },
       activeProjectCount: 1,
+    })
+    mockResolveSdkProjectBillingContext.mockResolvedValue({
+      plan: "growth",
+      ownerType: "user",
+      ownerUserId: "user-1",
+      orgId: null,
+      ownerScopeKey: "user:user-1",
+      stripeCustomerId: "cus_user_123",
+      includedProjects: 500,
+      overageUsdPerProject: 0.05,
+      maxProjectsPerMonth: null,
     })
     mockCountActiveProjectsForBillingContext.mockResolvedValue(2)
     mockRecordGrowthProjectMeterEvent.mockResolvedValue(undefined)
@@ -293,11 +312,12 @@ describe("/api/mcp/tenants", () => {
     expect(mockInitSchema).toHaveBeenCalledOnce()
     expect(upsertMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        owner_scope_key: "user:user-1",
         api_key_hash: "hash_123",
         tenant_id: "tenant-b",
         status: "ready",
       }),
-      { onConflict: "api_key_hash,tenant_id" }
+      { onConflict: "owner_scope_key,tenant_id" }
     )
   })
 
@@ -454,7 +474,7 @@ describe("/api/mcp/tenants", () => {
         tenant_id: "tenant-retry",
         status: "ready",
       }),
-      { onConflict: "api_key_hash,tenant_id" },
+      { onConflict: "owner_scope_key,tenant_id" },
     )
   })
 
