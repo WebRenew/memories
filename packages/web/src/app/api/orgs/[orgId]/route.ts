@@ -18,6 +18,19 @@ function isMissingColumnError(error: unknown, columnName: string): boolean {
   )
 }
 
+function supportsDomainAutoJoinPlan(plan: unknown): boolean {
+  if (typeof plan !== "string") return false
+  const normalized = plan.trim().toLowerCase()
+  return (
+    normalized === "team" ||
+    normalized === "growth" ||
+    normalized === "enterprise" ||
+    normalized === "pro" ||
+    normalized === "individual" ||
+    normalized === "past_due"
+  )
+}
+
 // GET /api/orgs/[orgId] - Get organization details
 export async function GET(
   request: Request,
@@ -150,7 +163,7 @@ export async function PATCH(
   if (updatesDomainSettings) {
     const { data: currentOrg, error: currentOrgError } = await supabase
       .from("organizations")
-      .select("domain_auto_join_enabled, domain_auto_join_domain")
+      .select("plan, domain_auto_join_enabled, domain_auto_join_domain")
       .eq("id", orgId)
       .single()
 
@@ -169,6 +182,25 @@ export async function PATCH(
       return NextResponse.json({ error: "Organization not found" }, { status: 404 })
     }
 
+    const currentDomain = typeof currentOrg.domain_auto_join_domain === "string"
+      ? currentOrg.domain_auto_join_domain.trim().toLowerCase()
+      : ""
+    const requestedDomain =
+      typeof updates.domain_auto_join_domain === "string"
+        ? updates.domain_auto_join_domain.trim().toLowerCase()
+        : updates.domain_auto_join_domain === null
+          ? null
+          : currentDomain
+    const domainChanged = requestedDomain !== currentDomain
+
+    // Saving a domain should activate auto-join in the same action.
+    if (domainChanged && typeof requestedDomain === "string" && requestedDomain.length > 0) {
+      updates.domain_auto_join_enabled = true
+    }
+    if (domainChanged && requestedDomain === null) {
+      updates.domain_auto_join_enabled = false
+    }
+
     const finalEnabled =
       typeof updates.domain_auto_join_enabled === "boolean"
         ? updates.domain_auto_join_enabled
@@ -182,6 +214,17 @@ export async function PATCH(
       return NextResponse.json(
         { error: "Set a domain before enabling domain auto-join" },
         { status: 400 },
+      )
+    }
+
+    if (finalEnabled && !supportsDomainAutoJoinPlan(currentOrg.plan)) {
+      return NextResponse.json(
+        {
+          error: "Domain auto-join requires the Team plan. Upgrade to continue.",
+          code: "TEAM_PLAN_REQUIRED",
+          upgradeUrl: "/app/upgrade?plan=team",
+        },
+        { status: 402 },
       )
     }
   }
