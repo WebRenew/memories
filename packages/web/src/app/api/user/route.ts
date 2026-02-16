@@ -122,7 +122,15 @@ export async function GET(request: Request): Promise<Response> {
     error = fallback.error
   }
 
-  if (error || !profile) {
+  if (error) {
+    console.error("Failed to load user profile:", {
+      error,
+      userId: auth.userId,
+    })
+    return NextResponse.json({ error: "Failed to load user profile" }, { status: 500 })
+  }
+
+  if (!profile) {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
 

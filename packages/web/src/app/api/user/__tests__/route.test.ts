@@ -80,6 +80,26 @@ describe("/api/user", () => {
       expect(body.user.current_org_id).toBe("org-1")
       expect(body.user.repo_workspace_routing_mode).toBe("auto")
     })
+
+    it("returns 500 when profile lookup fails", async () => {
+      mockAuthenticateRequest.mockResolvedValue({ userId: "user-1", email: "u@example.com" })
+      mockAdminFrom.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: null,
+              error: { message: "DB read failed" },
+            }),
+          }),
+        }),
+      })
+
+      const response = await GET(new Request("https://example.com/api/user"))
+      expect(response.status).toBe(500)
+      await expect(response.json()).resolves.toMatchObject({
+        error: "Failed to load user profile",
+      })
+    })
   })
 
   describe("PATCH", () => {
