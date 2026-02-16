@@ -74,7 +74,7 @@ export const metadata: Metadata = {
     locale: "en_US",
     images: [
       {
-        url: "/opengraph.webp",
+        url: "/opengraph.png",
         width: 1200,
         height: 630,
         alt: "Memories – Durable State for Coding Agents",
@@ -86,7 +86,7 @@ export const metadata: Metadata = {
     title: "Memories – Durable State for Coding Agents",
     description:
       "Store rules once, recall context, and generate native configs for Cursor, Claude Code, Copilot, and more.",
-    images: ["/opengraph.webp"],
+    images: ["/opengraph.png"],
   },
   robots: {
     index: true,
