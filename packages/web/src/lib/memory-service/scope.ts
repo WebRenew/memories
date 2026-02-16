@@ -8,6 +8,11 @@ import {
   shouldAutoProvisionTenants,
 } from "@/lib/env"
 import {
+  enforceSdkProjectProvisionLimit,
+  recordGrowthProjectMeterEvent,
+  type SdkProjectBillingContext,
+} from "@/lib/sdk-project-billing"
+import {
   apiError,
   type TursoClient,
   ToolExecutionError,
@@ -86,8 +91,9 @@ async function autoProvisionTenantDatabase(params: {
   tenantId: string
   ownerUserId?: string | null
   existingMetadata?: Record<string, unknown> | null
+  billing?: SdkProjectBillingContext | null
 }): Promise<void> {
-  const { apiKeyHash, tenantId, ownerUserId, existingMetadata } = params
+  const { apiKeyHash, tenantId, ownerUserId, existingMetadata, billing } = params
 
   if (!hasTursoPlatformApiToken()) {
     return
@@ -121,6 +127,10 @@ async function autoProvisionTenantDatabase(params: {
         status: "ready",
         metadata,
         created_by_user_id: ownerUserId ?? null,
+        billing_owner_type: billing?.ownerType ?? "user",
+        billing_owner_user_id: billing?.ownerUserId ?? ownerUserId ?? null,
+        billing_org_id: billing?.orgId ?? null,
+        stripe_customer_id: billing?.stripeCustomerId ?? null,
         updated_at: now,
         last_verified_at: now,
       },
@@ -140,6 +150,15 @@ async function autoProvisionTenantDatabase(params: {
       { rpcCode: -32000 }
     )
   }
+
+  if (billing) {
+    await recordGrowthProjectMeterEvent({
+      admin,
+      billing,
+      apiKeyHash,
+      tenantId,
+    })
+  }
 }
 
 export async function resolveTenantTurso(
@@ -148,6 +167,7 @@ export async function resolveTenantTurso(
   options: { ownerUserId?: string | null; autoProvision?: boolean } = {}
 ): Promise<TursoClient> {
   let mapping = await readTenantMapping(apiKeyHash, tenantId)
+  let billingContext: SdkProjectBillingContext | null = null
 
   const canAutoProvision =
     (options.autoProvision ?? true) &&
@@ -158,12 +178,37 @@ export async function resolveTenantTurso(
     canAutoProvision &&
     (!mapping || mapping.status === "disabled" || mapping.status === "error" || !mapping.turso_db_url || !mapping.turso_db_token)
   ) {
+    if (options.ownerUserId) {
+      const admin = createAdminClient()
+      const billingCheck = await enforceSdkProjectProvisionLimit({
+        admin,
+        userId: options.ownerUserId,
+        apiKeyHash,
+      })
+
+      if (!billingCheck.ok) {
+        throw new ToolExecutionError(
+          apiError({
+            type: "auth_error",
+            code: billingCheck.code,
+            message: billingCheck.message,
+            status: billingCheck.status,
+            retryable: false,
+          }),
+          { rpcCode: -32003 }
+        )
+      }
+
+      billingContext = billingCheck.billing
+    }
+
     try {
       await autoProvisionTenantDatabase({
         apiKeyHash,
         tenantId,
         ownerUserId: options.ownerUserId,
         existingMetadata: mapping?.metadata ?? null,
+        billing: billingContext,
       })
       mapping = await readTenantMapping(apiKeyHash, tenantId)
       console.info(`[SDK_AUTO_PROVISION] Tenant database ready for tenant_id=${tenantId}`)

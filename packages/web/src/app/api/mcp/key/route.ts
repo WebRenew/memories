@@ -25,9 +25,26 @@ interface TenantMappingRow {
   status: string
   metadata: Record<string, unknown> | null
   created_by_user_id: string | null
+  billing_owner_type?: "user" | "organization" | null
+  billing_owner_user_id?: string | null
+  billing_org_id?: string | null
+  stripe_customer_id?: string | null
   created_at: string
   updated_at: string
   last_verified_at: string | null
+}
+
+function isMissingColumnError(error: unknown, columnName: string): boolean {
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message ?? "").toLowerCase()
+      : ""
+
+  return (
+    message.includes("column") &&
+    message.includes(columnName.toLowerCase()) &&
+    message.includes("does not exist")
+  )
 }
 
 function applyLegacyHeaders(response: NextResponse): NextResponse {
@@ -78,10 +95,31 @@ async function cloneTenantMappingsForKeyRotation(
     return { copied: 0 }
   }
 
-  const { data, error } = await admin
+  const primary = await admin
     .from("sdk_tenant_databases")
-    .select("tenant_id, turso_db_url, turso_db_token, turso_db_name, status, metadata, created_by_user_id, created_at, updated_at, last_verified_at")
+    .select(
+      "tenant_id, turso_db_url, turso_db_token, turso_db_name, status, metadata, created_by_user_id, billing_owner_type, billing_owner_user_id, billing_org_id, stripe_customer_id, created_at, updated_at, last_verified_at"
+    )
     .eq("api_key_hash", previousApiKeyHash)
+  let data = primary.data as TenantMappingRow[] | null
+  let error = primary.error as { message: string } | null
+
+  if (
+    error &&
+    (isMissingColumnError(error, "billing_owner_type") ||
+      isMissingColumnError(error, "billing_owner_user_id") ||
+      isMissingColumnError(error, "billing_org_id") ||
+      isMissingColumnError(error, "stripe_customer_id"))
+  ) {
+    const fallback = await admin
+      .from("sdk_tenant_databases")
+      .select(
+        "tenant_id, turso_db_url, turso_db_token, turso_db_name, status, metadata, created_by_user_id, created_at, updated_at, last_verified_at"
+      )
+      .eq("api_key_hash", previousApiKeyHash)
+    data = fallback.data as TenantMappingRow[] | null
+    error = fallback.error as { message: string } | null
+  }
 
   if (error) {
     throw new Error(`Failed to load tenant mappings for key rotation: ${error.message}`)
@@ -102,6 +140,10 @@ async function cloneTenantMappingsForKeyRotation(
     status: row.status,
     metadata: row.metadata ?? {},
     created_by_user_id: row.created_by_user_id ?? userId,
+    billing_owner_type: row.billing_owner_type ?? "user",
+    billing_owner_user_id: row.billing_owner_user_id ?? userId,
+    billing_org_id: row.billing_org_id ?? null,
+    stripe_customer_id: row.stripe_customer_id ?? null,
     created_at: row.created_at ?? now,
     updated_at: now,
     last_verified_at: row.last_verified_at ?? now,

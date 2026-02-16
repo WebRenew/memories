@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient as createTurso } from "@libsql/client"
 import { BillingContent } from "./billing-content"
-import { resolveWorkspaceContext } from "@/lib/workspace"
+import { resolveWorkspaceContext, type WorkspacePlan } from "@/lib/workspace"
 
 export const metadata = {
   title: "Billing & Usage",
@@ -144,8 +144,21 @@ export default async function BillingPage(): Promise<React.JSX.Element | null> {
     .eq("id", user.id)
     .single()
 
-  const plan = workspace?.plan || "free"
-  const hasStripeCustomer = !!profile?.stripe_customer_id
+  let orgStripeCustomerId: string | null = null
+  if (workspace?.ownerType === "organization" && workspace.orgId) {
+    const { data: organization } = await supabase
+      .from("organizations")
+      .select("stripe_customer_id")
+      .eq("id", workspace.orgId)
+      .single()
+    orgStripeCustomerId = organization?.stripe_customer_id ?? null
+  }
+
+  const plan: WorkspacePlan = workspace?.plan ?? "free"
+  const hasStripeCustomer =
+    workspace?.ownerType === "organization"
+      ? Boolean(orgStripeCustomerId)
+      : Boolean(profile?.stripe_customer_id)
   const memberSince = profile?.created_at
 
   let usage: UsageStats = {

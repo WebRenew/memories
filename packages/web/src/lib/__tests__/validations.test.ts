@@ -325,6 +325,19 @@ describe("checkoutSchema", () => {
     expect(result.success).toBe(true)
     if (result.success) expect(result.data.billing).toBe("annual")
   })
+
+  it("should accept individual, team, and growth plans", () => {
+    for (const plan of ["individual", "team", "growth"] as const) {
+      const result = checkoutSchema.safeParse({ billing: "monthly", plan })
+      expect(result.success).toBe(true)
+      if (result.success) expect(result.data.plan).toBe(plan)
+    }
+  })
+
+  it("should reject unknown plan values", () => {
+    const result = checkoutSchema.safeParse({ billing: "monthly", plan: "unknown" })
+    expect(result.success).toBe(false)
+  })
 })
 
 describe("updateUserSchema", () => {

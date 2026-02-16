@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { 
+import {
   CreditCard, 
   Zap, 
   Database, 
@@ -18,6 +18,13 @@ import {
 } from "lucide-react"
 import { extractErrorMessage } from "@/lib/client-errors"
 import { recordClientWorkflowEvent } from "@/lib/client-workflow-debug"
+import {
+  GROWTH_INCLUDED_PROJECTS_PER_MONTH,
+  GROWTH_OVERAGE_USD_PER_PROJECT,
+  getWorkspacePlanLabel,
+  isPaidWorkspacePlan,
+  type WorkspacePlan,
+} from "@/lib/workspace"
 
 interface UsageStats {
   totalMemories: number
@@ -37,7 +44,7 @@ interface TenantRoutingStatus {
 }
 
 interface BillingContentProps {
-  plan: string
+  plan: WorkspacePlan
   hasStripeCustomer: boolean
   usage: UsageStats
   memberSince: string | null
@@ -63,6 +70,20 @@ const PRO_FEATURES = [
   "Priority support",
 ]
 
+const TEAM_FEATURES = [
+  "Everything in Individual",
+  "Per-seat organization billing",
+  "Owner-managed billing controls",
+  "Collaboration-ready workspace settings",
+]
+
+const GROWTH_FEATURES = [
+  "Everything in Team",
+  "500 AI SDK projects included / month",
+  "$0.05 per additional AI SDK project",
+  "Usage-based metering",
+]
+
 export function BillingContent({
   plan,
   hasStripeCustomer,
@@ -79,8 +100,18 @@ export function BillingContent({
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [deleting, setDeleting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const isPro = plan === "pro"
+  const isPaidPlan = isPaidWorkspacePlan(plan)
+  const isPastDue = plan === "past_due"
   const isOrgWorkspace = ownerType === "organization"
+  const currentPlanLabel = getWorkspacePlanLabel(plan)
+  const effectivePlanFeatures =
+    plan === "growth"
+      ? GROWTH_FEATURES
+      : plan === "team"
+        ? TEAM_FEATURES
+        : PRO_FEATURES
+  const tenantOverageProjects = Math.max(0, tenantRouting.totalTenantCount - GROWTH_INCLUDED_PROJECTS_PER_MONTH)
+  const tenantProjectedOverage = tenantOverageProjects * GROWTH_OVERAGE_USD_PER_PROJECT
 
   async function handleManageBilling() {
     if (!canManageBilling) return
@@ -127,7 +158,7 @@ export function BillingContent({
     }
   }
 
-  async function handleUpgrade(billing: "monthly" | "annual") {
+  async function handleUpgrade(planChoice: "individual" | "team" | "growth", billing: "monthly" | "annual") {
     if (!canManageBilling) return
 
     setLoading(true)
@@ -136,13 +167,13 @@ export function BillingContent({
     recordClientWorkflowEvent({
       workflow: "billing_checkout",
       phase: "start",
-      details: { billing },
+      details: { billing, plan: planChoice },
     })
     try {
       const res = await fetch("/api/stripe/checkout", { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ billing }),
+        body: JSON.stringify({ billing, plan: planChoice }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) {
@@ -159,6 +190,7 @@ export function BillingContent({
           durationMs: performance.now() - startedAt,
           details: {
             billing,
+            plan: planChoice,
             redirected: true,
           },
         })
@@ -172,7 +204,7 @@ export function BillingContent({
         phase: "failure",
         durationMs: performance.now() - startedAt,
         message,
-        details: { billing },
+        details: { billing, plan: planChoice },
       })
     } finally {
       setLoading(false)
@@ -248,22 +280,24 @@ export function BillingContent({
             <h2 className="font-semibold">Current Plan</h2>
           </div>
           <span className={`px-3 py-1 text-xs font-bold uppercase tracking-wider ${
-            isPro 
-              ? "bg-primary/10 text-primary border border-primary/20" 
+            isPaidPlan || isPastDue
+              ? "bg-primary/10 text-primary border border-primary/20"
               : "bg-muted/50 text-muted-foreground border border-border"
           }`}>
-            {isPro ? "Pro" : "Free"}
+            {currentPlanLabel}
           </span>
         </div>
 
         <div className="p-4 space-y-4">
-          {isPro ? (
+          {isPaidPlan || isPastDue ? (
             <>
               <p className="text-sm text-muted-foreground">
-                You have access to all Pro features including cloud sync, web dashboard, and MCP API.
+                {isPastDue
+                  ? "Billing is currently past due. Update your payment method to keep all paid features active."
+                  : `Your workspace is on the ${currentPlanLabel} plan.`}
               </p>
               <div className="flex flex-wrap gap-2">
-                {PRO_FEATURES.map((feature) => (
+                {effectivePlanFeatures.map((feature) => (
                   <span key={feature} className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Check className="h-3 w-3 text-green-400" />
                     {feature}
@@ -289,26 +323,61 @@ export function BillingContent({
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                You&apos;re on the Free plan. Upgrade to Pro for cloud sync, web dashboard access, and MCP API.
+                You&apos;re on the Free plan. Upgrade to unlock hosted memory and production AI SDK project routing.
               </p>
               {canManageBilling ? (
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                  <button
-                    onClick={() => handleUpgrade("monthly")}
-                    disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-                  >
-                    <Zap className="h-4 w-4" />
-                    {loading ? "Loading..." : "Upgrade — $15/mo"}
-                  </button>
-                  <button
-                    onClick={() => handleUpgrade("annual")}
-                    disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 bg-muted/50 border border-border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
-                  >
-                    {loading ? "Loading..." : "$150/year"} 
-                    <span className="text-xs text-green-400">(Save $30)</span>
-                  </button>
+                <div className="space-y-3">
+                  {ownerType === "organization" ? (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={() => handleUpgrade("team", "monthly")}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                      >
+                        <Zap className="h-4 w-4" />
+                        {loading ? "Loading..." : "Team — $25/seat/mo"}
+                      </button>
+                      <button
+                        onClick={() => handleUpgrade("team", "annual")}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 bg-muted/50 border border-border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
+                      >
+                        {loading ? "Loading..." : "Team — $240/seat/year"}
+                      </button>
+                      <button
+                        onClick={() => handleUpgrade("growth", "monthly")}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 bg-muted/50 border border-border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
+                      >
+                        {loading ? "Loading..." : "Growth — $299/mo"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={() => handleUpgrade("individual", "monthly")}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                      >
+                        <Zap className="h-4 w-4" />
+                        {loading ? "Loading..." : "Individual — $15/mo"}
+                      </button>
+                      <button
+                        onClick={() => handleUpgrade("individual", "annual")}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 bg-muted/50 border border-border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
+                      >
+                        {loading ? "Loading..." : "Individual — $150/year"}
+                      </button>
+                      <button
+                        onClick={() => handleUpgrade("growth", "monthly")}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 bg-muted/50 border border-border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
+                      >
+                        {loading ? "Loading..." : "Growth — $299/mo"}
+                      </button>
+                    </div>
+                  )}
                   <Link
                     href="/#pricing"
                     className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -388,9 +457,16 @@ export function BillingContent({
           <p className="text-muted-foreground">
             Routes SDK traffic by <code className="text-foreground">tenantId</code> to isolated Turso databases.
           </p>
-          <p className="text-xs text-amber-300/90">
-            Metered billing for project routing is not enabled yet.
-          </p>
+          {plan === "growth" ? (
+            <p className="text-xs text-emerald-300/90">
+              Includes {GROWTH_INCLUDED_PROJECTS_PER_MONTH.toLocaleString()} projects per month, then $
+              {GROWTH_OVERAGE_USD_PER_PROJECT.toFixed(2)} per additional project.
+            </p>
+          ) : (
+            <p className="text-xs text-amber-300/90">
+              Growth plan required for usage-based AI SDK project metering.
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="p-3 bg-muted/20 border border-border">
               <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Ready Projects</p>
@@ -410,6 +486,13 @@ export function BillingContent({
           <p className="text-xs text-muted-foreground">
             Total active projects (excluding disabled): {tenantRouting.totalTenantCount}
           </p>
+          {plan === "growth" && tenantOverageProjects > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Current overage estimate: {tenantOverageProjects.toLocaleString()} projects (about $
+              {tenantProjectedOverage.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              /month)
+            </p>
+          )}
           <div>
             <Link
               href="/app/sdk-projects"
@@ -443,10 +526,10 @@ export function BillingContent({
       </div>
 
       {/* Plan Comparison */}
-      {!isPro && (
+      {plan === "free" && (
         <div className="border border-border bg-card/20">
           <div className="p-4 border-b border-border">
-            <h2 className="font-semibold">Free vs Pro</h2>
+            <h2 className="font-semibold">Free vs Individual</h2>
           </div>
 
           <div className="p-4">
@@ -455,7 +538,7 @@ export function BillingContent({
                 <tr className="border-b border-border">
                   <th className="text-left py-2 font-medium">Feature</th>
                   <th className="text-center py-2 font-medium">Free</th>
-                  <th className="text-center py-2 font-medium text-primary">Pro</th>
+                  <th className="text-center py-2 font-medium text-primary">Individual</th>
                 </tr>
               </thead>
               <tbody className="text-muted-foreground">
@@ -508,8 +591,8 @@ export function BillingContent({
         </div>
 
         <div className="p-4 space-y-6">
-          {/* Cancel Subscription (Pro only) */}
-          {isPro && hasStripeCustomer && canManageBilling && (
+          {/* Cancel Subscription (paid plans) */}
+          {(isPaidPlan || isPastDue) && hasStripeCustomer && canManageBilling && (
             <div className="flex items-start justify-between gap-4 pb-6 border-b border-red-500/20">
               <div>
                 <h3 className="font-medium text-sm">Cancel Subscription</h3>
@@ -533,7 +616,7 @@ export function BillingContent({
               <h3 className="font-medium text-sm">Delete Account</h3>
               <p className="text-xs text-muted-foreground mt-1">
                 Permanently delete your account and all data. This action cannot be undone.
-                {isPro && " Your subscription will be cancelled immediately."}
+                {(isPaidPlan || isPastDue) && " Your subscription will be cancelled immediately."}
               </p>
             </div>
             {!showDeleteConfirm ? (

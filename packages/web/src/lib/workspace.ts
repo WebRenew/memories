@@ -4,7 +4,10 @@ import {
   type ResolveActiveMemoryContextOptions,
 } from "@/lib/active-memory-context"
 
-export type WorkspacePlan = "free" | "pro" | "past_due"
+export type WorkspacePlan = "free" | "individual" | "team" | "growth" | "past_due"
+
+export const GROWTH_INCLUDED_PROJECTS_PER_MONTH = 500
+export const GROWTH_OVERAGE_USD_PER_PROJECT = 0.05
 
 export interface WorkspaceContext extends Omit<ActiveMemoryContext, "plan"> {
   plan: WorkspacePlan
@@ -17,10 +20,58 @@ export function normalizeWorkspacePlan(plan: string | null | undefined): Workspa
   if (plan === "past_due") {
     return "past_due"
   }
-  if (plan === "pro" || plan === "team" || plan === "enterprise") {
-    return "pro"
+
+  if (plan === "growth" || plan === "enterprise") {
+    return "growth"
   }
+
+  if (plan === "team") {
+    return "team"
+  }
+
+  if (plan === "individual" || plan === "pro") {
+    return "individual"
+  }
+
   return "free"
+}
+
+export function normalizeActiveOrganizationPlan(plan: string | null | undefined): WorkspacePlan {
+  if (plan === "past_due") {
+    return "past_due"
+  }
+
+  if (plan === "growth" || plan === "enterprise") {
+    return "growth"
+  }
+
+  // Legacy org plans ("pro") map to the current team seat plan.
+  if (plan === "team" || plan === "pro" || plan === "individual") {
+    return "team"
+  }
+
+  // An active org subscription without explicit tier metadata is treated as team.
+  return "team"
+}
+
+export function isPaidWorkspacePlan(plan: WorkspacePlan): boolean {
+  return plan === "individual" || plan === "team" || plan === "growth"
+}
+
+export function isGrowthWorkspacePlan(plan: WorkspacePlan): boolean {
+  return plan === "growth"
+}
+
+export function getWorkspacePlanLabel(plan: WorkspacePlan): string {
+  if (plan === "individual") return "Individual"
+  if (plan === "team") return "Team"
+  if (plan === "growth") return "Growth"
+  if (plan === "past_due") return "Past due"
+  return "Free"
+}
+
+export function includedSdkProjectsForPlan(plan: WorkspacePlan): number {
+  return plan === "growth" ? GROWTH_INCLUDED_PROJECTS_PER_MONTH : 0
 }
 
 export function canProvisionWorkspace(

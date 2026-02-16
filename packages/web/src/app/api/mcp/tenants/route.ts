@@ -7,6 +7,11 @@ import { apiRateLimit, checkRateLimit, strictRateLimit } from "@/lib/rate-limit"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createDatabase, createDatabaseToken, initSchema } from "@/lib/turso"
 import { getTursoOrgSlug } from "@/lib/env"
+import {
+  countActiveProjectsForBillingContext,
+  enforceSdkProjectProvisionLimit,
+  recordGrowthProjectMeterEvent,
+} from "@/lib/sdk-project-billing"
 
 const TURSO_ORG = getTursoOrgSlug()
 const LEGACY_ENDPOINT = "/api/mcp/tenants"
@@ -122,6 +127,22 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const admin = createAdminClient()
+  const billingState = await enforceSdkProjectProvisionLimit({
+    admin,
+    userId: auth.userId,
+    apiKeyHash: keyState.apiKeyHash,
+  })
+  const billingSummary =
+    billingState.ok
+      ? {
+          plan: billingState.billing.plan,
+          includedProjects: billingState.billing.includedProjects,
+          overageUsdPerProject: billingState.billing.overageUsdPerProject,
+          maxProjectsPerMonth: billingState.billing.maxProjectsPerMonth,
+          activeProjects: billingState.activeProjectCount,
+        }
+      : null
+
   const { data, error } = await admin
     .from("sdk_tenant_databases")
     .select("tenant_id, turso_db_url, turso_db_name, status, metadata, created_at, updated_at, last_verified_at")
@@ -137,6 +158,7 @@ export async function GET(request: Request): Promise<Response> {
   return legacyJson({
     tenantDatabases: rows.map(mapTenantRow),
     count: rows.length,
+    billing: billingSummary,
   })
 }
 
@@ -163,6 +185,15 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const admin = createAdminClient()
+  const billingState = await enforceSdkProjectProvisionLimit({
+    admin,
+    userId: auth.userId,
+    apiKeyHash: keyState.apiKeyHash,
+  })
+  if (!billingState.ok) {
+    return legacyJson({ error: billingState.message, code: billingState.code }, { status: billingState.status })
+  }
+
   const { tenantId, mode, metadata } = parsed.data
 
   const { data: existing, error: existingError } = await admin
@@ -247,6 +278,10 @@ export async function POST(request: Request): Promise<Response> {
     status: "ready",
     metadata: metadata ?? {},
     created_by_user_id: auth.userId,
+    billing_owner_type: billingState.billing.ownerType,
+    billing_owner_user_id: billingState.billing.ownerUserId,
+    billing_org_id: billingState.billing.orgId,
+    stripe_customer_id: billingState.billing.stripeCustomerId,
     updated_at: now,
     last_verified_at: now,
   }
@@ -262,10 +297,30 @@ export async function POST(request: Request): Promise<Response> {
     return legacyJson({ error: "Failed to save tenant database mapping" }, { status: 500 })
   }
 
+  await recordGrowthProjectMeterEvent({
+    admin,
+    billing: billingState.billing,
+    apiKeyHash: keyState.apiKeyHash,
+    tenantId,
+  })
+
+  const activeProjects = await countActiveProjectsForBillingContext(
+    admin,
+    keyState.apiKeyHash,
+    billingState.billing.stripeCustomerId
+  )
+
   return legacyJson({
     tenantDatabase: mapTenantRow(saved as TenantRow),
     provisioned: true,
     mode,
+    billing: {
+      plan: billingState.billing.plan,
+      includedProjects: billingState.billing.includedProjects,
+      overageUsdPerProject: billingState.billing.overageUsdPerProject,
+      maxProjectsPerMonth: billingState.billing.maxProjectsPerMonth,
+      activeProjects,
+    },
   })
 }
 

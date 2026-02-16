@@ -141,13 +141,13 @@ describe("/api/stripe/checkout", () => {
           workspace_org_id: "org-1",
           supabase_user_id: "user-1",
         }),
-        subscription_data: {
-          metadata: {
+        subscription_data: expect.objectContaining({
+          metadata: expect.objectContaining({
             type: "team_seats",
             org_id: "org-1",
             created_by_user_id: "user-1",
-          },
-        },
+          }),
+        }),
       })
     )
   })
@@ -201,6 +201,53 @@ describe("/api/stripe/checkout", () => {
           workspace_owner_type: "user",
           supabase_user_id: "user-1",
         }),
+      })
+    )
+  })
+
+  it("adds overage line item for growth checkout", async () => {
+    mockAuthenticateRequest.mockResolvedValue({ userId: "user-1", email: "user@example.com" })
+    mockResolveWorkspaceContext.mockResolvedValue({
+      ownerType: "user",
+      orgId: null,
+      orgRole: null,
+      plan: "free",
+      hasDatabase: true,
+      canProvision: true,
+      canManageBilling: true,
+      turso_db_url: "libsql://user.turso.io",
+      turso_db_token: "token",
+      turso_db_name: "user-db",
+      userId: "user-1",
+    })
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "users") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { stripe_customer_id: "cus_user_123", email: "user@example.com" },
+                error: null,
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        }
+      }
+      return {}
+    })
+
+    const response = await POST(makeRequest({ billing: "monthly", plan: "growth" }))
+    expect(response.status).toBe(200)
+    expect(mockCheckoutSessionCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        line_items: expect.arrayContaining([
+          expect.objectContaining({ price: "price_growth_monthly" }),
+          expect.objectContaining({ price: "price_growth_overage" }),
+        ]),
       })
     )
   })

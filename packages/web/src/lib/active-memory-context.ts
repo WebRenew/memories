@@ -51,11 +51,25 @@ function toUserContext(user: UserMemoryRow): ActiveMemoryContext {
     userId: user.id,
     orgId: null,
     orgRole: null,
-    plan: user.plan,
+    plan: normalizeUserPlan(user.plan),
     turso_db_url: user.turso_db_url,
     turso_db_token: user.turso_db_token,
     turso_db_name: user.turso_db_name,
   }
+}
+
+function normalizeUserPlan(plan: string | null | undefined): string {
+  if (plan === "past_due") return "past_due"
+  if (plan === "growth" || plan === "enterprise") return "growth"
+  if (plan === "team") return "team"
+  if (plan === "individual" || plan === "pro") return "individual"
+  return "free"
+}
+
+function normalizeOrganizationActivePlan(plan: string | null | undefined): string {
+  if (plan === "growth" || plan === "enterprise") return "growth"
+  if (plan === "team" || plan === "pro" || plan === "individual") return "team"
+  return "team"
 }
 
 function resolveOrganizationPlan(
@@ -70,21 +84,20 @@ function resolveOrganizationPlan(
     return "free"
   }
 
-  // Active subscription with a Stripe subscription ID is definitively pro.
-  if (org.subscription_status === "active" && org.stripe_subscription_id) {
-    return "pro"
+  if (org.subscription_status === "active") {
+    if (org.plan) {
+      return normalizeOrganizationActivePlan(org.plan)
+    }
+    if (org.stripe_subscription_id) {
+      return "team"
+    }
   }
 
-  // Org plan "team" or "enterprise" with active status is a paid tier,
-  // even without a dedicated stripe_subscription_id (e.g. owner's personal sub covers it).
-  if (
-    org.subscription_status === "active" &&
-    (org.plan === "team" || org.plan === "enterprise")
-  ) {
-    return "pro"
+  if (org.plan) {
+    return normalizeUserPlan(org.plan)
   }
 
-  return org.plan ?? fallbackPlan
+  return normalizeUserPlan(fallbackPlan)
 }
 
 function normalizeRoutingMode(value: string | null | undefined): RepoWorkspaceRoutingMode {

@@ -45,17 +45,145 @@ export function getStripeSecretKey(): string {
   return key
 }
 
+export type StripeBillingInterval = "monthly" | "annual"
+export type StripeCheckoutPlan = "individual" | "team" | "growth"
+
+function envValue(...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = process.env[key]
+    if (value && value.trim().length > 0) {
+      return value.trim()
+    }
+  }
+  return null
+}
+
+export function getStripeIndividualPriceId(billing: StripeBillingInterval = "monthly"): string {
+  const value =
+    billing === "annual"
+      ? envValue("STRIPE_MEMORIES_INDIVIDUAL_PRICE_ID_ANNUAL", "STRIPE_PRO_PRICE_ID_ANNUAL")
+      : envValue("STRIPE_MEMORIES_INDIVIDUAL_PRICE_ID", "STRIPE_PRO_PRICE_ID")
+
+  if (!value) {
+    throw new Error(
+      billing === "annual"
+        ? "Missing STRIPE_MEMORIES_INDIVIDUAL_PRICE_ID_ANNUAL (or STRIPE_PRO_PRICE_ID_ANNUAL)"
+        : "Missing STRIPE_MEMORIES_INDIVIDUAL_PRICE_ID (or STRIPE_PRO_PRICE_ID)"
+    )
+  }
+
+  return value
+}
+
+export function getStripeTeamSeatPriceId(billing: StripeBillingInterval = "monthly"): string {
+  const value =
+    billing === "annual"
+      ? envValue("STRIPE_MEMORIES_TEAM_SEAT_PRICE_ID_ANNUAL")
+      : envValue("STRIPE_MEMORIES_TEAM_SEAT_PRICE_ID")
+
+  if (!value) {
+    throw new Error(
+      billing === "annual"
+        ? "Missing STRIPE_MEMORIES_TEAM_SEAT_PRICE_ID_ANNUAL"
+        : "Missing STRIPE_MEMORIES_TEAM_SEAT_PRICE_ID"
+    )
+  }
+
+  return value
+}
+
+export function getStripeGrowthBasePriceId(billing: StripeBillingInterval = "monthly"): string {
+  const value =
+    billing === "annual"
+      ? envValue("STRIPE_MEMORIES_GROWTH_BASE_PRICE_ID_ANNUAL")
+      : envValue("STRIPE_MEMORIES_GROWTH_BASE_PRICE_ID")
+
+  if (!value) {
+    throw new Error(
+      billing === "annual"
+        ? "Missing STRIPE_MEMORIES_GROWTH_BASE_PRICE_ID_ANNUAL"
+        : "Missing STRIPE_MEMORIES_GROWTH_BASE_PRICE_ID"
+    )
+  }
+
+  return value
+}
+
+export function getStripeGrowthOveragePriceId(): string {
+  const value = envValue("STRIPE_MEMORIES_GROWTH_OVERAGE_PRICE_ID")
+  if (!value) {
+    throw new Error("Missing STRIPE_MEMORIES_GROWTH_OVERAGE_PRICE_ID")
+  }
+  return value
+}
+
+export function getStripeCheckoutPriceId(
+  plan: StripeCheckoutPlan,
+  billing: StripeBillingInterval = "monthly"
+): string {
+  if (plan === "team") return getStripeTeamSeatPriceId(billing)
+  if (plan === "growth") return getStripeGrowthBasePriceId(billing)
+  return getStripeIndividualPriceId(billing)
+}
+
+export function getStripeGrowthMeterEventName(): string {
+  return envValue("STRIPE_MEMORIES_GROWTH_METER_EVENT_NAME") ?? "memories_growth_projects"
+}
+
+export function getStripeMeterMaxProjectsPerMonth(): number | null {
+  const raw = process.env.SDK_GROWTH_MAX_PROJECTS_PER_MONTH
+  if (!raw) return null
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return null
+  return parsed
+}
+
 export function getStripeProPriceId(billing: "monthly" | "annual" = "monthly"): string {
-  return billing === "annual"
-    ? process.env.STRIPE_PRO_PRICE_ID_ANNUAL!
-    : process.env.STRIPE_PRO_PRICE_ID!
+  return getStripeIndividualPriceId(billing)
 }
 
 export function getStripeProPriceIds(): Set<string> {
+  return getStripeManagedPriceIds()
+}
+
+export function getStripeManagedPriceIds(): Set<string> {
+  const values = [
+    envValue("STRIPE_MEMORIES_INDIVIDUAL_PRICE_ID", "STRIPE_PRO_PRICE_ID"),
+    envValue("STRIPE_MEMORIES_INDIVIDUAL_PRICE_ID_ANNUAL", "STRIPE_PRO_PRICE_ID_ANNUAL"),
+    envValue("STRIPE_MEMORIES_TEAM_SEAT_PRICE_ID"),
+    envValue("STRIPE_MEMORIES_TEAM_SEAT_PRICE_ID_ANNUAL"),
+    envValue("STRIPE_MEMORIES_GROWTH_BASE_PRICE_ID"),
+    envValue("STRIPE_MEMORIES_GROWTH_BASE_PRICE_ID_ANNUAL"),
+    envValue("STRIPE_MEMORIES_GROWTH_OVERAGE_PRICE_ID"),
+  ].filter((value): value is string => Boolean(value))
+
+  return new Set(values)
+}
+
+export function getStripeIndividualPriceIds(): Set<string> {
   return new Set(
-    [process.env.STRIPE_PRO_PRICE_ID, process.env.STRIPE_PRO_PRICE_ID_ANNUAL].filter(
-      (v): v is string => Boolean(v)
+    [
+      envValue("STRIPE_MEMORIES_INDIVIDUAL_PRICE_ID", "STRIPE_PRO_PRICE_ID"),
+      envValue("STRIPE_MEMORIES_INDIVIDUAL_PRICE_ID_ANNUAL", "STRIPE_PRO_PRICE_ID_ANNUAL"),
+    ].filter((value): value is string => Boolean(value))
+  )
+}
+
+export function getStripeTeamSeatPriceIds(): Set<string> {
+  return new Set(
+    [envValue("STRIPE_MEMORIES_TEAM_SEAT_PRICE_ID"), envValue("STRIPE_MEMORIES_TEAM_SEAT_PRICE_ID_ANNUAL")].filter(
+      (value): value is string => Boolean(value)
     )
+  )
+}
+
+export function getStripeGrowthPriceIds(): Set<string> {
+  return new Set(
+    [
+      envValue("STRIPE_MEMORIES_GROWTH_BASE_PRICE_ID"),
+      envValue("STRIPE_MEMORIES_GROWTH_BASE_PRICE_ID_ANNUAL"),
+      envValue("STRIPE_MEMORIES_GROWTH_OVERAGE_PRICE_ID"),
+    ].filter((value): value is string => Boolean(value))
   )
 }
 

@@ -99,6 +99,7 @@ export const acceptInviteSchema = z.object({
 
 export const checkoutSchema = z.object({
   billing: z.enum(["monthly", "annual"]).catch("annual"),
+  plan: z.enum(["individual", "team", "growth"]).optional(),
 })
 
 // --- User Profile ---

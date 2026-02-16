@@ -1,7 +1,11 @@
 import { authenticateRequest } from "@/lib/auth"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { normalizeWorkspacePlan } from "@/lib/workspace"
+import {
+  normalizeActiveOrganizationPlan,
+  normalizeWorkspacePlan,
+  type WorkspacePlan,
+} from "@/lib/workspace"
 import { NextResponse } from "next/server"
 
 interface UserWorkspaceRow {
@@ -32,7 +36,7 @@ interface WorkspaceSummary {
   ownerType: "user" | "organization"
   orgId: string | null
   orgRole: "owner" | "admin" | "member" | null
-  plan: "free" | "pro" | "past_due"
+  plan: WorkspacePlan
   hasDatabase: boolean
   canProvision: boolean
   canManageBilling: boolean
@@ -66,13 +70,13 @@ function withProfileHeaders(
 function resolveOrganizationPlan(
   org: OrganizationWorkspaceRow,
   fallbackPlan: string | null
-): "free" | "pro" | "past_due" {
+): WorkspacePlan {
   if (org.subscription_status === "past_due") return "past_due"
   if (org.subscription_status === "cancelled") return "free"
 
   if (org.subscription_status === "active") {
-    if (org.stripe_subscription_id) return "pro"
-    if (org.plan === "team" || org.plan === "enterprise") return "pro"
+    if (org.plan) return normalizeActiveOrganizationPlan(org.plan)
+    if (org.stripe_subscription_id) return "team"
   }
 
   return normalizeWorkspacePlan(org.plan ?? fallbackPlan)

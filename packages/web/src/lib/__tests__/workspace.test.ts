@@ -17,10 +17,13 @@ import {
 
 describe("workspace helpers", () => {
   it("normalizes plan values", () => {
-    expect(normalizeWorkspacePlan("pro")).toBe("pro")
+    expect(normalizeWorkspacePlan("pro")).toBe("individual")
+    expect(normalizeWorkspacePlan("individual")).toBe("individual")
+    expect(normalizeWorkspacePlan("team")).toBe("team")
+    expect(normalizeWorkspacePlan("growth")).toBe("growth")
     expect(normalizeWorkspacePlan("past_due")).toBe("past_due")
     expect(normalizeWorkspacePlan("free")).toBe("free")
-    expect(normalizeWorkspacePlan("enterprise")).toBe("pro")
+    expect(normalizeWorkspacePlan("enterprise")).toBe("growth")
     expect(normalizeWorkspacePlan(null)).toBe("free")
   })
 
@@ -58,7 +61,7 @@ describe("workspace helpers", () => {
       ownerType: "organization",
       orgId: "org-1",
       orgRole: "admin",
-      plan: "pro",
+      plan: "growth",
       hasDatabase: true,
       canProvision: true,
       canManageBilling: false,

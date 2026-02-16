@@ -10,7 +10,10 @@ import { useUser } from "@/hooks/use-user";
 
 const code = "font-mono text-[0.9em] text-foreground/80 bg-muted px-1.5 py-0.5 rounded";
 
-const tiers: {
+type Audience = "individuals" | "companies";
+
+interface PricingTier {
+  id: string;
   name: string;
   monthlyPrice: string;
   yearlyPrice: string;
@@ -19,8 +22,12 @@ const tiers: {
   features: { key: string; label: React.ReactNode }[];
   cta: string;
   highlighted: boolean;
-}[] = [
+  checkoutPlan?: "individual" | "team" | "growth";
+}
+
+const individualTiers: PricingTier[] = [
   {
+    id: "free",
     name: "Free",
     monthlyPrice: "$0",
     yearlyPrice: "$0",
@@ -37,46 +44,74 @@ const tiers: {
     highlighted: false,
   },
   {
-    name: "Professional",
+    id: "individual",
+    name: "Individual",
     monthlyPrice: "$15",
     yearlyPrice: "$12.50",
     yearlyTotal: "$150",
-    description: "Start here for hosted memory, team sync, and dashboard access.",
+    description: "Hosted memory for solo builders shipping with cloud sync and dashboard access.",
     features: [
       { key: "free", label: "Everything in Free" },
       { key: "sync", label: "Cloud backup and sync" },
       { key: "devices", label: "Access from any device" },
       { key: "dashboard", label: "Web dashboard" },
-      { key: "teams", label: "Create teams and invite members" },
       { key: "server-recall", label: "Server-side semantic recall" },
       { key: "support", label: "Priority support" },
     ],
-    cta: "Go Pro",
+    cta: "Choose Individual",
     highlighted: true,
-  },
-  {
-    name: "Enterprise",
-    monthlyPrice: "Custom",
-    yearlyPrice: "Custom",
-    description: "Contracts, compliance controls, and scale support for production SaaS.",
-    features: [
-      { key: "pro", label: "Everything in Professional" },
-      { key: "ai-sdk", label: <><code className={code}>@memories.sh/ai-sdk</code> package</> },
-      { key: "core", label: <><code className={code}>@memories.sh/core</code> client library</> },
-      { key: "middleware", label: <><code className={code}>memoriesMiddleware()</code> for AI SDK</> },
-      { key: "tenant", label: "AI SDK Projects (`tenantId`) + end-user scope (`userId`)" },
-      { key: "embeddings", label: "Custom embedding models" },
-      { key: "sla", label: "Dedicated support and SLA" },
-    ],
-    cta: "Talk to Sales",
-    highlighted: false,
+    checkoutPlan: "individual",
   },
 ];
 
-function getTierCtaHref(tierName: string, isAuthenticated: boolean): string {
-  if (tierName === "Enterprise") return "/enterprise";
-  if (tierName === "Professional") return isAuthenticated ? "/app/upgrade" : "/login?next=/app/upgrade";
-  if (tierName === "Free") return isAuthenticated ? "/app" : "/docs/getting-started";
+const companyTiers: PricingTier[] = [
+  {
+    id: "team",
+    name: "Team Seat",
+    monthlyPrice: "$25",
+    yearlyPrice: "$20",
+    yearlyTotal: "$240",
+    description: "Per-seat collaboration plan for organizations that need shared workspaces.",
+    features: [
+      { key: "individual", label: "Everything in Individual" },
+      { key: "org-billing", label: "Organization owner-managed billing" },
+      { key: "seat", label: "Per-seat pricing" },
+      { key: "invites", label: "Team member invites and workspace switching" },
+      { key: "priority", label: "Priority support" },
+    ],
+    cta: "Choose Team",
+    highlighted: true,
+    checkoutPlan: "team",
+  },
+  {
+    id: "growth",
+    name: "Growth",
+    monthlyPrice: "$299",
+    yearlyPrice: "$239",
+    yearlyTotal: "$2,870",
+    description: "For production AI SDK apps with metered project routing and overage pricing.",
+    features: [
+      { key: "team", label: "Everything in Team Seat" },
+      { key: "ai-sdk", label: <><code className={code}>@memories.sh/ai-sdk</code> package</> },
+      { key: "middleware", label: <><code className={code}>memoriesMiddleware()</code> for AI SDK</> },
+      { key: "included", label: "500 AI SDK projects included / month" },
+      { key: "overage", label: "$0.05 per additional project" },
+      { key: "tenant", label: "Tenant routing via `tenantId` + end-user scope `userId`" },
+    ],
+    cta: "Choose Growth",
+    highlighted: false,
+    checkoutPlan: "growth",
+  },
+];
+
+function getTierCtaHref(tier: PricingTier, isAuthenticated: boolean): string {
+  if (tier.id === "free") return isAuthenticated ? "/app" : "/docs/getting-started";
+  if (!isAuthenticated) {
+    return "/login?next=/app/upgrade";
+  }
+  if (tier.checkoutPlan) {
+    return `/app/upgrade?plan=${tier.checkoutPlan}`;
+  }
   return isAuthenticated ? "/app" : "/docs/getting-started";
 }
 
@@ -84,6 +119,8 @@ export function Pricing({ user }: { user?: User | null }): React.JSX.Element {
   const { user: sessionUser } = useUser();
   const effectiveUser = sessionUser ?? user ?? null;
   const [isYearly, setIsYearly] = useState(false);
+  const [audience, setAudience] = useState<Audience>("individuals");
+  const visibleTiers = audience === "individuals" ? individualTiers : companyTiers;
 
   return (
     <section id="pricing" className="py-28 border-t border-border relative overflow-hidden">
@@ -102,8 +139,34 @@ export function Pricing({ user }: { user?: User | null }): React.JSX.Element {
             <ScrambleText text="Simple, Transparent Pricing" delayMs={200} />
           </h2>
           <p className="text-muted-foreground max-w-2xl text-base sm:text-lg font-light leading-relaxed">
-            Free gives you durable local state and recall on your machine. Pro gets teams live quickly, then you can add enterprise controls and higher-volume routing as you scale.
+            Start with Individual for hosted memory. Move to Team and Growth when your company needs seat billing and metered AI SDK project routing.
           </p>
+        </div>
+
+        {/* Audience Toggle */}
+        <div className="flex justify-center mb-6">
+          <div className="inline-flex items-center gap-1 p-1 bg-background-secondary border border-border rounded-lg">
+            <button
+              onClick={() => setAudience("individuals")}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                audience === "individuals"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              For Individuals
+            </button>
+            <button
+              onClick={() => setAudience("companies")}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                audience === "companies"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              For Companies
+            </button>
+          </div>
         </div>
 
         {/* Billing Toggle */}
@@ -135,11 +198,11 @@ export function Pricing({ user }: { user?: User | null }): React.JSX.Element {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {tiers.map((tier) => {
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {visibleTiers.map((tier) => {
             const price = isYearly ? tier.yearlyPrice : tier.monthlyPrice;
             const isCustom = price === "Custom";
-            const ctaHref = getTierCtaHref(tier.name, Boolean(effectiveUser));
+            const ctaHref = getTierCtaHref(tier, Boolean(effectiveUser));
             
             return (
               <div key={tier.name} className={`relative ${tier.highlighted ? "pt-3 -mt-4 mb-[-16px] md:-mt-6 md:mb-[-24px]" : ""}`}>
