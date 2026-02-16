@@ -300,6 +300,50 @@ describe("/api/orgs/[orgId] GET", () => {
       error: "Failed to fetch organization",
     })
   })
+
+  it("returns 500 when organization lookup fails", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "org_members") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { role: "owner" },
+                  error: null,
+                }),
+              }),
+            }),
+          })),
+        }
+      }
+
+      if (table === "organizations") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: null,
+                error: { message: "DB read failed" },
+              }),
+            }),
+          })),
+        }
+      }
+
+      return {}
+    })
+
+    const response = await GET(
+      new Request("https://example.com/api/orgs/org-1"),
+      { params: Promise.resolve({ orgId: "org-1" }) },
+    )
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Failed to fetch organization",
+    })
+  })
 })
 
 describe("/api/orgs/[orgId] DELETE", () => {
