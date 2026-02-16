@@ -10,8 +10,6 @@ import { useUser } from "@/hooks/use-user";
 
 const code = "font-mono text-[0.9em] text-foreground/80 bg-muted px-1.5 py-0.5 rounded";
 
-type Audience = "individuals" | "companies";
-
 interface PricingTier {
   id: string;
   name: string;
@@ -119,8 +117,7 @@ export function Pricing({ user }: { user?: User | null }): React.JSX.Element {
   const { user: sessionUser } = useUser();
   const effectiveUser = sessionUser ?? user ?? null;
   const [isYearly, setIsYearly] = useState(false);
-  const [audience, setAudience] = useState<Audience>("individuals");
-  const visibleTiers = audience === "individuals" ? individualTiers : companyTiers;
+  const visibleTiers = [...individualTiers, ...companyTiers];
 
   return (
     <section id="pricing" className="py-28 border-t border-border relative overflow-hidden">
@@ -139,34 +136,8 @@ export function Pricing({ user }: { user?: User | null }): React.JSX.Element {
             <ScrambleText text="Simple, Transparent Pricing" delayMs={200} />
           </h2>
           <p className="text-muted-foreground max-w-2xl text-base sm:text-lg font-light leading-relaxed">
-            Start with Individual for hosted memory. Move to Team and Growth when your company needs seat billing and metered AI SDK project routing.
+            Start free, upgrade when you need cloud sync, and scale to team billing with metered AI SDK project routing.
           </p>
-        </div>
-
-        {/* Audience Toggle */}
-        <div className="flex justify-center mb-6">
-          <div className="inline-flex items-center gap-1 p-1 bg-background-secondary border border-border rounded-lg">
-            <button
-              onClick={() => setAudience("individuals")}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                audience === "individuals"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              For Individuals
-            </button>
-            <button
-              onClick={() => setAudience("companies")}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                audience === "companies"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              For Companies
-            </button>
-          </div>
         </div>
 
         {/* Billing Toggle */}
@@ -202,7 +173,7 @@ export function Pricing({ user }: { user?: User | null }): React.JSX.Element {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
           {visibleTiers.map((tier) => {
             const price = isYearly ? tier.yearlyPrice : tier.monthlyPrice;
             const isCustom = price === "Custom";
