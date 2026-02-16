@@ -201,7 +201,7 @@ export function Hero(): React.JSX.Element {
               href="https://www.producthunt.com/products/memories-sh?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-memories-sh"
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-6 inline-flex"
+              className="mt-12 inline-flex"
             >
               <Image
                 alt="memories.sh - One layer for memories, skills, and rules across any agent | Product Hunt"
