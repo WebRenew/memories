@@ -37,6 +37,10 @@ export default function SdkProjectsPage(): React.JSX.Element {
           scope model for your app.
         </p>
         <p className="text-xs text-muted-foreground mt-2 max-w-3xl">
+          Growth billing includes 500 AI SDK projects per month, then usage is metered at $0.05 per additional
+          project.
+        </p>
+        <p className="text-xs text-muted-foreground mt-2 max-w-3xl">
           If your app only uses SDK endpoints (`/api/sdk/v1/*`), you do not need MCP multitenancy.
           Use MCP routing only when you are serving MCP clients.
         </p>

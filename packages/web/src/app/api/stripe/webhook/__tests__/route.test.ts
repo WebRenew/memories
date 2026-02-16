@@ -106,7 +106,7 @@ describe("POST /api/stripe/webhook", () => {
       },
     })
     mockListLineItems.mockResolvedValue({
-      data: [{ price: { id: "price_pro_monthly" } }],
+      data: [{ price: { id: "price_team_monthly" } }],
     })
 
     const response = await POST(makeWebhookRequest("{}"))
@@ -116,7 +116,7 @@ describe("POST /api/stripe/webhook", () => {
         stripe_customer_id: "cus_org_123",
         stripe_subscription_id: "sub_org_123",
         subscription_status: "active",
-        plan: "pro",
+        plan: "team",
       })
     )
     expect(mockOrganizationsEq).toHaveBeenCalledWith("id", "org-1")
@@ -138,18 +138,47 @@ describe("POST /api/stripe/webhook", () => {
       },
     })
     mockListLineItems.mockResolvedValue({
-      data: [{ price: { id: "price_pro_monthly" } }],
+      data: [{ price: { id: "price_individual_monthly" } }],
     })
 
     const response = await POST(makeWebhookRequest("{}"))
     expect(response.status).toBe(200)
     expect(mockUsersUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        plan: "pro",
+        plan: "individual",
         stripe_customer_id: "cus_user_123",
       })
     )
     expect(mockUsersEq).toHaveBeenCalledWith("id", "user-1")
+  })
+
+  it("maps growth checkout completion to growth plan", async () => {
+    mockConstructEvent.mockReturnValue({
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_user_growth",
+          customer: "cus_user_growth",
+          metadata: {
+            supabase_user_id: "user-1",
+            workspace_owner_type: "user",
+            billing_plan: "growth",
+          },
+        },
+      },
+    })
+    mockListLineItems.mockResolvedValue({
+      data: [{ price: { id: "price_growth_monthly" } }],
+    })
+
+    const response = await POST(makeWebhookRequest("{}"))
+    expect(response.status).toBe(200)
+    expect(mockUsersUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: "growth",
+        stripe_customer_id: "cus_user_growth",
+      })
+    )
   })
 
   it("updates team subscription status with org billing identifiers", async () => {
@@ -161,7 +190,7 @@ describe("POST /api/stripe/webhook", () => {
           customer: "cus_org_123",
           status: "past_due",
           metadata: { type: "team_seats", org_id: "org-1" },
-          items: { data: [{ price: { id: "price_pro_monthly" } }] },
+          items: { data: [{ price: { id: "price_team_monthly" } }] },
         },
       },
     })

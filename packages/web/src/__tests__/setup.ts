@@ -10,6 +10,14 @@ process.env.STRIPE_SECRET_KEY = "sk_test_fake"
 process.env.STRIPE_WEBHOOK_SECRET = "whsec_test_fake"
 process.env.STRIPE_PRO_PRICE_ID = "price_pro_monthly"
 process.env.STRIPE_PRO_PRICE_ID_ANNUAL = "price_pro_annual"
+process.env.STRIPE_MEMORIES_INDIVIDUAL_PRICE_ID = "price_individual_monthly"
+process.env.STRIPE_MEMORIES_INDIVIDUAL_PRICE_ID_ANNUAL = "price_individual_annual"
+process.env.STRIPE_MEMORIES_TEAM_SEAT_PRICE_ID = "price_team_monthly"
+process.env.STRIPE_MEMORIES_TEAM_SEAT_PRICE_ID_ANNUAL = "price_team_annual"
+process.env.STRIPE_MEMORIES_GROWTH_BASE_PRICE_ID = "price_growth_monthly"
+process.env.STRIPE_MEMORIES_GROWTH_BASE_PRICE_ID_ANNUAL = "price_growth_annual"
+process.env.STRIPE_MEMORIES_GROWTH_OVERAGE_PRICE_ID = "price_growth_overage"
+process.env.STRIPE_MEMORIES_GROWTH_METER_EVENT_NAME = "memories_growth_projects"
 
 // Mock @upstash/redis globally — must be before rate-limit imports
 // Use a real function (not arrow) so it works as a constructor with `new`

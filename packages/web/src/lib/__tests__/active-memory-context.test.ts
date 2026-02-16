@@ -136,7 +136,7 @@ describe("resolveActiveMemoryContext", () => {
     expect(context?.ownerType).toBe("organization")
     expect(context?.orgId).toBe("org-1")
     expect(context?.turso_db_url).toBe("libsql://org.turso.io")
-    expect(context?.plan).toBe("pro")
+    expect(context?.plan).toBe("team")
   })
 
   it("keeps org context without creds by default", async () => {

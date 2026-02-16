@@ -2,16 +2,56 @@ import { getStripe } from "@/lib/stripe"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 import type Stripe from "stripe"
-import { getStripeProPriceIds, getStripeWebhookSecret } from "@/lib/env"
+import {
+  getStripeGrowthPriceIds,
+  getStripeIndividualPriceIds,
+  getStripeManagedPriceIds,
+  getStripeTeamSeatPriceIds,
+  getStripeWebhookSecret,
+} from "@/lib/env"
 
-const PRO_PRICE_IDS = getStripeProPriceIds()
+type StripeBillingPlan = "individual" | "team" | "growth"
 
-function hasProPrice(items: { price?: { id: string } | null }[]): boolean {
-  return items.some((item) => item.price?.id && PRO_PRICE_IDS.has(item.price.id))
+const MANAGED_PRICE_IDS = getStripeManagedPriceIds()
+const INDIVIDUAL_PRICE_IDS = getStripeIndividualPriceIds()
+const TEAM_PRICE_IDS = getStripeTeamSeatPriceIds()
+const GROWTH_PRICE_IDS = getStripeGrowthPriceIds()
+
+function hasManagedPrice(items: { price?: { id: string } | null }[]): boolean {
+  return items.some((item) => item.price?.id && MANAGED_PRICE_IDS.has(item.price.id))
+}
+
+function detectBillingPlanFromItems(items: { price?: { id: string } | null }[]): StripeBillingPlan | null {
+  const priceIds = new Set(items.map((item) => item.price?.id).filter((id): id is string => Boolean(id)))
+  if ([...priceIds].some((id) => GROWTH_PRICE_IDS.has(id))) return "growth"
+  if ([...priceIds].some((id) => TEAM_PRICE_IDS.has(id))) return "team"
+  if ([...priceIds].some((id) => INDIVIDUAL_PRICE_IDS.has(id))) return "individual"
+  return null
 }
 
 function isTeamSubscription(metadata: Stripe.Metadata | null | undefined): boolean {
   return metadata?.type === "team_seats"
+}
+
+function parseMetadataBillingPlan(metadata: Stripe.Metadata | null | undefined): StripeBillingPlan | null {
+  const billingPlan = metadata?.billing_plan
+  if (billingPlan === "individual" || billingPlan === "team" || billingPlan === "growth") {
+    return billingPlan
+  }
+
+  const type = metadata?.type
+  if (type === "team_seats") return "team"
+  if (type === "growth_base") return "growth"
+  if (type === "individual") return "individual"
+  return null
+}
+
+function planForActiveUserSubscription(plan: StripeBillingPlan | null): "individual" | "growth" {
+  return plan === "growth" ? "growth" : "individual"
+}
+
+function planForActiveOrgSubscription(plan: StripeBillingPlan | null): "team" | "growth" {
+  return plan === "growth" ? "growth" : "team"
 }
 
 async function updateUserPlan(
@@ -35,11 +75,20 @@ async function updateOrgSubscriptionStatus(
   supabase: ReturnType<typeof createAdminClient>,
   orgId: string,
   status: "active" | "past_due" | "cancelled",
-  options: { stripeCustomerId?: string; stripeSubscriptionId?: string | null } = {}
+  options: {
+    stripeCustomerId?: string
+    stripeSubscriptionId?: string | null
+    activePlan?: "team" | "growth"
+  } = {}
 ) {
   const updates: Record<string, string | null> = {
     subscription_status: status,
-    plan: status === "active" ? "pro" : status === "past_due" ? "past_due" : "free",
+    plan:
+      status === "active"
+        ? (options.activePlan ?? "team")
+        : status === "past_due"
+          ? "past_due"
+          : "free",
   }
 
   if (options.stripeCustomerId) {
@@ -91,9 +140,12 @@ export async function POST(request: Request): Promise<Response> {
     case "checkout.session.completed": {
       const session = event.data.object
 
-      // Verify the checkout contains one of our Pro price IDs
+      // Verify the checkout contains one of our managed subscription price IDs.
       const lineItems = await getStripe().checkout.sessions.listLineItems(session.id, { limit: 5 })
-      if (!hasProPrice(lineItems.data)) break
+      if (!hasManagedPrice(lineItems.data)) break
+      const planFromItems = detectBillingPlanFromItems(lineItems.data)
+      const planFromMetadata = parseMetadataBillingPlan(session.metadata)
+      const plan = planFromMetadata ?? planFromItems
 
       const ownerType = session.metadata?.workspace_owner_type
       const orgId = session.metadata?.workspace_org_id
@@ -110,6 +162,7 @@ export async function POST(request: Request): Promise<Response> {
         ok = await updateOrgSubscriptionStatus(supabase, orgId, "active", {
           stripeCustomerId: customerId ?? undefined,
           stripeSubscriptionId: subscriptionId,
+          activePlan: planForActiveOrgSubscription(plan),
         })
         break
       }
@@ -117,7 +170,7 @@ export async function POST(request: Request): Promise<Response> {
       const userId = session.metadata?.supabase_user_id
       if (!userId) break
 
-      const userUpdates: Record<string, string> = { plan: "pro" }
+      const userUpdates: Record<string, string> = { plan: planForActiveUserSubscription(plan) }
       if (customerId) {
         userUpdates.stripe_customer_id = customerId
       }
@@ -129,17 +182,14 @@ export async function POST(request: Request): Promise<Response> {
       const subscription = event.data.object
       const customerId = subscription.customer as string
 
-      // Only act on subscriptions for our Pro prices
-      if (!hasProPrice(subscription.items.data)) break
+      // Only act on subscriptions for our managed prices.
+      if (!hasManagedPrice(subscription.items.data)) break
+      const planFromItems = detectBillingPlanFromItems(subscription.items.data)
+      const planFromMetadata = parseMetadataBillingPlan(subscription.metadata)
+      const subscriptionPlan = planFromMetadata ?? planFromItems
 
-      // Handle team subscriptions separately
-      if (isTeamSubscription(subscription.metadata)) {
-        const orgId = subscription.metadata.org_id
-        if (!orgId || typeof orgId !== "string") {
-          console.error("Team subscription missing org_id metadata:", subscription.id)
-          break
-        }
-
+      const orgId = subscription.metadata.org_id
+      if (orgId && typeof orgId === "string") {
         const statusMap: Record<string, "active" | "past_due" | "cancelled"> = {
           active: "active",
           trialing: "active",
@@ -154,14 +204,15 @@ export async function POST(request: Request): Promise<Response> {
         ok = await updateOrgSubscriptionStatus(supabase, orgId, status, {
           stripeCustomerId: customerId,
           stripeSubscriptionId: subscription.id,
+          activePlan: planForActiveOrgSubscription(subscriptionPlan),
         })
         break
       }
 
       // Individual subscription
       const planMap: Record<string, string> = {
-        active: "pro",
-        trialing: "pro",
+        active: planForActiveUserSubscription(subscriptionPlan),
+        trialing: planForActiveUserSubscription(subscriptionPlan),
         past_due: "past_due",
         unpaid: "free",
         canceled: "free",
@@ -169,9 +220,9 @@ export async function POST(request: Request): Promise<Response> {
         incomplete_expired: "free",
         paused: "free",
       }
-      const plan = planMap[subscription.status] ?? "free"
+      const resolvedPlan = planMap[subscription.status] ?? "free"
 
-      ok = await updateUserPlan(supabase, { stripe_customer_id: customerId }, { plan })
+      ok = await updateUserPlan(supabase, { stripe_customer_id: customerId }, { plan: resolvedPlan })
       break
     }
 
@@ -179,18 +230,22 @@ export async function POST(request: Request): Promise<Response> {
       const subscription = event.data.object
       const customerId = subscription.customer as string
 
-      // Only act on subscriptions for our Pro prices
-      if (!hasProPrice(subscription.items.data)) break
+      // Only act on subscriptions for our managed prices.
+      if (!hasManagedPrice(subscription.items.data)) break
+      const planFromItems = detectBillingPlanFromItems(subscription.items.data)
+      const planFromMetadata = parseMetadataBillingPlan(subscription.metadata)
+      const plan = planFromMetadata ?? planFromItems
 
-      // Handle team subscriptions
-      if (isTeamSubscription(subscription.metadata)) {
+      // Handle organization subscriptions.
+      if (subscription.metadata.org_id) {
         const orgId = subscription.metadata.org_id
         if (!orgId || typeof orgId !== "string") {
-          console.error("Team subscription missing org_id metadata:", subscription.id)
+          console.error("Organization subscription missing org_id metadata:", subscription.id)
           break
         }
         ok = await updateOrgSubscriptionStatus(supabase, orgId, "cancelled", {
           stripeCustomerId: customerId,
+          activePlan: planForActiveOrgSubscription(plan),
         })
         break
       }
@@ -205,26 +260,27 @@ export async function POST(request: Request): Promise<Response> {
       const customerId = invoice.customer as string
       const subscriptionId = (invoice as { subscription?: string | null }).subscription
 
-      // Only act on invoices for our Pro prices
-      if (!invoice.lines?.data || !hasProPrice(invoice.lines.data as { price?: { id: string } | null }[])) break
+      // Only act on invoices for our managed prices.
+      if (!invoice.lines?.data || !hasManagedPrice(invoice.lines.data as { price?: { id: string } | null }[])) break
 
       let handled = false
 
-      // Check if this is for a team subscription
+      // Check if this is for an organization subscription.
       if (subscriptionId && typeof subscriptionId === "string") {
         try {
           const subscription = await getStripe().subscriptions.retrieve(subscriptionId)
-          if (isTeamSubscription(subscription.metadata)) {
-            const orgId = subscription.metadata.org_id
-            if (orgId && typeof orgId === "string") {
-              ok = await updateOrgSubscriptionStatus(supabase, orgId, "past_due", {
-                stripeCustomerId: customerId,
-                stripeSubscriptionId: subscriptionId,
-              })
-              handled = true
-            } else {
-              console.error("Team subscription missing org_id for invoice:", subscriptionId)
-            }
+          const orgId = subscription.metadata.org_id
+          if (orgId && typeof orgId === "string") {
+            const subscriptionPlan = parseMetadataBillingPlan(subscription.metadata) ??
+              detectBillingPlanFromItems(subscription.items.data)
+            ok = await updateOrgSubscriptionStatus(supabase, orgId, "past_due", {
+              stripeCustomerId: customerId,
+              stripeSubscriptionId: subscriptionId,
+              activePlan: planForActiveOrgSubscription(subscriptionPlan),
+            })
+            handled = true
+          } else if (isTeamSubscription(subscription.metadata)) {
+            console.error("Team subscription missing org_id for invoice:", subscriptionId)
           }
         } catch (e) {
           console.error("Failed to retrieve subscription for invoice:", e)
@@ -243,25 +299,26 @@ export async function POST(request: Request): Promise<Response> {
       const customerId = invoice.customer as string
       const subscriptionId = (invoice as { subscription?: string | null }).subscription
 
-      // Only act on invoices for our Pro prices
-      if (!invoice.lines?.data || !hasProPrice(invoice.lines.data as { price?: { id: string } | null }[])) break
+      // Only act on invoices for our managed prices.
+      if (!invoice.lines?.data || !hasManagedPrice(invoice.lines.data as { price?: { id: string } | null }[])) break
 
       let handled = false
 
-      // Check if this is for a team subscription
+      // Check if this is for an organization subscription.
       if (subscriptionId && typeof subscriptionId === "string") {
         try {
           const subscription = await getStripe().subscriptions.retrieve(subscriptionId)
-          if (isTeamSubscription(subscription.metadata)) {
-            const orgId = subscription.metadata.org_id
-            if (orgId && typeof orgId === "string") {
-              ok = await updateOrgSubscriptionStatus(supabase, orgId, "cancelled", {
-                stripeCustomerId: customerId,
-              })
-              handled = true
-            } else {
-              console.error("Team subscription missing org_id for invoice:", subscriptionId)
-            }
+          const orgId = subscription.metadata.org_id
+          if (orgId && typeof orgId === "string") {
+            const subscriptionPlan = parseMetadataBillingPlan(subscription.metadata) ??
+              detectBillingPlanFromItems(subscription.items.data)
+            ok = await updateOrgSubscriptionStatus(supabase, orgId, "cancelled", {
+              stripeCustomerId: customerId,
+              activePlan: planForActiveOrgSubscription(subscriptionPlan),
+            })
+            handled = true
+          } else if (isTeamSubscription(subscription.metadata)) {
+            console.error("Team subscription missing org_id for invoice:", subscriptionId)
           }
         } catch (e) {
           console.error("Failed to retrieve subscription for invoice:", e)

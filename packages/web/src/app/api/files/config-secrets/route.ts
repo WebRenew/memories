@@ -4,7 +4,7 @@ import { createHash } from "node:crypto"
 import { authenticateRequest } from "@/lib/auth"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { apiRateLimit, checkPreAuthApiRateLimit, checkRateLimit } from "@/lib/rate-limit"
-import { resolveWorkspaceContext } from "@/lib/workspace"
+import { isPaidWorkspacePlan, resolveWorkspaceContext } from "@/lib/workspace"
 
 const scopeSchema = z.enum(["global", "project"])
 const integrationSchema = z.string().trim().min(1).max(80)
@@ -198,7 +198,7 @@ export async function GET(request: Request): Promise<Response> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  if (workspace.plan !== "pro") {
+  if (!isPaidWorkspacePlan(workspace.plan)) {
     return NextResponse.json({ error: "Scoped Vault-backed config sync is a Pro feature." }, { status: 403 })
   }
 
@@ -299,7 +299,7 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  if (workspace.plan !== "pro") {
+  if (!isPaidWorkspacePlan(workspace.plan)) {
     return NextResponse.json({ error: "Scoped Vault-backed config sync is a Pro feature." }, { status: 403 })
   }
 

@@ -12,6 +12,10 @@ import { ClientWorkflowDebugPanel } from "./ClientWorkflowDebugPanel"
 import { ThemeSwitcher } from "@/components/ThemeSwitcher"
 import { extractErrorMessage } from "@/lib/client-errors"
 import {
+  getWorkspacePlanLabel,
+  type WorkspacePlan,
+} from "@/lib/workspace"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -30,7 +34,7 @@ interface Profile {
 interface WorkspaceSummary {
   ownerType: "user" | "organization"
   orgRole: "owner" | "admin" | "member" | null
-  plan: "free" | "pro" | "past_due"
+  plan: WorkspacePlan
 }
 
 const navItems = [
@@ -63,6 +67,7 @@ export function DashboardShell({
   const router = useRouter()
   const displayName = profile?.name ?? user.email?.split("@")[0] ?? "User"
   const plan = workspace.plan
+  const showUpgradeCta = plan === "free"
   const canManageBilling =
     workspace.ownerType === "user" || workspace.orgRole === "owner"
   const sidebarOffsetClass =
@@ -157,7 +162,7 @@ export function DashboardShell({
           </div>
 
           <div className="flex items-center gap-4">
-            {plan !== "pro" && canManageBilling && (
+            {showUpgradeCta && canManageBilling && (
               <Link
                 href="/app/upgrade"
                 className="hidden sm:flex items-center gap-2 px-4 py-1.5 bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 transition-all duration-300"
@@ -179,7 +184,7 @@ export function DashboardShell({
                   <div className="text-right hidden sm:block">
                     <p className="text-xs font-bold">{displayName}</p>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                      {plan} plan
+                      {getWorkspacePlanLabel(plan)} plan
                     </p>
                   </div>
                   {profile?.avatar_url ? (

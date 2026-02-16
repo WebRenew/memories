@@ -5,7 +5,11 @@ import { checkRateLimit, strictRateLimit } from "@/lib/rate-limit"
 import { parseBody, checkoutSchema } from "@/lib/validations"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { resolveWorkspaceContext } from "@/lib/workspace"
-import { getStripeProPriceId } from "@/lib/env"
+import {
+  getStripeCheckoutPriceId,
+  getStripeGrowthOveragePriceId,
+  type StripeCheckoutPlan,
+} from "@/lib/env"
 
 function jsonError(message: string, status: number, code: string) {
   return NextResponse.json({ error: message, code }, { status })
@@ -132,15 +136,34 @@ export async function POST(request: Request): Promise<Response> {
     return jsonError("Only organization owners can manage billing", 403, "BILLING_PERMISSION_DENIED")
   }
 
-  if (workspace.plan === "pro") {
-    return jsonError("Workspace is already on Pro", 400, "ALREADY_ON_PRO")
-  }
-
   const parsed = parseBody(checkoutSchema, await request.json().catch(() => ({})))
   if (!parsed.success) return parsed.response
   const { billing } = parsed.data
 
-  const priceId = getStripeProPriceId(billing)
+  const defaultPlan: StripeCheckoutPlan = workspace.ownerType === "organization" ? "team" : "individual"
+  const requestedPlan = parsed.data.plan ?? defaultPlan
+
+  if (workspace.ownerType === "organization" && requestedPlan === "individual") {
+    return jsonError(
+      "Organization workspaces can only subscribe to Team or Growth plans",
+      400,
+      "INVALID_ORG_PLAN_SELECTION"
+    )
+  }
+
+  if (workspace.ownerType === "user" && requestedPlan === "team") {
+    return jsonError(
+      "Team seats require an organization workspace",
+      400,
+      "INVALID_USER_PLAN_SELECTION"
+    )
+  }
+
+  if (workspace.plan === requestedPlan) {
+    return jsonError("Workspace is already on this plan", 400, "ALREADY_ON_PLAN")
+  }
+
+  const priceId = getStripeCheckoutPriceId(requestedPlan, billing)
 
   let customerId: string | null = null
   if (workspace.ownerType === "organization") {
@@ -161,6 +184,7 @@ export async function POST(request: Request): Promise<Response> {
     const metadata: Record<string, string> = {
       supabase_user_id: auth.userId,
       workspace_owner_type: workspace.ownerType,
+      billing_plan: requestedPlan,
     }
     if (workspace.orgId) {
       metadata.workspace_org_id = workspace.orgId
@@ -168,7 +192,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const sessionPayload: {
       customer: string
-      line_items: { price: string; quantity: number }[]
+      line_items: Array<{ price: string; quantity?: number }>
       mode: "subscription"
       success_url: string
       cancel_url: string
@@ -183,15 +207,26 @@ export async function POST(request: Request): Promise<Response> {
       metadata,
     }
 
-    if (workspace.ownerType === "organization" && workspace.orgId) {
-      sessionPayload.subscription_data = {
-        metadata: {
-          type: "team_seats",
-          org_id: workspace.orgId,
-          created_by_user_id: auth.userId,
-        },
-      }
+    if (requestedPlan === "growth") {
+      sessionPayload.line_items.push({ price: getStripeGrowthOveragePriceId() })
     }
+
+    const subscriptionType =
+      requestedPlan === "team"
+        ? "team_seats"
+        : requestedPlan === "growth"
+          ? "growth_base"
+          : "individual"
+
+    const subscriptionMetadata: Record<string, string> = {
+      type: subscriptionType,
+      billing_plan: requestedPlan,
+      created_by_user_id: auth.userId,
+    }
+    if (workspace.ownerType === "organization" && workspace.orgId) {
+      subscriptionMetadata.org_id = workspace.orgId
+    }
+    sessionPayload.subscription_data = { metadata: subscriptionMetadata }
 
     const session = await getStripe().checkout.sessions.create(sessionPayload)
 

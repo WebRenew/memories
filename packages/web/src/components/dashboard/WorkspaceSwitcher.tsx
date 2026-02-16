@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { ChevronDown, Check, Crown, Shield, User, Loader2 } from "lucide-react"
 import { extractErrorMessage } from "@/lib/client-errors"
 import { recordClientWorkflowEvent } from "@/lib/client-workflow-debug"
+import type { WorkspacePlan } from "@/lib/workspace"
 
 export interface OrgMembership {
   role: "owner" | "admin" | "member"
@@ -24,7 +25,7 @@ interface WorkspaceSummary {
   ownerType: "user" | "organization"
   orgId: string | null
   orgRole: "owner" | "admin" | "member" | null
-  plan: "free" | "pro" | "past_due"
+  plan: WorkspacePlan
   hasDatabase: boolean
   canProvision: boolean
   canManageBilling: boolean

@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient as createTurso } from "@libsql/client"
 import { NextResponse } from "next/server"
 import { apiRateLimit, checkPreAuthApiRateLimit, checkRateLimit } from "@/lib/rate-limit"
-import { resolveWorkspaceContext } from "@/lib/workspace"
+import { isPaidWorkspacePlan, resolveWorkspaceContext } from "@/lib/workspace"
 
 const FREE_LIMIT = 5000
 
@@ -27,12 +27,12 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const plan = workspace.plan
-  const isPro = plan === "pro"
+  const isPaid = isPaidWorkspacePlan(plan)
 
   if (!workspace.hasDatabase || !workspace.turso_db_url || !workspace.turso_db_token) {
     return NextResponse.json({
       plan,
-      memoryLimit: isPro ? null : FREE_LIMIT,
+      memoryLimit: isPaid ? null : FREE_LIMIT,
       memoryCount: 0,
     })
   }
@@ -53,7 +53,7 @@ export async function GET(request: Request): Promise<Response> {
 
   return NextResponse.json({
     plan,
-    memoryLimit: isPro ? null : FREE_LIMIT,
+    memoryLimit: isPaid ? null : FREE_LIMIT,
     memoryCount,
   })
 }

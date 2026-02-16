@@ -8,6 +8,9 @@ const {
   mockCreateDatabaseToken,
   mockInitSchema,
   mockTursoExecute,
+  mockEnforceSdkProjectProvisionLimit,
+  mockCountActiveProjectsForBillingContext,
+  mockRecordGrowthProjectMeterEvent,
 } = vi.hoisted(() => ({
   mockAuthenticateRequest: vi.fn(),
   mockCheckRateLimit: vi.fn(),
@@ -16,6 +19,9 @@ const {
   mockCreateDatabaseToken: vi.fn(),
   mockInitSchema: vi.fn(),
   mockTursoExecute: vi.fn(),
+  mockEnforceSdkProjectProvisionLimit: vi.fn(),
+  mockCountActiveProjectsForBillingContext: vi.fn(),
+  mockRecordGrowthProjectMeterEvent: vi.fn(),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -46,6 +52,12 @@ vi.mock("@libsql/client", () => ({
   })),
 }))
 
+vi.mock("@/lib/sdk-project-billing", () => ({
+  enforceSdkProjectProvisionLimit: mockEnforceSdkProjectProvisionLimit,
+  countActiveProjectsForBillingContext: mockCountActiveProjectsForBillingContext,
+  recordGrowthProjectMeterEvent: mockRecordGrowthProjectMeterEvent,
+}))
+
 import { DELETE, GET, POST } from "../route"
 
 describe("/api/mcp/tenants", () => {
@@ -63,6 +75,22 @@ describe("/api/mcp/tenants", () => {
     mockCreateDatabaseToken.mockResolvedValue("token-tenant-a")
     mockInitSchema.mockResolvedValue(undefined)
     mockTursoExecute.mockResolvedValue({ rows: [{ 1: 1 }] })
+    mockEnforceSdkProjectProvisionLimit.mockResolvedValue({
+      ok: true,
+      billing: {
+        plan: "growth",
+        ownerType: "user",
+        ownerUserId: "user-1",
+        orgId: null,
+        stripeCustomerId: "cus_user_123",
+        includedProjects: 500,
+        overageUsdPerProject: 0.05,
+        maxProjectsPerMonth: null,
+      },
+      activeProjectCount: 1,
+    })
+    mockCountActiveProjectsForBillingContext.mockResolvedValue(2)
+    mockRecordGrowthProjectMeterEvent.mockResolvedValue(undefined)
   })
 
   it("adds deprecation headers on GET unauthorized", async () => {

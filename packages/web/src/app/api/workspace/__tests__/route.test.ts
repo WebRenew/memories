@@ -103,7 +103,7 @@ describe("/api/workspace", () => {
       ownerType: "organization",
       orgId: "org-1",
       orgRole: "admin",
-      plan: "pro",
+      plan: "team",
       hasDatabase: true,
       canProvision: true,
       canManageBilling: false,
