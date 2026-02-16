@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { hashMcpApiKey } from "@/lib/mcp-api-key"
 
 const {
@@ -35,6 +35,7 @@ vi.mock("@/lib/active-memory-context", () => ({
 import { GET } from "../route"
 
 const VALID_API_KEY = `mem_${"a".repeat(64)}`
+const originalTursoDomainSuffix = process.env.TURSO_DB_DOMAIN_SUFFIX
 
 describe("/api/db/credentials", () => {
   beforeEach(() => {
@@ -47,6 +48,14 @@ describe("/api/db/credentials", () => {
       turso_db_token: "token-123",
       turso_db_name: "demo-db",
     })
+  })
+
+  afterEach(() => {
+    if (originalTursoDomainSuffix === undefined) {
+      delete process.env.TURSO_DB_DOMAIN_SUFFIX
+    } else {
+      process.env.TURSO_DB_DOMAIN_SUFFIX = originalTursoDomainSuffix
+    }
   })
 
   it("returns 401 without bearer auth", async () => {
@@ -128,6 +137,25 @@ describe("/api/db/credentials", () => {
     expect(body.url).toBe("libsql://demo.turso.io")
     expect(body.token).toBe("token-123")
     expect(body.dbName).toBe("demo-db")
+  })
+
+  it("rewrites returned libsql URL when TURSO_DB_DOMAIN_SUFFIX is set", async () => {
+    process.env.TURSO_DB_DOMAIN_SUFFIX = "db.memories.sh"
+    mockAuthenticateRequest.mockResolvedValue({
+      userId: "user-1",
+      email: "user@example.com",
+    })
+
+    const request = new Request("http://localhost/api/db/credentials", {
+      headers: { authorization: "Bearer cli_abc123" },
+    })
+
+    const response = await GET(request as never)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.url).toBe("libsql://demo.db.memories.sh")
+    expect(body.turso_db_url).toBe("libsql://demo.db.memories.sh")
   })
 
   it("returns personal credentials when org membership is revoked", async () => {

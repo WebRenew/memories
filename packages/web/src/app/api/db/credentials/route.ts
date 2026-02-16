@@ -4,6 +4,7 @@ import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 import { authenticateRequest } from "@/lib/auth"
 import { resolveActiveMemoryContext } from "@/lib/active-memory-context"
 import { hashMcpApiKey, isValidMcpApiKey } from "@/lib/mcp-api-key"
+import { applyTursoDomainAlias } from "@/lib/turso-domain"
 
 export async function GET(request: NextRequest): Promise<Response> {
   const authHeader = request.headers.get("authorization")
@@ -64,12 +65,14 @@ export async function GET(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: "Database not provisioned" }, { status: 400 })
   }
 
+  const tursoDbUrl = applyTursoDomainAlias(context.turso_db_url)
+
   // Return both canonical and legacy keys for compatibility with existing clients.
   return NextResponse.json({
-    url: context.turso_db_url,
+    url: tursoDbUrl,
     token: context.turso_db_token,
     dbName: context.turso_db_name,
-    turso_db_url: context.turso_db_url,
+    turso_db_url: tursoDbUrl,
     turso_db_token: context.turso_db_token,
     turso_db_name: context.turso_db_name,
     ownerType: context.ownerType,

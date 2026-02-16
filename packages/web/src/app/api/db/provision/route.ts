@@ -1,12 +1,12 @@
 import { authenticateRequest } from "@/lib/auth"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createDatabase, createDatabaseToken, initSchema } from "@/lib/turso"
+import { applyTursoDomainAlias, buildLibsqlUrlFromHostname } from "@/lib/turso-domain"
 import { NextResponse } from "next/server"
 import { setTimeout as delay } from "node:timers/promises"
 import { checkPreAuthApiRateLimit, checkRateLimit, strictRateLimit } from "@/lib/rate-limit"
 import { resolveWorkspaceContext } from "@/lib/workspace"
-
-const TURSO_ORG = "webrenew"
+import { getTursoOrgSlug } from "@/lib/env"
 
 export async function POST(request: Request): Promise<Response> {
   const preAuthRateLimited = await checkPreAuthApiRateLimit(request)
@@ -53,8 +53,9 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (context.hasDatabase && context.turso_db_url && context.turso_db_token) {
+    const url = applyTursoDomainAlias(context.turso_db_url)
     return NextResponse.json({
-      url: context.turso_db_url,
+      url,
       provisioned: false,
     })
   }
@@ -74,16 +75,18 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
+    const tursoOrg = getTursoOrgSlug()
     // Create a new Turso database
-    const db = await createDatabase(TURSO_ORG)
-    const token = await createDatabaseToken(TURSO_ORG, db.name)
-    const url = `libsql://${db.hostname}`
+    const db = await createDatabase(tursoOrg)
+    const token = await createDatabaseToken(tursoOrg, db.name)
+    const canonicalUrl = `libsql://${db.hostname}`
+    const url = buildLibsqlUrlFromHostname(db.hostname)
 
     // Wait for Turso to finish provisioning
     await delay(3000)
 
     // Initialize the schema
-    await initSchema(url, token)
+    await initSchema(canonicalUrl, token)
 
     let error: { message?: string } | null = null
     if (context.ownerType === "organization" && context.orgId) {

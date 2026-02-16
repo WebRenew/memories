@@ -128,8 +128,9 @@ describe("/api/db/provision", () => {
       url: "libsql://demo.turso.io",
       provisioned: true,
     })
-    expect(mockCreateDatabase).toHaveBeenCalledWith("webrenew")
-    expect(mockCreateDatabaseToken).toHaveBeenCalledWith("webrenew", "db-demo")
+    const tursoOrg = process.env.TURSO_ORG_SLUG ?? "webrenew"
+    expect(mockCreateDatabase).toHaveBeenCalledWith(tursoOrg)
+    expect(mockCreateDatabaseToken).toHaveBeenCalledWith(tursoOrg, "db-demo")
     expect(mockInitSchema).toHaveBeenCalledWith("libsql://demo.turso.io", "token-123")
     expect(mockOrgUpdate).toHaveBeenCalledWith({
       turso_db_url: "libsql://demo.turso.io",

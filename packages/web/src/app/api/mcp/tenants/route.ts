@@ -7,13 +7,13 @@ import { apiRateLimit, checkRateLimit, strictRateLimit } from "@/lib/rate-limit"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createDatabase, createDatabaseToken, initSchema } from "@/lib/turso"
 import { getTursoOrgSlug } from "@/lib/env"
+import { applyTursoDomainAlias, buildLibsqlUrlFromHostname } from "@/lib/turso-domain"
 import {
   countActiveProjectsForBillingContext,
   enforceSdkProjectProvisionLimit,
   recordGrowthProjectMeterEvent,
 } from "@/lib/sdk-project-billing"
 
-const TURSO_ORG = getTursoOrgSlug()
 const LEGACY_ENDPOINT = "/api/mcp/tenants"
 const SUCCESSOR_ENDPOINT = "/api/sdk/v1/management/tenants"
 const LEGACY_SUNSET = "Tue, 30 Jun 2026 00:00:00 GMT"
@@ -59,7 +59,7 @@ function logDeprecatedAccess(method: "GET" | "POST" | "DELETE", userId?: string)
 function mapTenantRow(row: TenantRow) {
   return {
     tenantId: row.tenant_id,
-    tursoDbUrl: row.turso_db_url,
+    tursoDbUrl: applyTursoDomainAlias(row.turso_db_url),
     tursoDbName: row.turso_db_name,
     status: row.status,
     metadata: row.metadata ?? {},
@@ -245,19 +245,21 @@ export async function POST(request: Request): Promise<Response> {
       })
       await attachedClient.execute("SELECT 1")
 
-      tursoDbUrl = attachUrl
+      tursoDbUrl = applyTursoDomainAlias(attachUrl)
       tursoDbToken = attachToken
       if (!tursoDbName) {
-        tursoDbName = attachUrl.replace("libsql://", "")
+        tursoDbName = tursoDbUrl.replace("libsql://", "")
       }
     } else {
-      const db = await createDatabase(TURSO_ORG)
-      const token = await createDatabaseToken(TURSO_ORG, db.name)
-      const url = `libsql://${db.hostname}`
+      const tursoOrg = getTursoOrgSlug()
+      const db = await createDatabase(tursoOrg)
+      const token = await createDatabaseToken(tursoOrg, db.name)
+      const canonicalUrl = `libsql://${db.hostname}`
+      const url = buildLibsqlUrlFromHostname(db.hostname)
 
       // Give Turso a moment to finish provisioning before schema init.
       await delay(3000)
-      await initSchema(url, token)
+      await initSchema(canonicalUrl, token)
 
       tursoDbUrl = url
       tursoDbToken = token

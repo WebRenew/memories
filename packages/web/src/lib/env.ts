@@ -197,6 +197,27 @@ export function getTursoOrgSlug(): string {
   return process.env.TURSO_ORG_SLUG ?? "webrenew"
 }
 
+/**
+ * Optional custom hostname suffix for white-labeling Turso DB URLs.
+ * Example: TURSO_DB_DOMAIN_SUFFIX=db.memories.sh
+ * - libsql://my-db.turso.io -> libsql://my-db.db.memories.sh
+ */
+export function getTursoDbDomainSuffix(): string | null {
+  const raw = envValue("TURSO_DB_DOMAIN_SUFFIX")
+  if (!raw) return null
+
+  const normalized = raw
+    .replace(/^libsql:\/\//i, "")
+    .replace(/^https?:\/\//i, "")
+    .replace(/^\*\./, "")
+    .replace(/\/.*$/, "")
+    .replace(/\.$/, "")
+    .trim()
+    .toLowerCase()
+
+  return normalized.length > 0 ? normalized : null
+}
+
 export function getTursoPlatformApiToken(): string {
   const token = process.env.TURSO_PLATFORM_API_TOKEN
   if (!token) throw new Error("TURSO_PLATFORM_API_TOKEN not set")

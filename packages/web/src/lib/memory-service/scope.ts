@@ -7,6 +7,7 @@ import {
   hasTursoPlatformApiToken,
   shouldAutoProvisionTenants,
 } from "@/lib/env"
+import { buildLibsqlUrlFromHostname } from "@/lib/turso-domain"
 import {
   enforceSdkProjectProvisionLimit,
   recordGrowthProjectMeterEvent,
@@ -102,10 +103,11 @@ async function autoProvisionTenantDatabase(params: {
   const tursoOrg = getTursoOrgSlug()
   const db = await createDatabase(tursoOrg)
   const token = await createDatabaseToken(tursoOrg, db.name)
-  const url = `libsql://${db.hostname}`
+  const canonicalUrl = `libsql://${db.hostname}`
+  const url = buildLibsqlUrlFromHostname(db.hostname)
 
   await delay(3000)
-  await initSchema(url, token)
+  await initSchema(canonicalUrl, token)
 
   const now = new Date().toISOString()
   const metadata = {
