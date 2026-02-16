@@ -204,11 +204,11 @@ export async function PATCH(
     }
 
     const currentDomain = typeof currentOrg.domain_auto_join_domain === "string"
-      ? currentOrg.domain_auto_join_domain.trim().toLowerCase()
-      : ""
+      ? currentOrg.domain_auto_join_domain.trim().toLowerCase() || null
+      : null
     const requestedDomain =
       typeof updates.domain_auto_join_domain === "string"
-        ? updates.domain_auto_join_domain.trim().toLowerCase()
+        ? updates.domain_auto_join_domain.trim().toLowerCase() || null
         : updates.domain_auto_join_domain === null
           ? null
           : currentDomain
