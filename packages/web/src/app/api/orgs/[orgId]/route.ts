@@ -4,6 +4,7 @@ import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 import { parseBody, updateOrgSchema } from "@/lib/validations"
 import { normalizeOrgJoinDomain } from "@/lib/org-domain"
+import { isPaidWorkspacePlan, normalizeWorkspacePlan } from "@/lib/workspace"
 
 function isMissingColumnError(error: unknown, columnName: string): boolean {
   const message =
@@ -18,17 +19,8 @@ function isMissingColumnError(error: unknown, columnName: string): boolean {
   )
 }
 
-function supportsDomainAutoJoinPlan(plan: unknown): boolean {
-  if (typeof plan !== "string") return false
-  const normalized = plan.trim().toLowerCase()
-  return (
-    normalized === "team" ||
-    normalized === "growth" ||
-    normalized === "enterprise" ||
-    normalized === "pro" ||
-    normalized === "individual" ||
-    normalized === "past_due"
-  )
+function supportsDomainAutoJoinPlan(plan: string | null | undefined): boolean {
+  return isPaidWorkspacePlan(normalizeWorkspacePlan(plan))
 }
 
 // GET /api/orgs/[orgId] - Get organization details
