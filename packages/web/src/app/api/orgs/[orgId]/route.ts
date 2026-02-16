@@ -4,7 +4,12 @@ import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 import { parseBody, updateOrgSchema } from "@/lib/validations"
 import { normalizeOrgJoinDomain } from "@/lib/org-domain"
-import { isPaidWorkspacePlan, normalizeWorkspacePlan } from "@/lib/workspace"
+import {
+  isPaidWorkspacePlan,
+  normalizeActiveOrganizationPlan,
+  normalizeWorkspacePlan,
+  type WorkspacePlan,
+} from "@/lib/workspace"
 
 function isMissingColumnError(error: unknown, columnName: string): boolean {
   const message =
@@ -19,8 +24,30 @@ function isMissingColumnError(error: unknown, columnName: string): boolean {
   )
 }
 
-function supportsDomainAutoJoinPlan(plan: string | null | undefined): boolean {
-  return isPaidWorkspacePlan(normalizeWorkspacePlan(plan))
+type OrgSubscriptionStatus = "active" | "past_due" | "cancelled" | null
+
+interface OrganizationDomainAutoJoinPlanRow {
+  plan: string | null
+  subscription_status: OrgSubscriptionStatus
+  stripe_subscription_id: string | null
+}
+
+function resolveOrganizationDomainAutoJoinPlan(
+  org: OrganizationDomainAutoJoinPlanRow
+): WorkspacePlan {
+  if (org.subscription_status === "past_due") return "past_due"
+  if (org.subscription_status === "cancelled") return "free"
+
+  if (org.subscription_status === "active") {
+    if (org.plan) return normalizeActiveOrganizationPlan(org.plan)
+    if (org.stripe_subscription_id) return "team"
+  }
+
+  return normalizeWorkspacePlan(org.plan)
+}
+
+function supportsDomainAutoJoinPlan(org: OrganizationDomainAutoJoinPlanRow): boolean {
+  return isPaidWorkspacePlan(resolveOrganizationDomainAutoJoinPlan(org))
 }
 
 // GET /api/orgs/[orgId] - Get organization details
@@ -155,7 +182,9 @@ export async function PATCH(
   if (updatesDomainSettings) {
     const { data: currentOrg, error: currentOrgError } = await supabase
       .from("organizations")
-      .select("plan, domain_auto_join_enabled, domain_auto_join_domain")
+      .select(
+        "plan, subscription_status, stripe_subscription_id, domain_auto_join_enabled, domain_auto_join_domain"
+      )
       .eq("id", orgId)
       .single()
 
@@ -209,7 +238,7 @@ export async function PATCH(
       )
     }
 
-    if (finalEnabled && !supportsDomainAutoJoinPlan(currentOrg.plan)) {
+    if (finalEnabled && !supportsDomainAutoJoinPlan(currentOrg)) {
       return NextResponse.json(
         {
           error: "Domain auto-join requires the Team plan. Upgrade to continue.",
