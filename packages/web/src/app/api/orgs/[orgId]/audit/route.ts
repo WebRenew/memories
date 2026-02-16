@@ -107,7 +107,14 @@ export async function GET(
         { status: 503 }
       )
     }
-    return NextResponse.json({ error: logsError.message }, { status: 500 })
+    console.error("Failed to load org audit log rows:", {
+      error: logsError,
+      orgId,
+      userId: user.id,
+      actionFilter,
+      limit,
+    })
+    return NextResponse.json({ error: "Failed to load audit events" }, { status: 500 })
   }
 
   const rows = (logs ?? []) as OrgAuditLogRow[]
