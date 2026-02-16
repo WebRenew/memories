@@ -61,7 +61,16 @@ export async function GET(
     .eq("id", orgId)
     .single()
 
-  if (error || !org) {
+  if (error) {
+    console.error("Failed to load organization by ID:", {
+      error,
+      orgId,
+      userId: user.id,
+    })
+    return NextResponse.json({ error: "Failed to fetch organization" }, { status: 500 })
+  }
+
+  if (!org) {
     return NextResponse.json({ error: "Organization not found" }, { status: 404 })
   }
 
