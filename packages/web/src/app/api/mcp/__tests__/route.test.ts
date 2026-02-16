@@ -1262,7 +1262,7 @@ describe("/api/mcp", () => {
         filters?: Record<string, string>
       }
       expect(tenantLookup.filters?.tenant_id).toBe("tenant-a")
-      expect(tenantLookup.filters?.api_key_hash).toMatch(/^[a-f0-9]{64}$/)
+      expect(tenantLookup.filters?.owner_scope_key).toBe("user:user-1")
     })
 
     it("returns typed error when tenant_id is invalid", async () => {

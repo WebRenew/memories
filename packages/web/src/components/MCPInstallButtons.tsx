@@ -6,7 +6,7 @@ import { CursorIcon } from "@/components/icons/CursorIcon";
 import { ClaudeIcon } from "@/components/icons/ClaudeIcon";
 import { AnthropicIcon } from "@/components/icons/AnthropicIcon";
 import { V0Icon } from "@/components/icons/V0Icon";
-import { WindsurfIcon } from "@/components/icons/WindsurfIcon";
+import { Windsurf } from "@/components/icons/windsurf";
 
 // Placeholder that's obviously meant to be replaced
 const API_KEY_PLACEHOLDER = "REPLACE_WITH_YOUR_API_KEY";
@@ -238,7 +238,7 @@ export function MCPInstallButtons(): React.JSX.Element {
             className="flex items-center gap-3 p-4 rounded-lg border border-border bg-card hover:bg-accent/50 hover:border-cyan-500/50 transition-all group no-underline"
           >
             <div className="p-2 rounded-lg bg-cyan-500/10 group-hover:bg-cyan-500/20 transition-colors">
-              <WindsurfIcon className="w-5 h-5 text-cyan-500" />
+              <Windsurf className="w-5 h-5 text-cyan-500" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-medium text-sm">Windsurf</div>
@@ -294,7 +294,7 @@ export function MCPInstallButtons(): React.JSX.Element {
           href="#windsurf"
           className="text-muted-foreground hover:text-cyan-500 transition-colors flex items-center gap-1.5 no-underline"
         >
-          <WindsurfIcon className="w-4 h-4" />
+          <Windsurf className="w-4 h-4" />
           Windsurf
         </a>
       </div>

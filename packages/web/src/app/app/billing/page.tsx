@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient as createTurso } from "@libsql/client"
 import { BillingContent } from "./billing-content"
 import { resolveWorkspaceContext, type WorkspacePlan } from "@/lib/workspace"
+import { buildSdkTenantOwnerScopeKey, resolveSdkProjectBillingContext } from "@/lib/sdk-project-billing"
 
 export const metadata = {
   title: "Billing & Usage",
@@ -95,17 +96,25 @@ async function getTenantRoutingStatus(userId: string): Promise<TenantRoutingStat
     const apiKeyExpired =
       !userData.mcp_api_key_expires_at ||
       new Date(userData.mcp_api_key_expires_at).getTime() <= Date.now()
+    const billing = await resolveSdkProjectBillingContext(admin, userId)
+    const ownerScopeKey =
+      billing?.ownerScopeKey ??
+      buildSdkTenantOwnerScopeKey({
+        ownerType: "user",
+        ownerUserId: userId,
+        orgId: null,
+      })
 
     const [readyResult, totalResult] = await Promise.all([
       admin
         .from("sdk_tenant_databases")
         .select("*", { count: "exact", head: true })
-        .eq("api_key_hash", userData.mcp_api_key_hash)
+        .eq("owner_scope_key", ownerScopeKey)
         .eq("status", "ready"),
       admin
         .from("sdk_tenant_databases")
         .select("*", { count: "exact", head: true })
-        .eq("api_key_hash", userData.mcp_api_key_hash)
+        .eq("owner_scope_key", ownerScopeKey)
         .neq("status", "disabled"),
     ])
 

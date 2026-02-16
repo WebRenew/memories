@@ -14,9 +14,11 @@ import {
   successResponse,
 } from "@/lib/sdk-api/runtime"
 import {
+  buildSdkTenantOwnerScopeKey,
   countActiveProjectsForBillingContext,
   enforceSdkProjectProvisionLimit,
   recordGrowthProjectMeterEvent,
+  resolveSdkProjectBillingContext,
 } from "@/lib/sdk-project-billing"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createDatabase, createDatabaseToken, initSchema } from "@/lib/turso"
@@ -50,6 +52,22 @@ type ManagementIdentity = {
   userId: string
   apiKeyHash: string
   authMode: "api_key" | "session"
+}
+
+async function resolveOwnerScopeKey(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string
+): Promise<string> {
+  const billing = await resolveSdkProjectBillingContext(admin, userId)
+  if (billing?.ownerScopeKey) {
+    return billing.ownerScopeKey
+  }
+
+  return buildSdkTenantOwnerScopeKey({
+    ownerType: "user",
+    ownerUserId: userId,
+    orgId: null,
+  })
 }
 
 function mapTenantRow(row: TenantRow) {
@@ -213,10 +231,10 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (identity instanceof NextResponse) return identity
 
   const admin = createAdminClient()
+  const ownerScopeKey = await resolveOwnerScopeKey(admin, identity.userId)
   const billingState = await enforceSdkProjectProvisionLimit({
     admin,
     userId: identity.userId,
-    apiKeyHash: identity.apiKeyHash,
   })
 
   const billingSummary =
@@ -233,7 +251,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const { data, error } = await admin
     .from("sdk_tenant_databases")
     .select("tenant_id, turso_db_url, turso_db_name, status, metadata, created_at, updated_at, last_verified_at")
-    .eq("api_key_hash", identity.apiKeyHash)
+    .eq("owner_scope_key", ownerScopeKey)
     .order("created_at", { ascending: true })
 
   if (error) {
@@ -277,7 +295,6 @@ export async function POST(request: NextRequest): Promise<Response> {
   const billingState = await enforceSdkProjectProvisionLimit({
     admin,
     userId: identity.userId,
-    apiKeyHash: identity.apiKeyHash,
   })
 
   if (!billingState.ok) {
@@ -298,7 +315,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   const { data: existing, error: existingError } = await admin
     .from("sdk_tenant_databases")
     .select("tenant_id, turso_db_url, turso_db_name, status, metadata, created_at, updated_at, last_verified_at")
-    .eq("api_key_hash", identity.apiKeyHash)
+    .eq("owner_scope_key", billingState.billing.ownerScopeKey)
     .eq("tenant_id", tenantId)
     .maybeSingle()
 
@@ -385,6 +402,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   const now = new Date().toISOString()
   const payload = {
+    owner_scope_key: billingState.billing.ownerScopeKey,
     api_key_hash: identity.apiKeyHash,
     tenant_id: tenantId,
     turso_db_url: tursoDbUrl,
@@ -403,7 +421,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   const { data: saved, error: saveError } = await admin
     .from("sdk_tenant_databases")
-    .upsert(payload, { onConflict: "api_key_hash,tenant_id" })
+    .upsert(payload, { onConflict: "owner_scope_key,tenant_id" })
     .select("tenant_id, turso_db_url, turso_db_name, status, metadata, created_at, updated_at, last_verified_at")
     .single()
 
@@ -431,7 +449,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   const activeProjects = await countActiveProjectsForBillingContext(
     admin,
-    identity.apiKeyHash,
+    billingState.billing.ownerScopeKey,
     billingState.billing.stripeCustomerId
   )
 
@@ -461,11 +479,12 @@ export async function DELETE(request: NextRequest): Promise<Response> {
   }
 
   const admin = createAdminClient()
+  const ownerScopeKey = await resolveOwnerScopeKey(admin, identity.userId)
   const now = new Date().toISOString()
   const { data, error } = await admin
     .from("sdk_tenant_databases")
     .update({ status: "disabled", updated_at: now })
-    .eq("api_key_hash", identity.apiKeyHash)
+    .eq("owner_scope_key", ownerScopeKey)
     .eq("tenant_id", parsedTenantId.data)
     .select("tenant_id, status, updated_at")
     .maybeSingle()

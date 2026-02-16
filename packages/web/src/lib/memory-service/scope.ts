@@ -8,8 +8,10 @@ import {
   shouldAutoProvisionTenants,
 } from "@/lib/env"
 import {
+  buildSdkTenantOwnerScopeKey,
   enforceSdkProjectProvisionLimit,
   recordGrowthProjectMeterEvent,
+  resolveSdkProjectBillingContext,
   type SdkProjectBillingContext,
 } from "@/lib/sdk-project-billing"
 import {
@@ -41,7 +43,7 @@ function shouldAutoProvisionTenantDatabases(): boolean {
 }
 
 async function readTenantMapping(
-  apiKeyHash: string,
+  ownerScopeKey: string,
   tenantId: string
 ): Promise<{
   turso_db_url: string | null
@@ -53,7 +55,7 @@ async function readTenantMapping(
   const { data, error } = await admin
     .from("sdk_tenant_databases")
     .select("turso_db_url, turso_db_token, status, metadata")
-    .eq("api_key_hash", apiKeyHash)
+    .eq("owner_scope_key", ownerScopeKey)
     .eq("tenant_id", tenantId)
     .maybeSingle()
 
@@ -88,12 +90,13 @@ async function readTenantMapping(
 
 async function autoProvisionTenantDatabase(params: {
   apiKeyHash: string
+  ownerScopeKey: string
   tenantId: string
   ownerUserId?: string | null
   existingMetadata?: Record<string, unknown> | null
   billing?: SdkProjectBillingContext | null
 }): Promise<void> {
-  const { apiKeyHash, tenantId, ownerUserId, existingMetadata, billing } = params
+  const { apiKeyHash, ownerScopeKey, tenantId, ownerUserId, existingMetadata, billing } = params
 
   if (!hasTursoPlatformApiToken()) {
     return
@@ -119,6 +122,7 @@ async function autoProvisionTenantDatabase(params: {
     .from("sdk_tenant_databases")
     .upsert(
       {
+        owner_scope_key: ownerScopeKey,
         api_key_hash: apiKeyHash,
         tenant_id: tenantId,
         turso_db_url: url,
@@ -134,7 +138,7 @@ async function autoProvisionTenantDatabase(params: {
         updated_at: now,
         last_verified_at: now,
       },
-      { onConflict: "api_key_hash,tenant_id" }
+      { onConflict: "owner_scope_key,tenant_id" }
     )
 
   if (error) {
@@ -161,13 +165,55 @@ async function autoProvisionTenantDatabase(params: {
   }
 }
 
+async function resolveTenantOwnerScope(params: {
+  admin: ReturnType<typeof createAdminClient>
+  apiKeyHash: string
+  ownerUserId?: string | null
+}): Promise<{
+  ownerScopeKey: string
+  ownerUserId: string | null
+  billingContext: SdkProjectBillingContext | null
+}> {
+  let ownerUserId = params.ownerUserId ?? null
+
+  if (!ownerUserId) {
+    const { data: keyOwnerData } = await params.admin
+      .from("users")
+      .select("id")
+      .eq("mcp_api_key_hash", params.apiKeyHash)
+      .maybeSingle()
+    ownerUserId = (keyOwnerData?.id as string | undefined) ?? null
+  }
+
+  let billingContext: SdkProjectBillingContext | null = null
+  if (ownerUserId) {
+    billingContext = await resolveSdkProjectBillingContext(params.admin, ownerUserId)
+  }
+
+  const ownerScopeKey =
+    billingContext?.ownerScopeKey ??
+    buildSdkTenantOwnerScopeKey({
+      ownerType: "user",
+      ownerUserId: ownerUserId ?? params.apiKeyHash,
+      orgId: null,
+    })
+
+  return { ownerScopeKey, ownerUserId, billingContext }
+}
+
 export async function resolveTenantTurso(
   apiKeyHash: string,
   tenantId: string,
   options: { ownerUserId?: string | null; autoProvision?: boolean } = {}
 ): Promise<TursoClient> {
-  let mapping = await readTenantMapping(apiKeyHash, tenantId)
-  let billingContext: SdkProjectBillingContext | null = null
+  const admin = createAdminClient()
+  const ownerScope = await resolveTenantOwnerScope({
+    admin,
+    apiKeyHash,
+    ownerUserId: options.ownerUserId ?? null,
+  })
+  let mapping = await readTenantMapping(ownerScope.ownerScopeKey, tenantId)
+  let billingContext: SdkProjectBillingContext | null = ownerScope.billingContext
 
   const canAutoProvision =
     (options.autoProvision ?? true) &&
@@ -178,12 +224,10 @@ export async function resolveTenantTurso(
     canAutoProvision &&
     (!mapping || mapping.status === "disabled" || mapping.status === "error" || !mapping.turso_db_url || !mapping.turso_db_token)
   ) {
-    if (options.ownerUserId) {
-      const admin = createAdminClient()
+    if (ownerScope.ownerUserId) {
       const billingCheck = await enforceSdkProjectProvisionLimit({
         admin,
-        userId: options.ownerUserId,
-        apiKeyHash,
+        userId: ownerScope.ownerUserId,
       })
 
       if (!billingCheck.ok) {
@@ -205,12 +249,13 @@ export async function resolveTenantTurso(
     try {
       await autoProvisionTenantDatabase({
         apiKeyHash,
+        ownerScopeKey: ownerScope.ownerScopeKey,
         tenantId,
-        ownerUserId: options.ownerUserId,
+        ownerUserId: ownerScope.ownerUserId,
         existingMetadata: mapping?.metadata ?? null,
         billing: billingContext,
       })
-      mapping = await readTenantMapping(apiKeyHash, tenantId)
+      mapping = await readTenantMapping(ownerScope.ownerScopeKey, tenantId)
       console.info(`[SDK_AUTO_PROVISION] Tenant database ready for tenant_id=${tenantId}`)
     } catch (error) {
       console.error("[SDK_AUTO_PROVISION] Failed to auto-provision tenant database:", error)

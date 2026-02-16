@@ -17,36 +17,6 @@ const LEGACY_ENDPOINT = "/api/mcp/key"
 const SUCCESSOR_ENDPOINT = "/api/sdk/v1/management/keys"
 const LEGACY_SUNSET = "Tue, 30 Jun 2026 00:00:00 GMT"
 
-interface TenantMappingRow {
-  tenant_id: string
-  turso_db_url: string
-  turso_db_token: string
-  turso_db_name: string | null
-  status: string
-  metadata: Record<string, unknown> | null
-  created_by_user_id: string | null
-  billing_owner_type?: "user" | "organization" | null
-  billing_owner_user_id?: string | null
-  billing_org_id?: string | null
-  stripe_customer_id?: string | null
-  created_at: string
-  updated_at: string
-  last_verified_at: string | null
-}
-
-function isMissingColumnError(error: unknown, columnName: string): boolean {
-  const message =
-    typeof error === "object" && error !== null && "message" in error
-      ? String((error as { message?: unknown }).message ?? "").toLowerCase()
-      : ""
-
-  return (
-    message.includes("column") &&
-    message.includes(columnName.toLowerCase()) &&
-    message.includes("does not exist")
-  )
-}
-
 function applyLegacyHeaders(response: NextResponse): NextResponse {
   response.headers.set("Deprecation", "true")
   response.headers.set("Sunset", LEGACY_SUNSET)
@@ -83,97 +53,6 @@ function parseRequestedExpiry(rawExpiry: unknown): { expiresAt: string } | { err
   }
 
   return { expiresAt: parsed.toISOString() }
-}
-
-async function cloneTenantMappingsForKeyRotation(
-  admin: ReturnType<typeof createAdminClient>,
-  userId: string,
-  previousApiKeyHash: string,
-  nextApiKeyHash: string
-): Promise<{ copied: number }> {
-  if (!previousApiKeyHash || previousApiKeyHash === nextApiKeyHash) {
-    return { copied: 0 }
-  }
-
-  const primary = await admin
-    .from("sdk_tenant_databases")
-    .select(
-      "tenant_id, turso_db_url, turso_db_token, turso_db_name, status, metadata, created_by_user_id, billing_owner_type, billing_owner_user_id, billing_org_id, stripe_customer_id, created_at, updated_at, last_verified_at"
-    )
-    .eq("api_key_hash", previousApiKeyHash)
-  let data = primary.data as TenantMappingRow[] | null
-  let error = primary.error as { message: string } | null
-
-  if (
-    error &&
-    (isMissingColumnError(error, "billing_owner_type") ||
-      isMissingColumnError(error, "billing_owner_user_id") ||
-      isMissingColumnError(error, "billing_org_id") ||
-      isMissingColumnError(error, "stripe_customer_id"))
-  ) {
-    const fallback = await admin
-      .from("sdk_tenant_databases")
-      .select(
-        "tenant_id, turso_db_url, turso_db_token, turso_db_name, status, metadata, created_by_user_id, created_at, updated_at, last_verified_at"
-      )
-      .eq("api_key_hash", previousApiKeyHash)
-    data = fallback.data as TenantMappingRow[] | null
-    error = fallback.error as { message: string } | null
-  }
-
-  if (error) {
-    throw new Error(`Failed to load tenant mappings for key rotation: ${error.message}`)
-  }
-
-  const rows = (data ?? []) as TenantMappingRow[]
-  if (rows.length === 0) {
-    return { copied: 0 }
-  }
-
-  const now = new Date().toISOString()
-  const payload = rows.map((row) => ({
-    api_key_hash: nextApiKeyHash,
-    tenant_id: row.tenant_id,
-    turso_db_url: row.turso_db_url,
-    turso_db_token: row.turso_db_token,
-    turso_db_name: row.turso_db_name,
-    status: row.status,
-    metadata: row.metadata ?? {},
-    created_by_user_id: row.created_by_user_id ?? userId,
-    billing_owner_type: row.billing_owner_type ?? "user",
-    billing_owner_user_id: row.billing_owner_user_id ?? userId,
-    billing_org_id: row.billing_org_id ?? null,
-    stripe_customer_id: row.stripe_customer_id ?? null,
-    created_at: row.created_at ?? now,
-    updated_at: now,
-    last_verified_at: row.last_verified_at ?? now,
-  }))
-
-  const { error: upsertError } = await admin
-    .from("sdk_tenant_databases")
-    .upsert(payload, { onConflict: "api_key_hash,tenant_id" })
-
-  if (upsertError) {
-    throw new Error(`Failed to copy tenant mappings for key rotation: ${upsertError.message}`)
-  }
-
-  return { copied: rows.length }
-}
-
-async function cleanupOldTenantMappingsForKeyRotation(
-  admin: ReturnType<typeof createAdminClient>,
-  previousApiKeyHash: string
-): Promise<void> {
-  if (!previousApiKeyHash) return
-
-  const { error } = await admin
-    .from("sdk_tenant_databases")
-    .delete()
-    .eq("api_key_hash", previousApiKeyHash)
-
-  if (error) {
-    throw new Error(`Failed to cleanup old tenant mappings: ${error.message}`)
-  }
 }
 
 // GET - Get current API key
@@ -252,28 +131,6 @@ export async function POST(request: Request): Promise<Response> {
   const createdAt = new Date().toISOString()
 
   const admin = createAdminClient()
-  const { data: existingUser, error: existingUserError } = await admin
-    .from("users")
-    .select("mcp_api_key_hash")
-    .eq("id", user.id)
-    .single()
-
-  if (existingUserError) {
-    console.error("Failed to load existing API key metadata:", existingUserError)
-    return legacyJson({ error: "Failed to load existing API key metadata" }, { status: 500 })
-  }
-
-  const previousApiKeyHash = existingUser?.mcp_api_key_hash as string | null
-
-  let copiedTenantMappings = 0
-  try {
-    const { copied } = await cloneTenantMappingsForKeyRotation(admin, user.id, previousApiKeyHash ?? "", apiKeyHash)
-    copiedTenantMappings = copied
-  } catch (error) {
-    console.error("Failed to remap tenant mappings for key rotation:", error)
-    return legacyJson({ error: "Failed to rotate key due to tenant mapping remap failure" }, { status: 500 })
-  }
-
   const { error } = await admin
     .from("users")
     .update({
@@ -287,24 +144,7 @@ export async function POST(request: Request): Promise<Response> {
     .eq("id", user.id)
 
   if (error) {
-    if (copiedTenantMappings > 0) {
-      try {
-        await cleanupOldTenantMappingsForKeyRotation(admin, apiKeyHash)
-      } catch (rollbackError) {
-        console.error("Failed to rollback tenant mappings after key rotation failure:", rollbackError)
-      }
-    }
-
     return legacyJson({ error: "Failed to generate key" }, { status: 500 })
-  }
-
-  if (previousApiKeyHash) {
-    try {
-      await cleanupOldTenantMappingsForKeyRotation(admin, previousApiKeyHash)
-    } catch (cleanupError) {
-      // Non-fatal: new key is already active and mapped.
-      console.error("Failed to cleanup old tenant mappings after key rotation:", cleanupError)
-    }
   }
 
   // Return the full key (only time it's shown)
@@ -332,18 +172,6 @@ export async function DELETE(): Promise<Response> {
   if (rateLimited) return applyLegacyHeaders(rateLimited)
 
   const admin = createAdminClient()
-  const { data: existingUser, error: existingUserError } = await admin
-    .from("users")
-    .select("mcp_api_key_hash")
-    .eq("id", user.id)
-    .single()
-
-  if (existingUserError) {
-    console.error("Failed to load existing API key metadata for revoke:", existingUserError)
-    return legacyJson({ error: "Failed to load existing API key metadata" }, { status: 500 })
-  }
-
-  const previousApiKeyHash = existingUser?.mcp_api_key_hash as string | null
 
   const { error } = await admin
     .from("users")
@@ -359,15 +187,6 @@ export async function DELETE(): Promise<Response> {
 
   if (error) {
     return legacyJson({ error: "Failed to revoke key" }, { status: 500 })
-  }
-
-  if (previousApiKeyHash) {
-    try {
-      await cleanupOldTenantMappingsForKeyRotation(admin, previousApiKeyHash)
-    } catch (cleanupError) {
-      // Non-fatal: the API key has already been revoked.
-      console.error("Failed to cleanup tenant mappings after key revoke:", cleanupError)
-    }
   }
 
   return legacyJson({ ok: true })

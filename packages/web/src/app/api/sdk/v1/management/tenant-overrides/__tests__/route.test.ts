@@ -7,6 +7,7 @@ const {
   mockAuthenticateApiKey,
   mockAdminFrom,
   mockEnforceSdkProjectProvisionLimit,
+  mockResolveSdkProjectBillingContext,
   mockCountActiveProjectsForBillingContext,
   mockRecordGrowthProjectMeterEvent,
 } = vi.hoisted(() => ({
@@ -16,6 +17,7 @@ const {
   mockAuthenticateApiKey: vi.fn(),
   mockAdminFrom: vi.fn(),
   mockEnforceSdkProjectProvisionLimit: vi.fn(),
+  mockResolveSdkProjectBillingContext: vi.fn(),
   mockCountActiveProjectsForBillingContext: vi.fn(),
   mockRecordGrowthProjectMeterEvent: vi.fn(),
 }))
@@ -38,6 +40,11 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/sdk-project-billing", () => ({
   enforceSdkProjectProvisionLimit: mockEnforceSdkProjectProvisionLimit,
+  resolveSdkProjectBillingContext: mockResolveSdkProjectBillingContext,
+  buildSdkTenantOwnerScopeKey: vi.fn(
+    (input: { ownerType: "user" | "organization"; ownerUserId: string; orgId: string | null }) =>
+      input.ownerType === "organization" && input.orgId ? `org:${input.orgId}` : `user:${input.ownerUserId}`
+  ),
   countActiveProjectsForBillingContext: mockCountActiveProjectsForBillingContext,
   recordGrowthProjectMeterEvent: mockRecordGrowthProjectMeterEvent,
 }))
@@ -84,12 +91,24 @@ describe("/api/sdk/v1/management/tenant-overrides", () => {
         ownerType: "user",
         ownerUserId: "user-1",
         orgId: null,
+        ownerScopeKey: "user:user-1",
         stripeCustomerId: "cus_123",
         includedProjects: 500,
         overageUsdPerProject: 0.05,
         maxProjectsPerMonth: null,
       },
       activeProjectCount: 1,
+    })
+    mockResolveSdkProjectBillingContext.mockResolvedValue({
+      plan: "growth",
+      ownerType: "user",
+      ownerUserId: "user-1",
+      orgId: null,
+      ownerScopeKey: "user:user-1",
+      stripeCustomerId: "cus_123",
+      includedProjects: 500,
+      overageUsdPerProject: 0.05,
+      maxProjectsPerMonth: null,
     })
     mockCountActiveProjectsForBillingContext.mockResolvedValue(1)
     mockRecordGrowthProjectMeterEvent.mockResolvedValue(undefined)

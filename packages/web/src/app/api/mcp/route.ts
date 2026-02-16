@@ -298,7 +298,9 @@ export async function POST(request: NextRequest): Promise<Response> {
 
           let toolTurso = turso
           if (tenantId) {
-            toolTurso = await resolveTenantTurso(apiKeyHash as string, tenantId)
+            toolTurso = await resolveTenantTurso(apiKeyHash as string, tenantId, {
+              ownerUserId,
+            })
           } else if (projectId) {
             const admin = createAdminClient()
             const context = await resolveActiveMemoryContext(admin, ownerUserId, {

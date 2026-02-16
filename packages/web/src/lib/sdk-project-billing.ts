@@ -33,10 +33,22 @@ export interface SdkProjectBillingContext {
   ownerType: "user" | "organization"
   ownerUserId: string
   orgId: string | null
+  ownerScopeKey: string
   stripeCustomerId: string | null
   includedProjects: number
   overageUsdPerProject: number
   maxProjectsPerMonth: number | null
+}
+
+export function buildSdkTenantOwnerScopeKey(input: {
+  ownerType: "user" | "organization"
+  ownerUserId: string
+  orgId: string | null
+}): string {
+  if (input.ownerType === "organization" && input.orgId) {
+    return `org:${input.orgId}`
+  }
+  return `user:${input.ownerUserId}`
 }
 
 function isDuplicateKeyError(error: unknown): boolean {
@@ -136,6 +148,11 @@ export async function resolveSdkProjectBillingContext(
           ownerType: "organization",
           ownerUserId: userId,
           orgId: org.id,
+          ownerScopeKey: buildSdkTenantOwnerScopeKey({
+            ownerType: "organization",
+            ownerUserId: userId,
+            orgId: org.id,
+          }),
           stripeCustomerId: org.stripe_customer_id ?? user.stripe_customer_id,
           includedProjects: GROWTH_INCLUDED_PROJECTS_PER_MONTH,
           overageUsdPerProject: GROWTH_OVERAGE_USD_PER_PROJECT,
@@ -150,6 +167,11 @@ export async function resolveSdkProjectBillingContext(
     ownerType: "user",
     ownerUserId: userId,
     orgId: null,
+    ownerScopeKey: buildSdkTenantOwnerScopeKey({
+      ownerType: "user",
+      ownerUserId: userId,
+      orgId: null,
+    }),
     stripeCustomerId: user.stripe_customer_id,
     includedProjects: GROWTH_INCLUDED_PROJECTS_PER_MONTH,
     overageUsdPerProject: GROWTH_OVERAGE_USD_PER_PROJECT,
@@ -157,15 +179,15 @@ export async function resolveSdkProjectBillingContext(
   }
 }
 
-async function countActiveProjectsByApiKey(admin: AdminClient, apiKeyHash: string): Promise<number> {
+async function countActiveProjectsByOwnerScope(admin: AdminClient, ownerScopeKey: string): Promise<number> {
   const { count, error } = await admin
     .from("sdk_tenant_databases")
     .select("*", { count: "exact", head: true })
-    .eq("api_key_hash", apiKeyHash)
+    .eq("owner_scope_key", ownerScopeKey)
     .neq("status", "disabled")
 
   if (error) {
-    console.error("SDK billing context: failed to count active projects by API key", error)
+    console.error("SDK billing context: failed to count active projects by owner scope", error)
     return 0
   }
 
@@ -174,11 +196,11 @@ async function countActiveProjectsByApiKey(admin: AdminClient, apiKeyHash: strin
 
 export async function countActiveProjectsForBillingContext(
   admin: AdminClient,
-  apiKeyHash: string,
+  ownerScopeKey: string,
   stripeCustomerId: string | null
 ): Promise<number> {
   if (!stripeCustomerId) {
-    return countActiveProjectsByApiKey(admin, apiKeyHash)
+    return countActiveProjectsByOwnerScope(admin, ownerScopeKey)
   }
 
   const byCustomer = await admin
@@ -189,7 +211,7 @@ export async function countActiveProjectsForBillingContext(
 
   if (byCustomer.error) {
     if (isMissingColumnError(byCustomer.error, "stripe_customer_id")) {
-      return countActiveProjectsByApiKey(admin, apiKeyHash)
+      return countActiveProjectsByOwnerScope(admin, ownerScopeKey)
     }
 
     console.error("SDK billing context: failed to count active projects by customer", byCustomer.error)
@@ -202,7 +224,6 @@ export async function countActiveProjectsForBillingContext(
 export async function enforceSdkProjectProvisionLimit(input: {
   admin: AdminClient
   userId: string
-  apiKeyHash: string
 }): Promise<
   | { ok: true; billing: SdkProjectBillingContext; activeProjectCount: number }
   | { ok: false; status: number; code: string; message: string }
@@ -237,7 +258,7 @@ export async function enforceSdkProjectProvisionLimit(input: {
 
   const activeProjectCount = await countActiveProjectsForBillingContext(
     input.admin,
-    input.apiKeyHash,
+    billing.ownerScopeKey,
     billing.stripeCustomerId
   )
 
