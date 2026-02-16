@@ -4,6 +4,12 @@ import { NextResponse } from "next/server"
 import { apiRateLimit, checkRateLimit } from "@/lib/rate-limit"
 import { parseBody, updateOrgSchema } from "@/lib/validations"
 import { normalizeOrgJoinDomain } from "@/lib/org-domain"
+import {
+  isPaidWorkspacePlan,
+  normalizeActiveOrganizationPlan,
+  normalizeWorkspacePlan,
+  type WorkspacePlan,
+} from "@/lib/workspace"
 
 function isMissingColumnError(error: unknown, columnName: string): boolean {
   const message =
@@ -16,6 +22,32 @@ function isMissingColumnError(error: unknown, columnName: string): boolean {
     message.includes(columnName.toLowerCase()) &&
     message.includes("does not exist")
   )
+}
+
+type OrgSubscriptionStatus = "active" | "past_due" | "cancelled" | null
+
+interface OrganizationDomainAutoJoinPlanRow {
+  plan: string | null
+  subscription_status: OrgSubscriptionStatus
+  stripe_subscription_id: string | null
+}
+
+function resolveOrganizationDomainAutoJoinPlan(
+  org: OrganizationDomainAutoJoinPlanRow
+): WorkspacePlan {
+  if (org.subscription_status === "past_due") return "past_due"
+  if (org.subscription_status === "cancelled") return "free"
+
+  if (org.subscription_status === "active") {
+    if (org.plan) return normalizeActiveOrganizationPlan(org.plan)
+    if (org.stripe_subscription_id) return "team"
+  }
+
+  return normalizeWorkspacePlan(org.plan)
+}
+
+function supportsDomainAutoJoinPlan(org: OrganizationDomainAutoJoinPlanRow): boolean {
+  return isPaidWorkspacePlan(resolveOrganizationDomainAutoJoinPlan(org))
 }
 
 // GET /api/orgs/[orgId] - Get organization details
@@ -150,7 +182,9 @@ export async function PATCH(
   if (updatesDomainSettings) {
     const { data: currentOrg, error: currentOrgError } = await supabase
       .from("organizations")
-      .select("domain_auto_join_enabled, domain_auto_join_domain")
+      .select(
+        "plan, subscription_status, stripe_subscription_id, domain_auto_join_enabled, domain_auto_join_domain"
+      )
       .eq("id", orgId)
       .single()
 
@@ -169,6 +203,25 @@ export async function PATCH(
       return NextResponse.json({ error: "Organization not found" }, { status: 404 })
     }
 
+    const currentDomain = typeof currentOrg.domain_auto_join_domain === "string"
+      ? currentOrg.domain_auto_join_domain.trim().toLowerCase() || null
+      : null
+    const requestedDomain =
+      typeof updates.domain_auto_join_domain === "string"
+        ? updates.domain_auto_join_domain.trim().toLowerCase() || null
+        : updates.domain_auto_join_domain === null
+          ? null
+          : currentDomain
+    const domainChanged = requestedDomain !== currentDomain
+
+    // Saving a domain should activate auto-join in the same action.
+    if (domainChanged && typeof requestedDomain === "string" && requestedDomain.length > 0) {
+      updates.domain_auto_join_enabled = true
+    }
+    if (domainChanged && requestedDomain === null) {
+      updates.domain_auto_join_enabled = false
+    }
+
     const finalEnabled =
       typeof updates.domain_auto_join_enabled === "boolean"
         ? updates.domain_auto_join_enabled
@@ -182,6 +235,17 @@ export async function PATCH(
       return NextResponse.json(
         { error: "Set a domain before enabling domain auto-join" },
         { status: 400 },
+      )
+    }
+
+    if (finalEnabled && !supportsDomainAutoJoinPlan(currentOrg)) {
+      return NextResponse.json(
+        {
+          error: "Domain auto-join requires the Team plan. Upgrade to continue.",
+          code: "TEAM_PLAN_REQUIRED",
+          upgradeUrl: "/app/upgrade?plan=team",
+        },
+        { status: 402 },
       )
     }
   }

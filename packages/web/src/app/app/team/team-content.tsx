@@ -65,6 +65,7 @@ export function TeamContent({
   const [domainAutoJoinDomain, setDomainAutoJoinDomain] = useState("")
   const [domainSettingsError, setDomainSettingsError] = useState<string | null>(null)
   const [domainSettingsSuccess, setDomainSettingsSuccess] = useState<string | null>(null)
+  const [domainSettingsUpgradeUrl, setDomainSettingsUpgradeUrl] = useState<string | null>(null)
   const [captureSettings, setCaptureSettings] = useState<GithubCaptureSettings | null>(null)
   const [savingCaptureSettings, setSavingCaptureSettings] = useState(false)
   const [captureSettingsError, setCaptureSettingsError] = useState<string | null>(null)
@@ -277,6 +278,7 @@ export function TeamContent({
     setDomainAutoJoinDomain(selectedOrgRecordDomain ?? "")
     setDomainSettingsError(null)
     setDomainSettingsSuccess(null)
+    setDomainSettingsUpgradeUrl(null)
   }, [selectedOrgRecordId, selectedOrgRecordDomainEnabled, selectedOrgRecordDomain])
 
   useEffect(() => {
@@ -378,27 +380,44 @@ export function TeamContent({
   async function saveDomainAutoJoinSettings() {
     if (!selectedOrgId || !selectedOrgRecord) return
 
+    const nextDomain = domainAutoJoinDomain.trim()
+    const currentDomain = (selectedOrgRecord.domain_auto_join_domain ?? "").trim().toLowerCase()
+    const nextDomainNormalized = nextDomain.toLowerCase()
+    const domainChanged = nextDomainNormalized !== currentDomain
+    const nextEnabled =
+      domainChanged && nextDomain.length > 0
+        ? true
+        : domainChanged && nextDomain.length === 0
+          ? false
+          : domainAutoJoinEnabled
+
     setSavingDomainSettings(true)
     setDomainSettingsError(null)
     setDomainSettingsSuccess(null)
+    setDomainSettingsUpgradeUrl(null)
 
     try {
       const res = await fetch(`/api/orgs/${selectedOrgId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          domain_auto_join_enabled: domainAutoJoinEnabled,
-          domain_auto_join_domain: domainAutoJoinDomain.trim() || null,
+          domain_auto_join_enabled: nextEnabled,
+          domain_auto_join_domain: nextDomain || null,
         }),
       })
 
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setDomainSettingsError(data.error || "Failed to update domain auto-join settings")
+        if (res.status === 402 && typeof data.upgradeUrl === "string") {
+          setDomainSettingsUpgradeUrl(data.upgradeUrl)
+        }
         return
       }
 
       setOrgDetails(data.organization ?? null)
+      setDomainAutoJoinEnabled(Boolean(data.organization?.domain_auto_join_enabled ?? nextEnabled))
+      setDomainAutoJoinDomain(data.organization?.domain_auto_join_domain ?? (nextDomain || ""))
       setDomainSettingsSuccess("Domain auto-join settings updated.")
       if (selectedOrgId) {
         fetchOrgData(selectedOrgId, { includeAudit: isAdmin, includeCaptureSettings: isAdmin })
@@ -688,6 +707,18 @@ export function TeamContent({
                   ) : null}
                   {domainSettingsSuccess ? (
                     <p className="text-xs text-emerald-400">{domainSettingsSuccess}</p>
+                  ) : null}
+
+                  {domainSettingsUpgradeUrl ? (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => router.push(domainSettingsUpgradeUrl)}
+                        className="px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-xs font-medium hover:bg-primary/20 transition-colors"
+                      >
+                        Upgrade to Team
+                      </button>
+                    </div>
                   ) : null}
 
                   <div className="flex justify-end">

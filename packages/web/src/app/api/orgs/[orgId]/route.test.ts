@@ -165,6 +165,7 @@ describe("/api/orgs/[orgId] PATCH", () => {
             eq: vi.fn().mockReturnValue({
               single: vi.fn().mockResolvedValue({
                 data: {
+                  plan: "team",
                   domain_auto_join_enabled: false,
                   domain_auto_join_domain: null,
                 },
@@ -228,6 +229,7 @@ describe("/api/orgs/[orgId] PATCH", () => {
             eq: vi.fn().mockReturnValue({
               single: vi.fn().mockResolvedValue({
                 data: {
+                  plan: "team",
                   domain_auto_join_enabled: false,
                   domain_auto_join_domain: null,
                 },
@@ -261,6 +263,128 @@ describe("/api/orgs/[orgId] PATCH", () => {
         domain_auto_join_domain: "webrenew.io",
       }),
     )
+  })
+
+  it("activates auto-join when saving a new domain even if enabled=false was sent", async () => {
+    const mockUpdate = vi.fn(() => ({
+      eq: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({
+            data: {
+              id: "org-1",
+              domain_auto_join_enabled: true,
+              domain_auto_join_domain: "webrenew.io",
+            },
+            error: null,
+          }),
+        }),
+      }),
+    }))
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "org_members") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { role: "owner" }, error: null }),
+              }),
+            }),
+          })),
+        }
+      }
+
+      if (table === "organizations") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: {
+                  plan: "team",
+                  domain_auto_join_enabled: false,
+                  domain_auto_join_domain: null,
+                },
+                error: null,
+              }),
+            }),
+          })),
+          update: mockUpdate,
+        }
+      }
+
+      return {}
+    })
+
+    const response = await PATCH(
+      new Request("https://example.com/api/orgs/org-1", {
+        method: "PATCH",
+        body: JSON.stringify({
+          domain_auto_join_enabled: false,
+          domain_auto_join_domain: "webrenew.io",
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+      { params: Promise.resolve({ orgId: "org-1" }) },
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        domain_auto_join_enabled: true,
+        domain_auto_join_domain: "webrenew.io",
+      }),
+    )
+  })
+
+  it("returns upgrade-required when enabling domain auto-join on free plan", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "org_members") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { role: "owner" }, error: null }),
+              }),
+            }),
+          })),
+        }
+      }
+
+      if (table === "organizations") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: {
+                  plan: "free",
+                  domain_auto_join_enabled: false,
+                  domain_auto_join_domain: null,
+                },
+                error: null,
+              }),
+            }),
+          })),
+        }
+      }
+
+      return {}
+    })
+
+    const response = await PATCH(
+      new Request("https://example.com/api/orgs/org-1", {
+        method: "PATCH",
+        body: JSON.stringify({ domain_auto_join_domain: "webrenew.io" }),
+        headers: { "content-type": "application/json" },
+      }),
+      { params: Promise.resolve({ orgId: "org-1" }) },
+    )
+
+    expect(response.status).toBe(402)
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Domain auto-join requires the Team plan. Upgrade to continue.",
+      code: "TEAM_PLAN_REQUIRED",
+      upgradeUrl: "/app/upgrade?plan=team",
+    })
   })
 })
 
