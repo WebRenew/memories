@@ -18,7 +18,12 @@ export function resolveLegacyRouteAuthMode(request: Request): LegacyRouteAuthMod
   if (authorization?.startsWith("Bearer ")) {
     return "api_key"
   }
-  return "session"
+
+  if (request.headers.get("cookie")) {
+    return "session"
+  }
+
+  return "unknown"
 }
 
 export const LEGACY_MCP_TENANTS_ENDPOINT = "/api/mcp/tenants"
