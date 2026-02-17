@@ -1,12 +1,21 @@
 import { describe, expect, it, vi } from "vitest"
 
-const { mockKeyGet, mockKeyPost, mockKeyDelete, mockTenantsGet, mockTenantsPost, mockTenantsDelete } = vi.hoisted(() => ({
+const {
+  mockKeyGet,
+  mockKeyPost,
+  mockKeyDelete,
+  mockTenantOverridesGet,
+  mockTenantOverridesPost,
+  mockTenantOverridesDelete,
+  mockRecordLegacyRouteUsageEvent,
+} = vi.hoisted(() => ({
   mockKeyGet: vi.fn(),
   mockKeyPost: vi.fn(),
   mockKeyDelete: vi.fn(),
-  mockTenantsGet: vi.fn(),
-  mockTenantsPost: vi.fn(),
-  mockTenantsDelete: vi.fn(),
+  mockTenantOverridesGet: vi.fn(),
+  mockTenantOverridesPost: vi.fn(),
+  mockTenantOverridesDelete: vi.fn(),
+  mockRecordLegacyRouteUsageEvent: vi.fn(),
 }))
 
 vi.mock("@/app/api/mcp/key/route", () => ({
@@ -15,10 +24,14 @@ vi.mock("@/app/api/mcp/key/route", () => ({
   DELETE: mockKeyDelete,
 }))
 
-vi.mock("@/app/api/mcp/tenants/route", () => ({
-  GET: mockTenantsGet,
-  POST: mockTenantsPost,
-  DELETE: mockTenantsDelete,
+vi.mock("@/app/api/sdk/v1/management/tenant-overrides/route", () => ({
+  GET: mockTenantOverridesGet,
+  POST: mockTenantOverridesPost,
+  DELETE: mockTenantOverridesDelete,
+}))
+
+vi.mock("@/lib/legacy-route-telemetry", () => ({
+  recordLegacyRouteUsageEvent: mockRecordLegacyRouteUsageEvent,
 }))
 
 import { DELETE as keysDelete, GET as keysGet, POST as keysPost } from "../keys/route"
@@ -33,6 +46,46 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { "content-type": "application/json" },
   })
+}
+
+function sdkSuccessResponse(data: unknown, status = 200): Response {
+  return jsonResponse(
+    {
+      ok: true,
+      data,
+      error: null,
+      meta: {
+        endpoint: "/api/sdk/v1/management/tenant-overrides",
+        requestId: "legacy-test-id",
+        timestamp: "2026-02-17T00:00:00.000Z",
+        version: "2026-02-11",
+      },
+    },
+    status
+  )
+}
+
+function sdkErrorResponse(status: number, message: string, code = "TENANT_OVERRIDE_ERROR"): Response {
+  return jsonResponse(
+    {
+      ok: false,
+      data: null,
+      error: {
+        type: "validation_error",
+        code,
+        message,
+        status,
+        retryable: false,
+      },
+      meta: {
+        endpoint: "/api/sdk/v1/management/tenant-overrides",
+        requestId: "legacy-test-id",
+        timestamp: "2026-02-17T00:00:00.000Z",
+        version: "2026-02-11",
+      },
+    },
+    status
+  )
 }
 
 function normalizeEnvelope(body: Record<string, unknown>) {
@@ -86,8 +139,8 @@ describe("/api/sdk/v1/management/keys", () => {
 
 describe("/api/sdk/v1/management/tenants", () => {
   it("wraps successful tenants GET response in sdk envelope", async () => {
-    mockTenantsGet.mockResolvedValue(
-      jsonResponse({
+    mockTenantOverridesGet.mockResolvedValue(
+      sdkSuccessResponse({
         tenantDatabases: [{ tenantId: "tenant-a", status: "ready" }],
         count: 1,
       })
@@ -102,18 +155,18 @@ describe("/api/sdk/v1/management/tenants", () => {
   })
 
   it("wraps failed tenant POST response in typed sdk error envelope", async () => {
-    mockTenantsPost.mockResolvedValue(jsonResponse({ error: "tenantId is required" }, 400))
+    mockTenantOverridesPost.mockResolvedValue(sdkErrorResponse(400, "tenantId is required", "INVALID_REQUEST"))
 
     const response = await tenantsPost(new Request("https://example.com", { method: "POST", body: "{}" }))
     expect(response.status).toBe(400)
     const body = await response.json()
     expect(body.ok).toBe(false)
     expect(body.error.type).toBe("validation_error")
-    expect(body.error.code).toBe("LEGACY_MCP_TENANTS_ERROR")
+    expect(body.error.code).toBe("INVALID_REQUEST")
   })
 
   it("forwards delete response", async () => {
-    mockTenantsDelete.mockResolvedValue(jsonResponse({ ok: true }, 200))
+    mockTenantOverridesDelete.mockResolvedValue(sdkSuccessResponse({ ok: true }, 200))
 
     const response = await tenantsDelete(new Request("https://example.com?tenantId=t1", { method: "DELETE" }))
     expect(response.status).toBe(200)
@@ -151,7 +204,7 @@ describe("/api/sdk/v1/management/tenants", () => {
   })
 
   it("matches management tenants validation error envelope contract snapshot", async () => {
-    mockTenantsPost.mockResolvedValue(jsonResponse({ error: "tenantId is required" }, 400))
+    mockTenantOverridesPost.mockResolvedValue(sdkErrorResponse(400, "tenantId is required", "INVALID_REQUEST"))
 
     const response = await tenantsPost(new Request("https://example.com", { method: "POST", body: "{}" }))
     const body = (await response.json()) as Record<string, unknown>
@@ -160,10 +213,7 @@ describe("/api/sdk/v1/management/tenants", () => {
       {
         "data": null,
         "error": {
-          "code": "LEGACY_MCP_TENANTS_ERROR",
-          "details": {
-            "error": "tenantId is required",
-          },
+          "code": "INVALID_REQUEST",
           "message": "tenantId is required",
           "retryable": false,
           "status": 400,

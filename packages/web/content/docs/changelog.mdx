@@ -3,6 +3,14 @@ title: Changelog
 description: Product and documentation updates.
 ---
 
+## February 16, 2026
+
+- Deprecated legacy tenant management routes: `/api/mcp/tenants` and `/api/sdk/v1/management/tenants`.
+- Moved both legacy tenant paths to compatibility wrappers over `/api/sdk/v1/management/tenant-overrides`.
+- Added consistent deprecation headers (`Deprecation`, `Sunset`, `Link`, `Warning`) for legacy tenant route responses.
+- Added server-side legacy route telemetry table (`legacy_route_usage_events`) to track migration progress to zero traffic before removal.
+- Published sunset timeline and migration guide at `/docs/sdk/legacy-tenant-route-sunset`.
+
 ## February 14, 2026
 
 - Released `@memories.sh/cli` v0.7.6 and `@memories.sh/core` v0.3.2.

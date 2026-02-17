@@ -1,47 +1,127 @@
+import { DELETE as overridesDelete, GET as overridesGet, POST as overridesPost } from "@/app/api/sdk/v1/management/tenant-overrides/route"
+import { type LegacyRouteAuthMode, recordLegacyRouteUsageEvent } from "@/lib/legacy-route-telemetry"
 import {
-  DELETE as legacyDelete,
-  GET as legacyGet,
-  POST as legacyPost,
-} from "@/app/api/mcp/tenants/route"
+  applyLegacyTenantHeaders,
+  copySelectedHeaders,
+  LEGACY_MANAGEMENT_TENANTS_ENDPOINT,
+  LEGACY_TENANT_PASSTHROUGH_HEADERS,
+  LEGACY_TENANT_SUCCESSOR_ENDPOINT,
+} from "@/lib/sdk-api/legacy-tenant-route-policy"
 import { legacyErrorResponse, successResponse } from "@/lib/sdk-api/runtime"
+import { NextRequest, NextResponse } from "next/server"
 
-const ENDPOINT = "/api/sdk/v1/management/tenants"
+type LegacyMethod = "GET" | "POST" | "DELETE"
 
-async function wrapLegacyResponse(requestId: string, response: Response) {
-  let body: unknown = null
-  try {
-    body = await response.json()
-  } catch {
-    body = null
+type SdkEnvelopeLike = {
+  ok?: boolean
+  data?: unknown
+  error?: {
+    message?: string
+    code?: string
+    details?: Record<string, unknown>
+  } | null
+}
+
+function resolveAuthMode(request: Request): LegacyRouteAuthMode {
+  const authorization = request.headers.get("authorization")
+  if (authorization?.startsWith("Bearer ")) {
+    return "api_key"
+  }
+  return "session"
+}
+
+function logDeprecatedAccess(method: LegacyMethod, status: number, authMode: LegacyRouteAuthMode): void {
+  console.warn(
+    `[DEPRECATED_ENDPOINT] ${LEGACY_MANAGEMENT_TENANTS_ENDPOINT} ${method} status=${status} authMode=${authMode} -> use ${LEGACY_TENANT_SUCCESSOR_ENDPOINT}`
+  )
+}
+
+async function wrapLegacyResponse(
+  requestId: string,
+  method: LegacyMethod,
+  request: Request,
+  response: Response
+): Promise<NextResponse> {
+  const payload = await response.json().catch(() => null)
+  const authMode = resolveAuthMode(request)
+
+  let wrapped: NextResponse
+  if (payload && typeof payload === "object") {
+    const envelope = payload as SdkEnvelopeLike
+    if (envelope.ok === true) {
+      wrapped = successResponse(LEGACY_MANAGEMENT_TENANTS_ENDPOINT, requestId, envelope.data, response.status)
+    } else if (envelope.ok === false) {
+      const status = response.status
+      const message =
+        envelope.error?.message ??
+        (status >= 500
+          ? "Legacy endpoint failed due to an internal error"
+          : `Legacy endpoint failed with status ${status}`)
+      wrapped = legacyErrorResponse(
+        LEGACY_MANAGEMENT_TENANTS_ENDPOINT,
+        requestId,
+        status,
+        message,
+        envelope.error?.code ?? "LEGACY_TENANT_ROUTE_ERROR",
+        envelope.error?.details
+      )
+    } else if (response.ok) {
+      wrapped = successResponse(LEGACY_MANAGEMENT_TENANTS_ENDPOINT, requestId, payload, response.status)
+    } else {
+      wrapped = legacyErrorResponse(
+        LEGACY_MANAGEMENT_TENANTS_ENDPOINT,
+        requestId,
+        response.status,
+        `Legacy endpoint failed with status ${response.status}`,
+        "LEGACY_TENANT_ROUTE_ERROR",
+        payload as Record<string, unknown>
+      )
+    }
+  } else if (response.ok) {
+    wrapped = successResponse(LEGACY_MANAGEMENT_TENANTS_ENDPOINT, requestId, null, response.status)
+  } else {
+    wrapped = legacyErrorResponse(
+      LEGACY_MANAGEMENT_TENANTS_ENDPOINT,
+      requestId,
+      response.status,
+      `Legacy endpoint failed with status ${response.status}`,
+      "LEGACY_TENANT_ROUTE_ERROR"
+    )
   }
 
-  if (response.ok) {
-    return successResponse(ENDPOINT, requestId, body, response.status)
-  }
+  copySelectedHeaders(response.headers, wrapped.headers, LEGACY_TENANT_PASSTHROUGH_HEADERS)
+  applyLegacyTenantHeaders(wrapped)
 
-  const details = body && typeof body === "object" ? (body as Record<string, unknown>) : undefined
-  const message =
-    (details?.error as string | undefined) ||
-    (details?.message as string | undefined) ||
-    `Legacy endpoint failed with status ${response.status}`
+  await recordLegacyRouteUsageEvent({
+    route: LEGACY_MANAGEMENT_TENANTS_ENDPOINT,
+    successorRoute: LEGACY_TENANT_SUCCESSOR_ENDPOINT,
+    method,
+    status: wrapped.status,
+    requestId,
+    authMode,
+    metadata: {
+      wrappedEndpoint: LEGACY_TENANT_SUCCESSOR_ENDPOINT,
+    },
+  })
+  logDeprecatedAccess(method, wrapped.status, authMode)
 
-  return legacyErrorResponse(ENDPOINT, requestId, response.status, message, "LEGACY_MCP_TENANTS_ERROR", details)
+  return wrapped
 }
 
 export async function GET(request: Request): Promise<Response> {
   const requestId = crypto.randomUUID()
-  const response = await legacyGet(request)
-  return wrapLegacyResponse(requestId, response)
+  const response = await overridesGet(request as NextRequest)
+  return wrapLegacyResponse(requestId, "GET", request, response)
 }
 
 export async function POST(request: Request): Promise<Response> {
   const requestId = crypto.randomUUID()
-  const response = await legacyPost(request)
-  return wrapLegacyResponse(requestId, response)
+  const response = await overridesPost(request as NextRequest)
+  return wrapLegacyResponse(requestId, "POST", request, response)
 }
 
 export async function DELETE(request: Request): Promise<Response> {
   const requestId = crypto.randomUUID()
-  const response = await legacyDelete(request)
-  return wrapLegacyResponse(requestId, response)
+  const response = await overridesDelete(request as NextRequest)
+  return wrapLegacyResponse(requestId, "DELETE", request, response)
 }
