@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { NextResponse } from "next/server"
 import {
-  LEGACY_MCP_TENANTS_ENDPOINT,
+  LEGACY_MANAGEMENT_TENANTS_ENDPOINT,
   LEGACY_TENANT_SUCCESSOR_ENDPOINT,
   LEGACY_TENANT_SUNSET,
 } from "@/lib/sdk-api/legacy-tenant-route-policy"
@@ -70,13 +70,13 @@ function sdkError(status: number, message: string, code = "TENANT_OVERRIDE_ERROR
   )
 }
 
-describe("/api/mcp/tenants legacy compatibility wrapper", () => {
+describe("/api/sdk/v1/management/tenants legacy compatibility wrapper", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockRecordLegacyRouteUsageEvent.mockResolvedValue(undefined)
   })
 
-  it("unwraps SDK success payloads and adds deprecation headers", async () => {
+  it("returns SDK success envelope with legacy endpoint metadata and deprecation headers", async () => {
     mockOverridesGet.mockResolvedValue(
       sdkSuccess({
         tenantDatabases: [],
@@ -84,77 +84,70 @@ describe("/api/mcp/tenants legacy compatibility wrapper", () => {
       })
     )
 
-    const response = await GET(new Request("https://example.com/api/mcp/tenants") as never)
+    const response = await GET(new Request("https://example.com/api/sdk/v1/management/tenants") as never)
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(body).toEqual({
+    expect(body.ok).toBe(true)
+    expect(body.data).toEqual({
       tenantDatabases: [],
       count: 0,
     })
+    expect(body.meta.endpoint).toBe(LEGACY_MANAGEMENT_TENANTS_ENDPOINT)
     expect(response.headers.get("Deprecation")).toBe("true")
     expect(response.headers.get("Sunset")).toBe(LEGACY_TENANT_SUNSET)
     expect(response.headers.get("Link")).toBe(`<${LEGACY_TENANT_SUCCESSOR_ENDPOINT}>; rel="successor-version"`)
-    expect(response.headers.get("Warning")).toContain(LEGACY_TENANT_SUCCESSOR_ENDPOINT)
     expect(mockRecordLegacyRouteUsageEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        route: LEGACY_MCP_TENANTS_ENDPOINT,
+        route: LEGACY_MANAGEMENT_TENANTS_ENDPOINT,
         successorRoute: LEGACY_TENANT_SUCCESSOR_ENDPOINT,
         method: "GET",
         status: 200,
-        authMode: "unknown",
       })
     )
   })
 
-  it("maps SDK errors into legacy error payloads", async () => {
+  it("maps canonical errors into SDK error envelopes", async () => {
     mockOverridesPost.mockResolvedValue(sdkError(400, "tenantId is required", "INVALID_REQUEST"))
 
     const response = await POST(
-      new Request("https://example.com/api/mcp/tenants", {
+      new Request("https://example.com/api/sdk/v1/management/tenants", {
         method: "POST",
-        headers: {
-          authorization: "Bearer mem_key_123",
-          "content-type": "application/json",
-        },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({}),
       }) as never
     )
     const body = await response.json()
 
     expect(response.status).toBe(400)
-    expect(body).toEqual({
-      error: "tenantId is required",
-      code: "INVALID_REQUEST",
-    })
+    expect(body.ok).toBe(false)
+    expect(body.error.code).toBe("INVALID_REQUEST")
+    expect(body.error.message).toBe("tenantId is required")
     expect(mockRecordLegacyRouteUsageEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        route: LEGACY_MCP_TENANTS_ENDPOINT,
+        route: LEGACY_MANAGEMENT_TENANTS_ENDPOINT,
         method: "POST",
         status: 400,
-        authMode: "api_key",
       })
     )
   })
 
-  it("passes through rate limit headers from the canonical endpoint", async () => {
+  it("forwards rate limit headers from the canonical endpoint", async () => {
     const limited = sdkError(429, "Too many requests", "RATE_LIMITED")
-    limited.headers.set("Retry-After", "60")
-    limited.headers.set("X-RateLimit-Limit", "100")
+    limited.headers.set("Retry-After", "42")
+    limited.headers.set("X-RateLimit-Remaining", "0")
 
     mockOverridesDelete.mockResolvedValue(limited)
 
     const response = await DELETE(
-      new Request("https://example.com/api/mcp/tenants?tenantId=t1", {
+      new Request("https://example.com/api/sdk/v1/management/tenants?tenantId=t1", {
         method: "DELETE",
       }) as never
     )
-    const body = await response.json()
 
     expect(response.status).toBe(429)
-    expect(body.error).toBe("Too many requests")
-    expect(response.headers.get("Retry-After")).toBe("60")
-    expect(response.headers.get("X-RateLimit-Limit")).toBe("100")
+    expect(response.headers.get("Retry-After")).toBe("42")
+    expect(response.headers.get("X-RateLimit-Remaining")).toBe("0")
     expect(response.headers.get("Deprecation")).toBe("true")
   })
 })
