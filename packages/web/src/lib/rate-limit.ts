@@ -1,7 +1,6 @@
 import { Ratelimit } from "@upstash/ratelimit"
 import { Redis } from "@upstash/redis"
 import { NextResponse } from "next/server"
-import { isIP } from "node:net"
 import { getUpstashRedisConfig, parseBooleanFlag } from "@/lib/env"
 
 interface RateLimitResult {
@@ -205,5 +204,40 @@ function normalizeClientIpCandidate(value: string | null | undefined): string | 
   if (!value) return null
   const trimmed = value.trim()
   if (!trimmed) return null
-  return isIP(trimmed) ? trimmed : null
+  return isValidIpAddress(trimmed) ? trimmed : null
+}
+
+function isValidIpAddress(value: string): boolean {
+  return isValidIpv4(value) || isValidIpv6(value)
+}
+
+function isValidIpv4(value: string): boolean {
+  const parts = value.split(".")
+  if (parts.length !== 4) return false
+  for (const part of parts) {
+    if (!/^\d{1,3}$/.test(part)) return false
+    const parsed = Number.parseInt(part, 10)
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 255) return false
+    if (part.length > 1 && part.startsWith("0")) return false
+  }
+  return true
+}
+
+function isValidIpv6(value: string): boolean {
+  if (!value.includes(":")) return false
+  if (!/^[0-9a-fA-F:.]+$/.test(value)) return false
+
+  const doubleColonCount = (value.match(/::/g) ?? []).length
+  if (doubleColonCount > 1) return false
+
+  const parts = value.split(":")
+  if (parts.length < 3 || parts.length > 8) return false
+
+  for (const part of parts) {
+    if (part.length === 0) continue
+    if (part.length > 4) return false
+    if (!/^[0-9a-fA-F]{1,4}$/.test(part)) return false
+  }
+
+  return true
 }
