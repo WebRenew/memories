@@ -33,6 +33,8 @@ export type {
   ManagementTenantSource,
   ManagementTenantUpsertInput,
   ManagementTenantUpsertResult,
+  RetrievalStrategy,
+  LegacyContextStrategy,
   MemoryAddInput,
   MemoryEditInput,
   MemoryListOptions,
