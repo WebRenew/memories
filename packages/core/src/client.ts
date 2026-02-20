@@ -60,6 +60,7 @@ import {
   deriveSdkBaseUrl,
   messageFromEnvelope,
   normalizeContextInput,
+  normalizeContextStrategy,
   parseStructuredData,
   parseToolResult,
   pickMemoriesForMode,
@@ -67,7 +68,6 @@ import {
   stripTrailingSlash,
   toMcpContextStrategy,
   toClientError,
-  toSdkContextStrategy,
   toMemoryRecord,
   toSkillFileRecord,
   toTypedHttpError,
@@ -141,7 +141,6 @@ export class MemoriesClient {
       options: ContextGetOptions = {}
     ): Promise<ContextResult> => {
       const input = normalizeContextInput(inputOrQuery, options)
-      const strategy = toSdkContextStrategy(input.strategy)
       const rawScope = this.withDefaultScopeSdk({
         projectId: input.projectId,
         userId: input.userId,
@@ -156,7 +155,7 @@ export class MemoriesClient {
             includeRules: input.includeRules,
             includeSkillFiles: input.includeSkillFiles,
             mode: input.mode,
-            strategy,
+            strategy: input.strategy,
             graphDepth: input.graphDepth,
             graphLimit: input.graphLimit,
             scope: sdkScope,
@@ -235,7 +234,7 @@ export class MemoriesClient {
     },
 
     search: async (query: string, options: MemorySearchOptions = {}): Promise<MemoryRecord[]> => {
-      const strategy = options.strategy ? toSdkContextStrategy(options.strategy) : undefined
+      const strategy = options.strategy ? normalizeContextStrategy(options.strategy) : undefined
       const rawScope = this.withDefaultScopeSdk({ projectId: options.projectId })
       const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
       const result = this.transport === "sdk_http"

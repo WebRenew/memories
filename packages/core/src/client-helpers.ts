@@ -199,10 +199,6 @@ export function normalizeContextStrategy(strategy: unknown): NormalizedRetrieval
   return "lexical"
 }
 
-export function toSdkContextStrategy(strategy: unknown): NormalizedRetrievalStrategy {
-  return normalizeContextStrategy(strategy)
-}
-
 export function toMcpContextStrategy(strategy: unknown): "baseline" | "hybrid_graph" {
   const normalized = normalizeContextStrategy(strategy)
   return normalized === "hybrid" ? "hybrid_graph" : "baseline"
