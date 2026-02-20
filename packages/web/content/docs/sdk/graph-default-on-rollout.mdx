@@ -1,0 +1,62 @@
+---
+title: Graph Default-On Rollout
+description: SLOs, baseline gap-to-goal reporting, and rollout automation policy for hybrid graph retrieval.
+---
+
+This policy defines go/no-go criteria for moving from guarded rollout to default-on graph retrieval.
+
+## SLO Gate (Go/No-Go)
+
+Promotion to default-on requires all of the following:
+
+| Metric | Target | Minimum Sample |
+| --- | --- | --- |
+| Shadow executions (for canary promotion) | `>= 40` | `40` shadow executions |
+| Shadow avg graph candidates | `>= 1.0` | `40` shadow executions |
+| Shadow graph error rate | `<= 5%` | `40` shadow executions |
+| Hybrid request sample size | `>= 20` | `20` hybrid requests |
+| Canary-applied sample size | `>= 12` | `12` canary-applied requests |
+| Fallback rate | `<= 15%` | `20` hybrid requests |
+| Graph error fallback rate | `<= 5%` | `20` hybrid requests |
+| Expansion coverage | `>= 10%` | `12` canary-applied requests |
+
+Source of truth in code:
+
+- `/Users/tradecraft/dev/memories/packages/web/src/lib/memory-service/graph/rollout.ts`
+
+## Baseline Report + Gap To Goal
+
+Use `GET /api/sdk/v1/graph/rollout` and inspect `data.rolloutPlan.baseline`.
+
+Assumption: repository-only context has no attached production telemetry. Until a workspace report is collected, baseline values should be treated as zero-sample.
+
+Initial baseline snapshot (zero-sample assumption):
+
+| Metric | Current | Target | Gap |
+| --- | --- | --- | --- |
+| `shadow_executions` | `0` | `40` | `40` |
+| `hybrid_samples` | `0` | `20` | `20` |
+| `canary_samples` | `0` | `12` | `12` |
+| `fallback_rate` | `0` | `<= 0.15` | `0` |
+| `graph_error_rate` | `0` | `<= 0.05` | `0` |
+| `expansion_coverage` | `0` | `>= 0.10` | `0.10` |
+
+## Rollout Automation Policy
+
+`rolloutPlan` now emits:
+
+- `recommendedMode` (`off -> shadow`, then `shadow -> canary` when shadow gate passes)
+- `defaultBehaviorDecision` (`hold_lexical_default` or `enable_hybrid_default`)
+- `blockerCodes`
+- `autopilot` status (`enabled`, `applied`)
+
+Autopilot flag:
+
+- `GRAPH_ROLLOUT_AUTOPILOT_ENABLED=false` by default
+- when enabled, `GET /api/sdk/v1/graph/rollout` may auto-advance mode based on the plan
+
+## Default Behavior Decision
+
+Current decision in zero-sample state: `hold_lexical_default`.
+
+Reason: required hybrid/canary sample sizes are not met yet. Switch to default hybrid only after `rolloutPlan.readyForDefaultOn === true`.

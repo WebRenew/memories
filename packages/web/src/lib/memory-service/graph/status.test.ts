@@ -45,6 +45,8 @@ describe("getGraphStatusPayload", () => {
     expect(payload.counts.memoryLinks).toBe(0)
     expect(payload.qualityGate.status).toBe("insufficient_data")
     expect(payload.qualityGate.canaryBlocked).toBe(false)
+    expect(payload.rolloutPlan.defaultBehaviorDecision).toBe("hold_lexical_default")
+    expect(payload.rolloutPlan.slo.minHybridSamplesForDefaultOn).toBe(20)
     expect(payload.topConnectedNodes).toEqual([])
     expect(payload.recentErrors).toEqual(
       expect.arrayContaining([
@@ -336,6 +338,7 @@ describe("getGraphStatusPayload", () => {
     expect(payload.shadowMetrics.fallbackRate).toBe(0.2)
     expect(payload.qualityGate.status).toBe("fail")
     expect(payload.qualityGate.canaryBlocked).toBe(true)
+    expect(payload.rolloutPlan.readyForDefaultOn).toBe(false)
     expect(payload.qualityGate.reasons).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

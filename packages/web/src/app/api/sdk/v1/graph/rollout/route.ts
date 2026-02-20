@@ -1,7 +1,6 @@
 import {
+  evaluateGraphRolloutPlan,
   evaluateGraphRolloutQuality,
-  getGraphRolloutConfig,
-  getGraphRolloutMetricsSummary,
   setGraphRolloutConfig,
   type GraphRolloutMode,
 } from "@/lib/memory-service/graph/rollout"
@@ -105,32 +104,31 @@ async function buildRolloutResponse(params: {
   turso: Exclude<Awaited<ReturnType<typeof resolveTursoForScope>>, NextResponse>
   modeOverride?: GraphRolloutMode
   updatedBy?: string | null
+  disableAutopilot?: boolean
 }): Promise<NextResponse> {
-  const { requestId, turso, scope, modeOverride, updatedBy } = params
+  const { requestId, turso, scope, modeOverride, updatedBy, disableAutopilot } = params
   const nowIso = new Date().toISOString()
 
-  const rollout =
-    modeOverride === undefined
-      ? await getGraphRolloutConfig(turso, nowIso)
-      : await setGraphRolloutConfig(turso, {
-          mode: modeOverride,
-          nowIso,
-          updatedBy: updatedBy ?? null,
-        })
+  if (modeOverride !== undefined) {
+    await setGraphRolloutConfig(turso, {
+      mode: modeOverride,
+      nowIso,
+      updatedBy: updatedBy ?? null,
+    })
+  }
 
-  const shadowMetrics = await getGraphRolloutMetricsSummary(turso, {
+  const rolloutSnapshot = await evaluateGraphRolloutPlan(turso, {
     nowIso,
     windowHours: 24,
-  })
-  const qualityGate = await evaluateGraphRolloutQuality(turso, {
-    nowIso,
-    windowHours: 24,
+    updatedBy: updatedBy ?? null,
+    allowAutopilot: disableAutopilot ? false : undefined,
   })
 
   return successResponse(ENDPOINT, requestId, {
-    rollout,
-    shadowMetrics,
-    qualityGate,
+    rollout: rolloutSnapshot.rollout,
+    shadowMetrics: rolloutSnapshot.shadowMetrics,
+    qualityGate: rolloutSnapshot.qualityGate,
+    rolloutPlan: rolloutSnapshot.plan,
     scope,
   })
 }
@@ -154,6 +152,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       requestId: resolved.requestId,
       turso: resolved.turso,
       scope: resolved.scope,
+      disableAutopilot: false,
     })
   } catch (error) {
     const detail =
@@ -217,6 +216,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       scope: resolved.scope,
       modeOverride: parsedRequest.mode,
       updatedBy: resolved.authUserId,
+      disableAutopilot: true,
     })
   } catch (error) {
     const detail =

@@ -10,6 +10,7 @@
     "embeddings",
     "endpoint-contract",
     "graph-architecture",
+    "graph-default-on-rollout",
     "graph-operations-runbook",
     "embedding-operations-runbook"
   ]

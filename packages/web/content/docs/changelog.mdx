@@ -23,6 +23,8 @@ description: Product and documentation updates.
   - `hybrid_graph` -> `hybrid`
 - Documented `embeddingModel` request support on `memories/add` and `memories/edit`, including response metadata (`embeddingModel`, `embeddingModelSource`).
 - Clarified retrieval `trace` diagnostics and fallback semantics to support phased semantic/hybrid rollout.
+- Set graph retrieval feature flag default to enabled (`GRAPH_RETRIEVAL_ENABLED=true` fallback) and added rollout decision payloads with SLO/gap metrics (`rolloutPlan`) on `GET|POST|PATCH /api/sdk/v1/graph/rollout`.
+- Added graph default-on rollout policy docs with explicit go/no-go thresholds, baseline gap reporting, and `GRAPH_ROLLOUT_AUTOPILOT_ENABLED` behavior.
 
 ## February 16, 2026
 

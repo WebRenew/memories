@@ -7,12 +7,14 @@ import {
   type TursoClient,
 } from "../types"
 import {
+  buildGraphRolloutPlan,
   emptyGraphRolloutQualitySummary,
   evaluateGraphRolloutQuality,
   getGraphRolloutConfig,
   getGraphRolloutMetricsSummary,
   type GraphRolloutConfig,
   type GraphRolloutMetricsSummary,
+  type GraphRolloutPlan,
   type GraphRolloutQualitySummary,
 } from "./rollout"
 import { removeMemoryGraphMapping, syncMemoryGraphMapping } from "./upsert"
@@ -100,6 +102,7 @@ export interface GraphStatusPayload {
   rollout: GraphRolloutConfig
   shadowMetrics: GraphStatusShadowMetrics
   qualityGate: GraphRolloutQualitySummary
+  rolloutPlan: GraphRolloutPlan
   alarms: GraphStatusAlarm[]
   topConnectedNodes: GraphStatusTopNode[]
   recentErrors: GraphStatusError[]
@@ -335,6 +338,14 @@ export async function getGraphStatusPayload(input: GraphStatusInput): Promise<Gr
     nowIso,
     windowHours: 24,
   })
+  let rolloutPlan = buildGraphRolloutPlan({
+    evaluatedAt: nowIso,
+    rollout,
+    shadowMetrics,
+    qualityGate,
+    autopilotEnabled: false,
+    autopilotApplied: false,
+  })
   const alarms: GraphStatusAlarm[] = []
 
   try {
@@ -346,6 +357,14 @@ export async function getGraphStatusPayload(input: GraphStatusInput): Promise<Gr
     qualityGate = await evaluateGraphRolloutQuality(turso, {
       nowIso,
       windowHours: 24,
+    })
+    rolloutPlan = buildGraphRolloutPlan({
+      evaluatedAt: nowIso,
+      rollout,
+      shadowMetrics,
+      qualityGate,
+      autopilotEnabled: false,
+      autopilotApplied: false,
     })
   } catch (err) {
     recentErrors.push({
@@ -430,6 +449,7 @@ export async function getGraphStatusPayload(input: GraphStatusInput): Promise<Gr
       rollout,
       shadowMetrics,
       qualityGate,
+      rolloutPlan,
       alarms,
       topConnectedNodes: [],
       recentErrors,
@@ -550,6 +570,7 @@ export async function getGraphStatusPayload(input: GraphStatusInput): Promise<Gr
     rollout,
     shadowMetrics,
     qualityGate,
+    rolloutPlan,
     alarms,
     topConnectedNodes,
     recentErrors,
