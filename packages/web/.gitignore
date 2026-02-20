@@ -39,3 +39,7 @@ next-env.d.ts
 
 # fumadocs
 .source
+
+# sentry
+.env.sentry-build-plugin
+.env.local
