@@ -1,4 +1,4 @@
-import { GRAPH_RETRIEVAL_ENABLED, type TursoClient } from "../types"
+import { GRAPH_RETRIEVAL_ENABLED, GRAPH_ROLLOUT_AUTOPILOT_ENABLED, type TursoClient } from "../types"
 
 export type GraphRolloutMode = "off" | "shadow" | "canary"
 
@@ -89,7 +89,7 @@ export interface GraphRolloutQualitySummary {
   previous: GraphRolloutEvalWindow
 }
 
-const GRAPH_ROLLOUT_QUALITY_THRESHOLDS = {
+export const GRAPH_ROLLOUT_QUALITY_THRESHOLDS = {
   windowHours: 24,
   minHybridSamples: 20,
   minCanarySamplesForRelevance: 12,
@@ -101,6 +101,59 @@ const GRAPH_ROLLOUT_QUALITY_THRESHOLDS = {
   maxExpansionCoverageDrop: 0.25,
   maxCandidateLiftDropRatio: 0.35,
 } as const
+
+export const GRAPH_ROLLOUT_SLO_THRESHOLDS = {
+  minShadowExecutionsForCanary: 40,
+  minShadowAverageGraphCandidates: 1,
+  maxShadowGraphErrorRateForCanary: GRAPH_ROLLOUT_QUALITY_THRESHOLDS.maxGraphErrorFallbackRate,
+  minHybridSamplesForDefaultOn: GRAPH_ROLLOUT_QUALITY_THRESHOLDS.minHybridSamples,
+  minCanarySamplesForDefaultOn: GRAPH_ROLLOUT_QUALITY_THRESHOLDS.minCanarySamplesForRelevance,
+  maxFallbackRateForDefaultOn: GRAPH_ROLLOUT_QUALITY_THRESHOLDS.maxFallbackRate,
+  maxGraphErrorRateForDefaultOn: GRAPH_ROLLOUT_QUALITY_THRESHOLDS.maxGraphErrorFallbackRate,
+  minExpansionCoverageForDefaultOn: GRAPH_ROLLOUT_QUALITY_THRESHOLDS.minExpansionCoverageRate,
+} as const
+
+export interface GraphRolloutBaselineMetric {
+  metric:
+    | "shadow_executions"
+    | "shadow_avg_graph_candidates"
+    | "shadow_graph_error_rate"
+    | "hybrid_samples"
+    | "canary_samples"
+    | "fallback_rate"
+    | "graph_error_rate"
+    | "expansion_coverage"
+  comparator: "<=" | ">="
+  target: number
+  current: number
+  gapToGoal: number
+  ready: boolean
+}
+
+export interface GraphRolloutStage {
+  stage: "shadow" | "canary" | "default_on"
+  ready: boolean
+  requiredSamples: number
+  currentSamples: number
+  blockerCodes: string[]
+}
+
+export interface GraphRolloutPlan {
+  evaluatedAt: string
+  currentMode: GraphRolloutMode
+  recommendedMode: GraphRolloutMode
+  defaultBehaviorDecision: "enable_hybrid_default" | "hold_lexical_default"
+  rationale: string
+  readyForDefaultOn: boolean
+  blockerCodes: string[]
+  stages: GraphRolloutStage[]
+  baseline: GraphRolloutBaselineMetric[]
+  slo: typeof GRAPH_ROLLOUT_SLO_THRESHOLDS
+  autopilot: {
+    enabled: boolean
+    applied: boolean
+  }
+}
 
 const ensuredRolloutTables = new WeakSet<TursoClient>()
 
@@ -188,6 +241,181 @@ function toMetric(value: unknown, decimals = 4): number {
 function toRate(numerator: number, denominator: number): number {
   if (denominator <= 0) return 0
   return toMetric(numerator / denominator)
+}
+
+function buildBaselineMetric(params: {
+  metric: GraphRolloutBaselineMetric["metric"]
+  comparator: GraphRolloutBaselineMetric["comparator"]
+  target: number
+  current: number
+}): GraphRolloutBaselineMetric {
+  const current = toMetric(params.current)
+  const target = toMetric(params.target)
+  const ready = params.comparator === ">=" ? current >= target : current <= target
+  const rawGapToGoal =
+    params.comparator === ">=" ? Math.max(0, target - current) : Math.max(0, current - target)
+
+  return {
+    metric: params.metric,
+    comparator: params.comparator,
+    target,
+    current,
+    gapToGoal: toMetric(rawGapToGoal),
+    ready,
+  }
+}
+
+export function buildGraphRolloutPlan(params: {
+  evaluatedAt: string
+  rollout: GraphRolloutConfig
+  shadowMetrics: GraphRolloutMetricsSummary
+  qualityGate: GraphRolloutQualitySummary
+  autopilotApplied?: boolean
+  autopilotEnabled?: boolean
+}): GraphRolloutPlan {
+  const shadowGraphErrorRate = toRate(
+    params.shadowMetrics.graphErrorFallbacks,
+    Math.max(1, params.shadowMetrics.shadowExecutions)
+  )
+
+  const canaryBlockers: string[] = []
+  if (params.shadowMetrics.shadowExecutions < GRAPH_ROLLOUT_SLO_THRESHOLDS.minShadowExecutionsForCanary) {
+    canaryBlockers.push("MIN_SHADOW_EXECUTIONS_NOT_MET")
+  }
+  if (params.shadowMetrics.avgGraphCandidates < GRAPH_ROLLOUT_SLO_THRESHOLDS.minShadowAverageGraphCandidates) {
+    canaryBlockers.push("SHADOW_GRAPH_CANDIDATES_TOO_LOW")
+  }
+  if (shadowGraphErrorRate > GRAPH_ROLLOUT_SLO_THRESHOLDS.maxShadowGraphErrorRateForCanary) {
+    canaryBlockers.push("SHADOW_GRAPH_ERROR_RATE_ABOVE_LIMIT")
+  }
+
+  const current = params.qualityGate.current
+  const defaultOnBlockers: string[] = []
+  if (current.hybridRequested < GRAPH_ROLLOUT_SLO_THRESHOLDS.minHybridSamplesForDefaultOn) {
+    defaultOnBlockers.push("MIN_HYBRID_SAMPLES_NOT_MET")
+  }
+  if (current.canaryApplied < GRAPH_ROLLOUT_SLO_THRESHOLDS.minCanarySamplesForDefaultOn) {
+    defaultOnBlockers.push("MIN_CANARY_SAMPLES_NOT_MET")
+  }
+  if (current.fallbackRate > GRAPH_ROLLOUT_SLO_THRESHOLDS.maxFallbackRateForDefaultOn) {
+    defaultOnBlockers.push("FALLBACK_RATE_ABOVE_LIMIT")
+  }
+  if (current.graphErrorFallbackRate > GRAPH_ROLLOUT_SLO_THRESHOLDS.maxGraphErrorRateForDefaultOn) {
+    defaultOnBlockers.push("GRAPH_ERROR_RATE_ABOVE_LIMIT")
+  }
+  if (current.expansionCoverageRate < GRAPH_ROLLOUT_SLO_THRESHOLDS.minExpansionCoverageForDefaultOn) {
+    defaultOnBlockers.push("EXPANSION_COVERAGE_TOO_LOW")
+  }
+  if (params.qualityGate.canaryBlocked) {
+    defaultOnBlockers.push("CANARY_QUALITY_GATE_BLOCKED")
+  }
+  if (params.qualityGate.status !== "pass") {
+    defaultOnBlockers.push(`QUALITY_STATUS_${params.qualityGate.status.toUpperCase()}`)
+  }
+
+  const readyForCanary = canaryBlockers.length === 0
+  const readyForDefaultOn = defaultOnBlockers.length === 0
+
+  const recommendedMode: GraphRolloutMode =
+    params.rollout.mode === "off"
+      ? "shadow"
+      : params.rollout.mode === "shadow" && readyForCanary
+        ? "canary"
+        : params.rollout.mode
+
+  const blockerCodes = readyForDefaultOn ? [] : defaultOnBlockers
+  const defaultBehaviorDecision = readyForDefaultOn ? "enable_hybrid_default" : "hold_lexical_default"
+  const rationale = readyForDefaultOn
+    ? "Canary SLOs and minimum sample sizes are satisfied; switch default retrieval to hybrid."
+    : `Hold lexical default until blockers clear: ${blockerCodes.join(", ")}.`
+
+  return {
+    evaluatedAt: params.evaluatedAt,
+    currentMode: params.rollout.mode,
+    recommendedMode,
+    defaultBehaviorDecision,
+    rationale,
+    readyForDefaultOn,
+    blockerCodes,
+    stages: [
+      {
+        stage: "shadow",
+        ready: params.rollout.mode !== "off",
+        requiredSamples: 0,
+        currentSamples: params.shadowMetrics.totalRequests,
+        blockerCodes: params.rollout.mode === "off" ? ["ROLLOUT_MODE_OFF"] : [],
+      },
+      {
+        stage: "canary",
+        ready: readyForCanary,
+        requiredSamples: GRAPH_ROLLOUT_SLO_THRESHOLDS.minShadowExecutionsForCanary,
+        currentSamples: params.shadowMetrics.shadowExecutions,
+        blockerCodes: canaryBlockers,
+      },
+      {
+        stage: "default_on",
+        ready: readyForDefaultOn,
+        requiredSamples: GRAPH_ROLLOUT_SLO_THRESHOLDS.minCanarySamplesForDefaultOn,
+        currentSamples: current.canaryApplied,
+        blockerCodes: defaultOnBlockers,
+      },
+    ],
+    baseline: [
+      buildBaselineMetric({
+        metric: "shadow_executions",
+        comparator: ">=",
+        target: GRAPH_ROLLOUT_SLO_THRESHOLDS.minShadowExecutionsForCanary,
+        current: params.shadowMetrics.shadowExecutions,
+      }),
+      buildBaselineMetric({
+        metric: "shadow_avg_graph_candidates",
+        comparator: ">=",
+        target: GRAPH_ROLLOUT_SLO_THRESHOLDS.minShadowAverageGraphCandidates,
+        current: params.shadowMetrics.avgGraphCandidates,
+      }),
+      buildBaselineMetric({
+        metric: "shadow_graph_error_rate",
+        comparator: "<=",
+        target: GRAPH_ROLLOUT_SLO_THRESHOLDS.maxShadowGraphErrorRateForCanary,
+        current: shadowGraphErrorRate,
+      }),
+      buildBaselineMetric({
+        metric: "hybrid_samples",
+        comparator: ">=",
+        target: GRAPH_ROLLOUT_SLO_THRESHOLDS.minHybridSamplesForDefaultOn,
+        current: current.hybridRequested,
+      }),
+      buildBaselineMetric({
+        metric: "canary_samples",
+        comparator: ">=",
+        target: GRAPH_ROLLOUT_SLO_THRESHOLDS.minCanarySamplesForDefaultOn,
+        current: current.canaryApplied,
+      }),
+      buildBaselineMetric({
+        metric: "fallback_rate",
+        comparator: "<=",
+        target: GRAPH_ROLLOUT_SLO_THRESHOLDS.maxFallbackRateForDefaultOn,
+        current: current.fallbackRate,
+      }),
+      buildBaselineMetric({
+        metric: "graph_error_rate",
+        comparator: "<=",
+        target: GRAPH_ROLLOUT_SLO_THRESHOLDS.maxGraphErrorRateForDefaultOn,
+        current: current.graphErrorFallbackRate,
+      }),
+      buildBaselineMetric({
+        metric: "expansion_coverage",
+        comparator: ">=",
+        target: GRAPH_ROLLOUT_SLO_THRESHOLDS.minExpansionCoverageForDefaultOn,
+        current: current.expansionCoverageRate,
+      }),
+    ],
+    slo: GRAPH_ROLLOUT_SLO_THRESHOLDS,
+    autopilot: {
+      enabled: params.autopilotEnabled ?? GRAPH_ROLLOUT_AUTOPILOT_ENABLED,
+      applied: params.autopilotApplied ?? false,
+    },
+  }
 }
 
 async function ensureGraphRolloutTables(turso: TursoClient): Promise<void> {
@@ -709,5 +937,68 @@ export async function getGraphRolloutMetricsSummary(
     avgGraphExpandedCount: Number(toCount(row?.avg_graph_expanded_count).toFixed(2)),
     lastFallbackAt: fallbackRow?.created_at ?? null,
     lastFallbackReason: fallbackRow?.fallback_reason ?? null,
+  }
+}
+
+export async function evaluateGraphRolloutPlan(
+  turso: TursoClient,
+  params: {
+    nowIso: string
+    windowHours?: number
+    updatedBy?: string | null
+    allowAutopilot?: boolean
+  }
+): Promise<{
+  rollout: GraphRolloutConfig
+  shadowMetrics: GraphRolloutMetricsSummary
+  qualityGate: GraphRolloutQualitySummary
+  plan: GraphRolloutPlan
+}> {
+  const nowIso = params.nowIso
+  const windowHours = normalizeWindowHours(params.windowHours ?? 24)
+  const allowAutopilot = params.allowAutopilot ?? GRAPH_ROLLOUT_AUTOPILOT_ENABLED
+
+  let rollout = await getGraphRolloutConfig(turso, nowIso)
+  let [shadowMetrics, qualityGate] = await Promise.all([
+    getGraphRolloutMetricsSummary(turso, { nowIso, windowHours }),
+    evaluateGraphRolloutQuality(turso, { nowIso, windowHours }),
+  ])
+
+  let plan = buildGraphRolloutPlan({
+    evaluatedAt: nowIso,
+    rollout,
+    shadowMetrics,
+    qualityGate,
+    autopilotEnabled: allowAutopilot,
+    autopilotApplied: false,
+  })
+
+  if (allowAutopilot && plan.recommendedMode !== rollout.mode) {
+    rollout = await setGraphRolloutConfig(turso, {
+      mode: plan.recommendedMode,
+      nowIso,
+      updatedBy: params.updatedBy ?? null,
+    })
+
+    ;[shadowMetrics, qualityGate] = await Promise.all([
+      getGraphRolloutMetricsSummary(turso, { nowIso, windowHours }),
+      evaluateGraphRolloutQuality(turso, { nowIso, windowHours }),
+    ])
+
+    plan = buildGraphRolloutPlan({
+      evaluatedAt: nowIso,
+      rollout,
+      shadowMetrics,
+      qualityGate,
+      autopilotEnabled: allowAutopilot,
+      autopilotApplied: true,
+    })
+  }
+
+  return {
+    rollout,
+    shadowMetrics,
+    qualityGate,
+    plan,
   }
 }

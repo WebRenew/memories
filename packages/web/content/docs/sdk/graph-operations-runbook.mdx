@@ -45,6 +45,14 @@ curl -s -H "Authorization: Bearer $MEMORIES_API_KEY" \
 4. Stay in `canary` while monitoring alarms and trace fallback reasons.
 5. If quality gate blocks canary (`CANARY_ROLLOUT_BLOCKED`), remain in `shadow` until regressions clear.
 
+Default-on decision is driven by `rolloutPlan` from `/api/sdk/v1/graph/rollout`:
+
+- `defaultBehaviorDecision: hold_lexical_default` keeps current defaults
+- `defaultBehaviorDecision: enable_hybrid_default` marks rollout ready for default-on
+- `blockerCodes` enumerate exact gaps
+
+See [Graph Default-On Rollout](/docs/sdk/graph-default-on-rollout) for SLO thresholds and baseline gap metrics.
+
 Patch mode via SDK endpoint:
 
 ```bash

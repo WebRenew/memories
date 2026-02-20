@@ -7,6 +7,7 @@ const {
   mockResolveActiveMemoryContext,
   mockGetGraphStatusPayload,
   mockGetContextPayload,
+  mockEvaluateGraphRolloutPlan,
   mockGetGraphRolloutConfig,
   mockSetGraphRolloutConfig,
   mockGetGraphRolloutMetricsSummary,
@@ -18,6 +19,7 @@ const {
   mockResolveActiveMemoryContext: vi.fn(),
   mockGetGraphStatusPayload: vi.fn(),
   mockGetContextPayload: vi.fn(),
+  mockEvaluateGraphRolloutPlan: vi.fn(),
   mockGetGraphRolloutConfig: vi.fn(),
   mockSetGraphRolloutConfig: vi.fn(),
   mockGetGraphRolloutMetricsSummary: vi.fn(),
@@ -75,6 +77,7 @@ vi.mock("@/lib/memory-service/queries", () => ({
 }))
 
 vi.mock("@/lib/memory-service/graph/rollout", () => ({
+  evaluateGraphRolloutPlan: mockEvaluateGraphRolloutPlan,
   getGraphRolloutConfig: mockGetGraphRolloutConfig,
   setGraphRolloutConfig: mockSetGraphRolloutConfig,
   getGraphRolloutMetricsSummary: mockGetGraphRolloutMetricsSummary,
@@ -291,6 +294,92 @@ describe("/api/sdk/v1/graph/*", () => {
       },
     })
 
+    mockEvaluateGraphRolloutPlan.mockResolvedValue({
+      rollout: {
+        mode: "shadow",
+        updatedAt: "2026-02-12T00:00:00.000Z",
+        updatedBy: "user-1",
+      },
+      shadowMetrics: {
+        windowHours: 24,
+        totalRequests: 48,
+        hybridRequested: 32,
+        canaryApplied: 20,
+        shadowExecutions: 12,
+        fallbackCount: 12,
+        fallbackRate: 0.25,
+        graphErrorFallbacks: 2,
+        avgGraphCandidates: 3,
+        avgGraphExpandedCount: 1.4,
+        lastFallbackAt: "2026-02-12T00:55:00.000Z",
+        lastFallbackReason: "shadow_mode",
+      },
+      qualityGate: {
+        evaluatedAt: "2026-02-12T01:00:00.000Z",
+        windowHours: 24,
+        minHybridSamples: 20,
+        minCanarySamplesForRelevance: 12,
+        status: "pass",
+        canaryBlocked: false,
+        reasons: [],
+        current: {
+          startAt: "2026-02-11T01:00:00.000Z",
+          endAt: "2026-02-12T01:00:00.000Z",
+          totalRequests: 48,
+          hybridRequested: 32,
+          canaryApplied: 20,
+          hybridFallbacks: 12,
+          graphErrorFallbacks: 2,
+          fallbackRate: 0.25,
+          graphErrorFallbackRate: 0.0417,
+          canaryWithExpansion: 18,
+          expansionCoverageRate: 0.9,
+          avgExpandedCount: 1.4,
+          avgCandidateLift: 1.8,
+        },
+        previous: {
+          startAt: "2026-02-10T01:00:00.000Z",
+          endAt: "2026-02-11T01:00:00.000Z",
+          totalRequests: 48,
+          hybridRequested: 32,
+          canaryApplied: 24,
+          hybridFallbacks: 6,
+          graphErrorFallbacks: 1,
+          fallbackRate: 0.1875,
+          graphErrorFallbackRate: 0.0313,
+          canaryWithExpansion: 21,
+          expansionCoverageRate: 0.875,
+          avgExpandedCount: 1.3,
+          avgCandidateLift: 1.6,
+        },
+      },
+      plan: {
+        evaluatedAt: "2026-02-12T01:00:00.000Z",
+        currentMode: "shadow",
+        recommendedMode: "shadow",
+        defaultBehaviorDecision: "hold_lexical_default",
+        rationale: "Hold lexical default.",
+        readyForDefaultOn: false,
+        blockerCodes: ["MIN_CANARY_SAMPLES_NOT_MET"],
+        stages: [],
+        baseline: [],
+        slo: {
+          minShadowExecutionsForCanary: 40,
+          minShadowAverageGraphCandidates: 1,
+          maxShadowGraphErrorRateForCanary: 0.05,
+          minHybridSamplesForDefaultOn: 20,
+          minCanarySamplesForDefaultOn: 12,
+          maxFallbackRateForDefaultOn: 0.15,
+          maxGraphErrorRateForDefaultOn: 0.05,
+          minExpansionCoverageForDefaultOn: 0.1,
+        },
+        autopilot: {
+          enabled: false,
+          applied: false,
+        },
+      },
+    })
+
     mockGetContextPayload.mockResolvedValue({
       text: "## Relevant Memories",
       data: {
@@ -491,13 +580,105 @@ describe("/api/sdk/v1/graph/*", () => {
     expect(body.data.rollout.mode).toBe("shadow")
     expect(body.data.shadowMetrics.totalRequests).toBe(48)
     expect(body.data.qualityGate.status).toBe("pass")
+    expect(body.data.rolloutPlan.defaultBehaviorDecision).toBe("hold_lexical_default")
     expect(body.data.scope.tenantId).toBeNull()
-    expect(mockGetGraphRolloutConfig).toHaveBeenCalledTimes(1)
-    expect(mockGetGraphRolloutMetricsSummary).toHaveBeenCalledTimes(1)
-    expect(mockEvaluateGraphRolloutQuality).toHaveBeenCalledTimes(1)
+    expect(mockEvaluateGraphRolloutPlan).toHaveBeenCalledTimes(1)
+    expect(mockEvaluateGraphRolloutPlan).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        windowHours: 24,
+        allowAutopilot: undefined,
+      })
+    )
   })
 
   it("graph/rollout POST updates workspace rollout mode", async () => {
+    mockEvaluateGraphRolloutPlan.mockResolvedValueOnce({
+      rollout: {
+        mode: "canary",
+        updatedAt: "2026-02-12T01:00:00.000Z",
+        updatedBy: "user-1",
+      },
+      shadowMetrics: {
+        windowHours: 24,
+        totalRequests: 48,
+        hybridRequested: 32,
+        canaryApplied: 20,
+        shadowExecutions: 12,
+        fallbackCount: 12,
+        fallbackRate: 0.25,
+        graphErrorFallbacks: 2,
+        avgGraphCandidates: 3,
+        avgGraphExpandedCount: 1.4,
+        lastFallbackAt: "2026-02-12T00:55:00.000Z",
+        lastFallbackReason: "shadow_mode",
+      },
+      qualityGate: {
+        evaluatedAt: "2026-02-12T01:00:00.000Z",
+        windowHours: 24,
+        minHybridSamples: 20,
+        minCanarySamplesForRelevance: 12,
+        status: "pass",
+        canaryBlocked: false,
+        reasons: [],
+        current: {
+          startAt: "2026-02-11T01:00:00.000Z",
+          endAt: "2026-02-12T01:00:00.000Z",
+          totalRequests: 48,
+          hybridRequested: 32,
+          canaryApplied: 20,
+          hybridFallbacks: 12,
+          graphErrorFallbacks: 2,
+          fallbackRate: 0.25,
+          graphErrorFallbackRate: 0.0417,
+          canaryWithExpansion: 18,
+          expansionCoverageRate: 0.9,
+          avgExpandedCount: 1.4,
+          avgCandidateLift: 1.8,
+        },
+        previous: {
+          startAt: "2026-02-10T01:00:00.000Z",
+          endAt: "2026-02-11T01:00:00.000Z",
+          totalRequests: 48,
+          hybridRequested: 32,
+          canaryApplied: 24,
+          hybridFallbacks: 6,
+          graphErrorFallbacks: 1,
+          fallbackRate: 0.1875,
+          graphErrorFallbackRate: 0.0313,
+          canaryWithExpansion: 21,
+          expansionCoverageRate: 0.875,
+          avgExpandedCount: 1.3,
+          avgCandidateLift: 1.6,
+        },
+      },
+      plan: {
+        evaluatedAt: "2026-02-12T01:00:00.000Z",
+        currentMode: "canary",
+        recommendedMode: "canary",
+        defaultBehaviorDecision: "hold_lexical_default",
+        rationale: "Hold lexical default.",
+        readyForDefaultOn: false,
+        blockerCodes: ["MIN_CANARY_SAMPLES_NOT_MET"],
+        stages: [],
+        baseline: [],
+        slo: {
+          minShadowExecutionsForCanary: 40,
+          minShadowAverageGraphCandidates: 1,
+          maxShadowGraphErrorRateForCanary: 0.05,
+          minHybridSamplesForDefaultOn: 20,
+          minCanarySamplesForDefaultOn: 12,
+          maxFallbackRateForDefaultOn: 0.15,
+          maxGraphErrorRateForDefaultOn: 0.05,
+          minExpansionCoverageForDefaultOn: 0.1,
+        },
+        autopilot: {
+          enabled: false,
+          applied: false,
+        },
+      },
+    })
+
     const response = await rolloutPOST(
       makeRequest(
         "/api/sdk/v1/graph/rollout",
@@ -517,6 +698,13 @@ describe("/api/sdk/v1/graph/*", () => {
     expect(body.ok).toBe(true)
     expect(body.data.rollout.mode).toBe("canary")
     expect(body.data.qualityGate.status).toBe("pass")
+    expect(mockEvaluateGraphRolloutPlan).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        windowHours: 24,
+        allowAutopilot: false,
+      })
+    )
     expect(mockSetGraphRolloutConfig).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({

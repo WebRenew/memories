@@ -552,6 +552,7 @@ Manage rollout mode.
 `GET`:
 
 - reads current rollout + quality gate + metrics summary
+- evaluates rollout plan and optional autopilot promotion
 
 `POST` / `PATCH` request:
 
@@ -581,6 +582,14 @@ Successful response `data` includes:
 - `rollout`
 - `shadowMetrics`
 - `qualityGate`
+- `rolloutPlan`
+  - `recommendedMode`
+  - `defaultBehaviorDecision`
+  - `readyForDefaultOn`
+  - `blockerCodes`
+  - `baseline` (gap-to-goal metrics)
+  - `slo` thresholds and sample requirements
+  - `autopilot` (`enabled`, `applied`)
 - `scope`
 
 ## Health Contract
