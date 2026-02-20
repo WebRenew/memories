@@ -40,6 +40,8 @@ next-env.d.ts
 # fumadocs
 .source
 
+# local env overrides
+.env.local
+
 # sentry
 .env.sentry-build-plugin
-.env.local
