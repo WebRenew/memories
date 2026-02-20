@@ -374,6 +374,7 @@ describe("/api/sdk/v1/memories/*", () => {
         "/api/sdk/v1/memories/search",
         {
           query: "hello",
+          strategy: "semantic",
           scope: {
             userId: "end-user-1",
           },
@@ -386,6 +387,14 @@ describe("/api/sdk/v1/memories/*", () => {
     const body = await response.json()
     expect(body.ok).toBe(true)
     expect(body.data.count).toBe(1)
+    expect(mockSearchMemoriesPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "end-user-1",
+        args: expect.objectContaining({
+          strategy: "semantic",
+        }),
+      })
+    )
   })
 
   it("list returns results envelope", async () => {

@@ -65,7 +65,9 @@ import {
   pickMemoriesForMode,
   readDefaultApiKey,
   stripTrailingSlash,
+  toMcpContextStrategy,
   toClientError,
+  toSdkContextStrategy,
   toMemoryRecord,
   toSkillFileRecord,
   toTypedHttpError,
@@ -139,6 +141,7 @@ export class MemoriesClient {
       options: ContextGetOptions = {}
     ): Promise<ContextResult> => {
       const input = normalizeContextInput(inputOrQuery, options)
+      const strategy = toSdkContextStrategy(input.strategy)
       const rawScope = this.withDefaultScopeSdk({
         projectId: input.projectId,
         userId: input.userId,
@@ -153,7 +156,7 @@ export class MemoriesClient {
             includeRules: input.includeRules,
             includeSkillFiles: input.includeSkillFiles,
             mode: input.mode,
-            strategy: input.strategy,
+            strategy,
             graphDepth: input.graphDepth,
             graphLimit: input.graphLimit,
             scope: sdkScope,
@@ -164,7 +167,7 @@ export class MemoriesClient {
             project_id: input.projectId,
             user_id: input.userId,
             tenant_id: input.tenantId,
-            retrieval_strategy: input.strategy,
+            retrieval_strategy: toMcpContextStrategy(input.strategy),
             graph_depth: input.graphDepth,
             graph_limit: input.graphLimit,
           })
@@ -232,6 +235,7 @@ export class MemoriesClient {
     },
 
     search: async (query: string, options: MemorySearchOptions = {}): Promise<MemoryRecord[]> => {
+      const strategy = options.strategy ? toSdkContextStrategy(options.strategy) : undefined
       const rawScope = this.withDefaultScopeSdk({ projectId: options.projectId })
       const sdkScope = rawScope && Object.keys(rawScope).length > 0 ? rawScope : undefined
       const result = this.transport === "sdk_http"
@@ -239,6 +243,7 @@ export class MemoriesClient {
             query,
             type: options.type,
             layer: options.layer,
+            strategy,
             limit: options.limit,
             scope: sdkScope,
           })
@@ -247,6 +252,7 @@ export class MemoriesClient {
             type: options.type,
             layer: options.layer,
             limit: options.limit,
+            ...(strategy ? { retrieval_strategy: toMcpContextStrategy(strategy) } : {}),
             project_id: options.projectId,
           })
 

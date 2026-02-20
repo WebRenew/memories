@@ -64,8 +64,22 @@ export const contextStructuredSchema = z.object({
   longTermMemories: z.array(structuredMemorySchema).optional().default([]),
   trace: z
     .object({
-      requestedStrategy: z.union([z.literal("baseline"), z.literal("hybrid_graph")]).optional(),
-      strategy: z.union([z.literal("baseline"), z.literal("hybrid_graph")]),
+      requestedStrategy: z
+        .union([
+          z.literal("lexical"),
+          z.literal("semantic"),
+          z.literal("hybrid"),
+          z.literal("baseline"),
+          z.literal("hybrid_graph"),
+        ])
+        .optional(),
+      strategy: z.union([
+        z.literal("lexical"),
+        z.literal("semantic"),
+        z.literal("hybrid"),
+        z.literal("baseline"),
+        z.literal("hybrid_graph"),
+      ]),
       graphDepth: z.union([z.literal(0), z.literal(1), z.literal(2)]),
       graphLimit: z.number().int().nonnegative(),
       rolloutMode: z.union([z.literal("off"), z.literal("shadow"), z.literal("canary")]).optional(),

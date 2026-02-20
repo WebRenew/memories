@@ -1,6 +1,8 @@
 export type MemoryType = "rule" | "decision" | "fact" | "note" | "skill"
 export type MemoryLayer = "rule" | "working" | "long_term"
-export type ContextStrategy = "baseline" | "hybrid_graph"
+export type RetrievalStrategy = "lexical" | "semantic" | "hybrid"
+export type LegacyContextStrategy = "baseline" | "hybrid_graph"
+export type ContextStrategy = RetrievalStrategy | LegacyContextStrategy
 
 export type MemoryScope = "global" | "project" | "unknown"
 
@@ -148,6 +150,7 @@ export interface MemoryEditInput {
 export interface MemorySearchOptions {
   type?: MemoryType
   layer?: MemoryLayer
+  strategy?: ContextStrategy
   limit?: number
   projectId?: string
 }
