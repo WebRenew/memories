@@ -105,6 +105,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       nowIso: new Date().toISOString(),
       query: parsedRequest.query ?? "",
       limit: parsedRequest.limit ?? 5,
+      semanticStrategy: requestedStrategy,
       retrievalStrategy: toLegacyContextRetrievalStrategy(requestedStrategy),
       graphDepth: parsedRequest.graphDepth ?? 1,
       graphLimit: parsedRequest.graphLimit ?? 8,

@@ -61,6 +61,12 @@ export interface ContextResult {
   trace?: {
     requestedStrategy?: ContextStrategy
     strategy: ContextStrategy
+    semanticStrategyRequested?: RetrievalStrategy
+    semanticStrategyApplied?: RetrievalStrategy
+    lexicalCandidates?: number
+    semanticCandidates?: number
+    semanticFallbackTriggered?: boolean
+    semanticFallbackReason?: string | null
     graphDepth: 0 | 1 | 2
     graphLimit: number
     rolloutMode?: "off" | "shadow" | "canary"
