@@ -205,7 +205,7 @@ export async function initSchema(url: string, token: string): Promise<void> {
       embedding BLOB NOT NULL,
       model TEXT NOT NULL,
       model_version TEXT NOT NULL DEFAULT 'v1',
-      dimension INTEGER NOT NULL,
+      dimension INTEGER NOT NULL CHECK (dimension > 0),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`
