@@ -484,4 +484,69 @@ describe("semantic + hybrid retrieval", () => {
     expect(contextIds).not.toEqual(expect.arrayContaining(["blocked-project", "blocked-user"]))
     expect(contextPayload.data.trace.semanticStrategyApplied).toBe("semantic")
   })
+
+  it("falls back to lexical when memory_embeddings table is unavailable", async () => {
+    process.env.AI_GATEWAY_API_KEY = "test_key"
+    process.env.AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh"
+    process.env.SDK_DEFAULT_EMBEDDING_MODEL_ID = "openai/text-embedding-3-small"
+
+    const db = await setupDb("memories-semantic-missing-embeddings-table")
+    const nowIso = "2026-02-20T02:00:00.000Z"
+
+    await db.execute({
+      sql: `INSERT INTO memories (
+              id, content, type, memory_layer, expires_at, scope, project_id, user_id,
+              tags, paths, category, metadata, deleted_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        "m-lex-only",
+        "alpha keyword only lexical candidate",
+        "note",
+        "long_term",
+        null,
+        "global",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        nowIso,
+        nowIso,
+      ],
+    })
+
+    await db.execute("DROP TABLE memory_embeddings")
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: [{ embedding: [1, 0] }],
+            model: "openai/text-embedding-3-small",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      )
+    )
+
+    const { searchMemoriesPayload } = await loadQueriesModule()
+    const payload = await searchMemoriesPayload({
+      turso: db,
+      args: {
+        query: "alpha keyword",
+        strategy: "semantic",
+        limit: 5,
+      },
+      userId: null,
+      nowIso: "2026-02-20T02:10:00.000Z",
+    })
+
+    expect(payload.data.memories.map((memory) => memory.id)).toEqual(["m-lex-only"])
+    expect(payload.data.trace.appliedStrategy).toBe("lexical")
+    expect(payload.data.trace.fallbackTriggered).toBe(true)
+    expect(payload.data.trace.fallbackReason).toBe("vectors_unavailable")
+  })
 })

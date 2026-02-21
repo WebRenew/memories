@@ -345,83 +345,97 @@ export async function replaceMemoryRelationshipEdges(
 
 export async function syncMemoryGraphMapping(turso: TursoClient, input: GraphMemoryInput): Promise<void> {
   await ensureGraphTables(turso)
-  await removeMemoryGraphMapping(turso, input.id)
+  const savepoint = `graph_sync_${crypto.randomUUID().replace(/-/g, "")}`
+  await turso.execute(`SAVEPOINT ${savepoint}`)
 
-  const nowIso = new Date().toISOString()
-  const extracted = extractDeterministicGraph(toSnapshot(input))
-  const nodeIds = new Map<string, string>()
+  try {
+    await removeMemoryGraphMapping(turso, input.id)
 
-  const nodeRefKey = (ref: GraphNodeRef) => `${ref.nodeType}:${ref.nodeKey}`
+    const nowIso = new Date().toISOString()
+    const extracted = extractDeterministicGraph(toSnapshot(input))
+    const nodeIds = new Map<string, string>()
 
-  for (const node of extracted.nodes) {
-    const metadata = node.metadata ? JSON.stringify(node.metadata) : null
-    await turso.execute({
-      sql: `INSERT INTO graph_nodes (id, node_type, node_key, label, metadata, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(node_type, node_key) DO UPDATE SET
-              label = excluded.label,
-              metadata = COALESCE(excluded.metadata, graph_nodes.metadata),
-              updated_at = excluded.updated_at`,
-      args: [nodeIdFallback(node), node.nodeType, node.nodeKey, node.label, metadata, nowIso, nowIso],
-    })
+    const nodeRefKey = (ref: GraphNodeRef) => `${ref.nodeType}:${ref.nodeKey}`
 
-    const resolved = await resolveNodeId(turso, node)
-    if (resolved) {
-      nodeIds.set(nodeRefKey(node), resolved)
+    for (const node of extracted.nodes) {
+      const metadata = node.metadata ? JSON.stringify(node.metadata) : null
+      await turso.execute({
+        sql: `INSERT INTO graph_nodes (id, node_type, node_key, label, metadata, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(node_type, node_key) DO UPDATE SET
+                label = excluded.label,
+                metadata = COALESCE(excluded.metadata, graph_nodes.metadata),
+                updated_at = excluded.updated_at`,
+        args: [nodeIdFallback(node), node.nodeType, node.nodeKey, node.label, metadata, nowIso, nowIso],
+      })
+
+      const resolved = await resolveNodeId(turso, node)
+      if (resolved) {
+        nodeIds.set(nodeRefKey(node), resolved)
+      }
     }
+
+    for (const link of extracted.links) {
+      const nodeId = nodeIds.get(nodeRefKey(link.node))
+      if (!nodeId) continue
+
+      await turso.execute({
+        sql: `INSERT INTO memory_node_links (memory_id, node_id, role, created_at)
+              VALUES (?, ?, ?, ?)
+              ON CONFLICT(memory_id, node_id, role) DO UPDATE SET
+                created_at = excluded.created_at`,
+        args: [input.id, nodeId, link.role, nowIso],
+      })
+    }
+
+    for (const edge of extracted.edges) {
+      const fromNodeId = nodeIds.get(nodeRefKey(edge.from))
+      const toNodeId = nodeIds.get(nodeRefKey(edge.to))
+      if (!fromNodeId || !toNodeId) continue
+
+      await turso.execute({
+        sql: `INSERT INTO graph_edges (
+                id,
+                from_node_id,
+                to_node_id,
+                edge_type,
+                weight,
+                confidence,
+                evidence_memory_id,
+                expires_at,
+                created_at,
+                updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET
+                weight = excluded.weight,
+                confidence = excluded.confidence,
+                evidence_memory_id = excluded.evidence_memory_id,
+                expires_at = excluded.expires_at,
+                updated_at = excluded.updated_at`,
+        args: [
+          edgeId(input.id, edge.edgeType, fromNodeId, toNodeId),
+          fromNodeId,
+          toNodeId,
+          edge.edgeType,
+          edge.weight,
+          edge.confidence,
+          input.id,
+          edge.expiresAt,
+          nowIso,
+          nowIso,
+        ],
+      })
+    }
+
+    await pruneOrphanGraphNodes(turso)
+    await turso.execute(`RELEASE SAVEPOINT ${savepoint}`)
+  } catch (error) {
+    try {
+      await turso.execute(`ROLLBACK TO SAVEPOINT ${savepoint}`)
+      await turso.execute(`RELEASE SAVEPOINT ${savepoint}`)
+    } catch (rollbackError) {
+      console.error("Graph sync rollback failed:", rollbackError)
+    }
+    throw error
   }
-
-  for (const link of extracted.links) {
-    const nodeId = nodeIds.get(nodeRefKey(link.node))
-    if (!nodeId) continue
-
-    await turso.execute({
-      sql: `INSERT INTO memory_node_links (memory_id, node_id, role, created_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(memory_id, node_id, role) DO UPDATE SET
-              created_at = excluded.created_at`,
-      args: [input.id, nodeId, link.role, nowIso],
-    })
-  }
-
-  for (const edge of extracted.edges) {
-    const fromNodeId = nodeIds.get(nodeRefKey(edge.from))
-    const toNodeId = nodeIds.get(nodeRefKey(edge.to))
-    if (!fromNodeId || !toNodeId) continue
-
-    await turso.execute({
-      sql: `INSERT INTO graph_edges (
-              id,
-              from_node_id,
-              to_node_id,
-              edge_type,
-              weight,
-              confidence,
-              evidence_memory_id,
-              expires_at,
-              created_at,
-              updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-              weight = excluded.weight,
-              confidence = excluded.confidence,
-              evidence_memory_id = excluded.evidence_memory_id,
-              expires_at = excluded.expires_at,
-              updated_at = excluded.updated_at`,
-      args: [
-        edgeId(input.id, edge.edgeType, fromNodeId, toNodeId),
-        fromNodeId,
-        toNodeId,
-        edge.edgeType,
-        edge.weight,
-        edge.confidence,
-        input.id,
-        edge.expiresAt,
-        nowIso,
-        nowIso,
-      ],
-    })
-  }
-
-  await pruneOrphanGraphNodes(turso)
 }

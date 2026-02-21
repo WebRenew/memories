@@ -393,6 +393,57 @@ describe("similarity graph edges", () => {
     expect(pairs).toEqual(["mem-new->mem-old"])
   })
 
+  it("uses classifier direction for supersedes even when timestamps are inverted", async () => {
+    const db = await setupDb("memories-graph-similarity-supersedes-direction")
+    const modelId = "openai/text-embedding-3-small"
+    const olderIso = "2026-02-22T00:00:00.000Z"
+    const newerIso = "2026-02-22T00:20:00.000Z"
+
+    await insertMemory(db, { id: "mem-existing", content: "I use one password everywhere", nowIso: newerIso })
+    await insertMemory(db, { id: "mem-refined", content: "I now use a password manager", nowIso: olderIso })
+    await upsertEmbedding(db, {
+      memoryId: "mem-existing",
+      model: modelId,
+      embedding: [0.8, 0.6],
+      nowIso: newerIso,
+    })
+
+    await syncRelationshipEdgesForMemory({
+      turso: db,
+      memoryId: "mem-refined",
+      embedding: [1, 0],
+      modelId,
+      projectId: null,
+      userId: null,
+      layer: "long_term",
+      expiresAt: null,
+      nowIso: newerIso,
+      threshold: 0.95,
+      ambiguousMinScore: 0.7,
+      ambiguousMaxScore: 0.9,
+      llmConfidenceThreshold: 0.7,
+      memoryContent: "I now use a password manager",
+      memoryCreatedAt: olderIso,
+      classifier: async () => ({
+        relationship: "refines",
+        confidence: 0.91,
+        explanation: "The new memory updates the prior behavior.",
+      }),
+    })
+
+    const result = await db.execute({
+      sql: `SELECT from_n.node_key AS from_key, to_n.node_key AS to_key
+            FROM graph_edges e
+            JOIN graph_nodes from_n ON from_n.id = e.from_node_id
+            JOIN graph_nodes to_n ON to_n.id = e.to_node_id
+            WHERE e.edge_type = 'supersedes'
+            ORDER BY from_key, to_key`,
+    })
+
+    const pairs = result.rows.map((row) => `${row.from_key}->${row.to_key}`)
+    expect(pairs).toEqual(["mem-refined->mem-existing"])
+  })
+
   it("skips llm relationship edges below confidence threshold", async () => {
     const db = await setupDb("memories-graph-similarity-confidence-threshold")
     const nowIso = "2026-02-22T00:25:00.000Z"

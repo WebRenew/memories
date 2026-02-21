@@ -494,15 +494,15 @@ async function processSingleJob(turso: TursoClient, job: EmbeddingJobRow, nowIso
 
     const graphMappingEnabled = parseBooleanFlag(process.env.GRAPH_MAPPING_ENABLED, false)
     if (graphMappingEnabled && memoryRow) {
-      try {
-        const llmExtractionEnabled = parseBooleanFlag(process.env.GRAPH_LLM_EXTRACTION_ENABLED, false)
-        const memoryType = typeof memoryRow.type === "string" ? memoryRow.type : "note"
-        const memoryLayerRaw = typeof memoryRow.memory_layer === "string" ? memoryRow.memory_layer : null
-        const memoryLayer =
-          memoryLayerRaw === "rule" || memoryLayerRaw === "working" || memoryLayerRaw === "long_term"
-            ? memoryLayerRaw
-            : defaultLayerForType(memoryType)
+      const llmExtractionEnabled = parseBooleanFlag(process.env.GRAPH_LLM_EXTRACTION_ENABLED, false)
+      const memoryType = typeof memoryRow.type === "string" ? memoryRow.type : "note"
+      const memoryLayerRaw = typeof memoryRow.memory_layer === "string" ? memoryRow.memory_layer : null
+      const memoryLayer =
+        memoryLayerRaw === "rule" || memoryLayerRaw === "working" || memoryLayerRaw === "long_term"
+          ? memoryLayerRaw
+          : defaultLayerForType(memoryType)
 
+      try {
         await syncRelationshipEdgesForMemory({
           turso,
           memoryId: job.memoryId,
@@ -519,7 +519,11 @@ async function processSingleJob(turso: TursoClient, job: EmbeddingJobRow, nowIso
           nowIso,
         })
       } catch (error) {
-        console.error("Relationship edge sync failed:", error)
+        throw new EmbeddingJobError("Relationship edge sync failed", {
+          code: "GRAPH_RELATIONSHIP_SYNC_FAILED",
+          retryable: true,
+          cause: error,
+        })
       }
     }
 
