@@ -289,25 +289,6 @@ function buildBidirectionalMemoryEdges(params: {
   ]
 }
 
-function resolveSupersedesDirection(params: {
-  sourceMemoryId: string
-  sourceCreatedAt: string | null
-  candidateMemoryId: string
-  candidateCreatedAt: string | null
-}): { fromMemoryId: string; toMemoryId: string } {
-  const sourceTs = params.sourceCreatedAt ? Date.parse(params.sourceCreatedAt) : Number.NaN
-  const candidateTs = params.candidateCreatedAt ? Date.parse(params.candidateCreatedAt) : Number.NaN
-  if (Number.isFinite(sourceTs) && Number.isFinite(candidateTs)) {
-    if (sourceTs > candidateTs) {
-      return { fromMemoryId: params.sourceMemoryId, toMemoryId: params.candidateMemoryId }
-    }
-    if (candidateTs > sourceTs) {
-      return { fromMemoryId: params.candidateMemoryId, toMemoryId: params.sourceMemoryId }
-    }
-  }
-  return { fromMemoryId: params.sourceMemoryId, toMemoryId: params.candidateMemoryId }
-}
-
 function buildSimilarEdges(params: {
   matches: SimilarityMatch[]
   threshold: number
@@ -392,15 +373,12 @@ async function buildLlmRelationshipEdges(
           })
         )
       } else if (classification.relationship === "refines") {
-        const direction = resolveSupersedesDirection({
-          sourceMemoryId: input.memoryId,
-          sourceCreatedAt: input.memoryCreatedAt ?? null,
-          candidateMemoryId: match.memoryId,
-          candidateCreatedAt: match.createdAt,
-        })
+        // Relationship classifier contract:
+        // memoryA = existing candidate, memoryB = incoming/new memory.
+        // "refines" means memoryB updates/narrows memoryA.
         edges.push({
-          from: memoryNodeRef(direction.fromMemoryId),
-          to: memoryNodeRef(direction.toMemoryId),
+          from: memoryNodeRef(input.memoryId),
+          to: memoryNodeRef(match.memoryId),
           edgeType: "supersedes",
           weight: 1,
           confidence,

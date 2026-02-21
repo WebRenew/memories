@@ -198,6 +198,69 @@ describe("syncMemoryGraphMapping", () => {
     expect(longTermWithoutExpiry).toBe(longTermTotal)
   })
 
+  it("rolls back graph mapping replacement when sync fails mid-write", async () => {
+    const memoryId = "mem-graph-atomic"
+    const oldTag = "legacy-tag"
+    const newTag = "new-tag"
+
+    await syncMemoryGraphMapping(db, {
+      id: memoryId,
+      content: "Legacy memory content.",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: "github.com/webrenew/memories",
+      userId: "user-atomic",
+      tags: [oldTag],
+      category: "ops",
+    })
+
+    await db.execute(`
+      CREATE TRIGGER fail_graph_edge_insert
+      BEFORE INSERT ON graph_edges
+      WHEN NEW.evidence_memory_id = '${memoryId}'
+      BEGIN
+        SELECT RAISE(FAIL, 'forced graph edge failure');
+      END;
+    `)
+
+    await expect(
+      syncMemoryGraphMapping(db, {
+        id: memoryId,
+        content: "Updated content should not partially apply.",
+        type: "note",
+        layer: "long_term",
+        expiresAt: null,
+        projectId: "github.com/webrenew/memories",
+        userId: "user-atomic",
+        tags: [newTag],
+        category: "ops",
+      })
+    ).rejects.toThrow("forced graph edge failure")
+
+    const oldTagLinkCount = await scalarCount(
+      db,
+      `SELECT COUNT(*) AS count
+       FROM memory_node_links l
+       JOIN graph_nodes n ON n.id = l.node_id
+       WHERE l.memory_id = ? AND n.node_type = 'topic' AND n.node_key = ?`,
+      [memoryId, oldTag]
+    )
+    const newTagLinkCount = await scalarCount(
+      db,
+      `SELECT COUNT(*) AS count
+       FROM memory_node_links l
+       JOIN graph_nodes n ON n.id = l.node_id
+       WHERE l.memory_id = ? AND n.node_type = 'topic' AND n.node_key = ?`,
+      [memoryId, newTag]
+    )
+
+    expect(oldTagLinkCount).toBe(1)
+    expect(newTagLinkCount).toBe(0)
+
+    await db.execute("DROP TRIGGER fail_graph_edge_insert")
+  })
+
   it("keeps shared nodes when one of multiple linked memories is removed", async () => {
     const sharedTag = "shared-tag"
 

@@ -537,4 +537,118 @@ describe("sdk embedding jobs", () => {
     expect(semanticEdges.rows.map((row) => `${row.from_key}->${row.to_key}`)).toEqual(["mem_seed->mem_neighbor"])
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
+
+  it("retries the job when relationship edge sync fails after embedding upsert", async () => {
+    process.env.GRAPH_MAPPING_ENABLED = "true"
+
+    const db = await setupDb("memories-embedding-jobs-graph-sync-retry")
+    const nowIso = "2026-02-20T04:00:00.000Z"
+    const modelId = "openai/text-embedding-3-small"
+
+    await insertMemory(db, {
+      id: "mem_seed",
+      content: "Seed memory for graph sync retry",
+      nowIso,
+    })
+    await insertMemory(db, {
+      id: "mem_neighbor",
+      content: "Neighbor memory for graph sync retry",
+      nowIso,
+    })
+
+    await syncMemoryGraphMapping(db, {
+      id: "mem_seed",
+      content: "Seed memory for graph sync retry",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: null,
+      userId: null,
+      tags: [],
+      category: null,
+    })
+    await syncMemoryGraphMapping(db, {
+      id: "mem_neighbor",
+      content: "Neighbor memory for graph sync retry",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: null,
+      userId: null,
+      tags: [],
+      category: null,
+    })
+
+    await db.execute({
+      sql: `INSERT INTO memory_embeddings (
+              memory_id, embedding, model, model_version, dimension, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        "mem_neighbor",
+        encodeEmbedding([0.99, 0.01]),
+        modelId,
+        modelId,
+        2,
+        nowIso,
+        nowIso,
+      ],
+    })
+
+    await db.execute(`
+      CREATE TRIGGER fail_graph_edge_insert
+      BEFORE INSERT ON graph_edges
+      BEGIN
+        SELECT RAISE(FAIL, 'forced graph edge failure');
+      END;
+    `)
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: [{ embedding: [1, 0] }],
+            model: modelId,
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }
+        )
+      )
+    )
+
+    await enqueueEmbeddingJob({
+      turso: db,
+      memoryId: "mem_seed",
+      content: "Seed memory for graph sync retry",
+      modelId,
+      operation: "add",
+      maxAttempts: 3,
+      nowIso,
+    })
+
+    const summary = await processDueEmbeddingJobs({
+      turso: db,
+      maxJobs: 1,
+      nowIso,
+    })
+    expect(summary.processed).toBe(1)
+    expect(summary.retries).toBe(1)
+    expect(summary.success).toBe(0)
+
+    const jobResult = await db.execute({
+      sql: "SELECT status, attempt_count, last_error FROM memory_embedding_jobs WHERE memory_id = ?",
+      args: ["mem_seed"],
+    })
+    expect(String(jobResult.rows[0]?.status ?? "")).toBe("queued")
+    expect(Number(jobResult.rows[0]?.attempt_count ?? -1)).toBe(1)
+    expect(String(jobResult.rows[0]?.last_error ?? "")).toContain("GRAPH_RELATIONSHIP_SYNC_FAILED")
+
+    const embeddingResult = await db.execute({
+      sql: "SELECT COUNT(*) AS count FROM memory_embeddings WHERE memory_id = ?",
+      args: ["mem_seed"],
+    })
+    expect(Number(embeddingResult.rows[0]?.count ?? 0)).toBe(1)
+  })
 })

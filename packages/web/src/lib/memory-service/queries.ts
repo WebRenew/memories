@@ -120,6 +120,11 @@ function isMissingGraphTablesError(error: unknown): boolean {
   if (!message.includes("no such table")) return false
   return message.includes("graph_edges") || message.includes("graph_nodes")
 }
+
+function isMissingMemoryEmbeddingsTableError(error: unknown): boolean {
+  const message = parseQueryErrorMessage(error)
+  return message.includes("no such table") && message.includes("memory_embeddings")
+}
 async function listContextConflicts(
   turso: TursoClient,
   memoryIds: string[],
@@ -390,21 +395,29 @@ async function searchWithSemantic(
   args.push(...activeFilter.args)
   args.push(params.limit)
 
-  const result = await turso.execute({
-    sql: `SELECT ${MEMORY_COLUMNS_ALIASED}, e.embedding
-          FROM memory_embeddings e
-          JOIN memories m ON m.id = e.memory_id
-          WHERE e.model = ?
-            AND m.deleted_at IS NULL
-            ${typeFilter}
-            ${projectFilter}
-            AND ${userFilter.clause}
-            AND ${layerFilter.clause}
-            AND ${activeFilter.clause}
-          ORDER BY m.updated_at DESC
-          LIMIT ?`,
-    args,
-  })
+  let result: Awaited<ReturnType<TursoClient["execute"]>>
+  try {
+    result = await turso.execute({
+      sql: `SELECT ${MEMORY_COLUMNS_ALIASED}, e.embedding
+            FROM memory_embeddings e
+            JOIN memories m ON m.id = e.memory_id
+            WHERE e.model = ?
+              AND m.deleted_at IS NULL
+              ${typeFilter}
+              ${projectFilter}
+              AND ${userFilter.clause}
+              AND ${layerFilter.clause}
+              AND ${activeFilter.clause}
+            ORDER BY m.updated_at DESC
+            LIMIT ?`,
+      args,
+    })
+  } catch (error) {
+    if (isMissingMemoryEmbeddingsTableError(error)) {
+      return []
+    }
+    throw error
+  }
 
   const rows = Array.isArray(result.rows) ? result.rows : []
   const scored: SemanticCandidate[] = []
