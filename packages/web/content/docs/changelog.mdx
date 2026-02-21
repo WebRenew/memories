@@ -18,6 +18,9 @@ description: Product and documentation updates.
 - Added relationship-aware graph ranking weights by edge type (`caused_by`, `contradicts`, `supersedes`, `similar_to`, etc.) with confidence + hop decay in retrieval scoring.
 - Added `conflicts` to `get_context` responses when returned memories are linked by `contradicts` edges, including confidence and clarification suggestions.
 - Added semantic LLM relationship extraction on writes for `caused_by`, `prefers_over`, `depends_on`, `specializes`, and `conditional_on` edges (with reusable `condition` graph nodes).
+- Made relationship edge replacement atomic via savepoint rollback in graph upsert (`replaceMemoryRelationshipEdges`) to prevent partial edge loss on write failures.
+- Added structured LLM extraction degradation reporting in embedding worker metrics (`GRAPH_RELATIONSHIP_PARTIAL_DEGRADE`) with issue-level codes (`GRAPH_LLM_CLASSIFICATION_FAILED`, `GRAPH_LLM_SEMANTIC_EXTRACTION_FAILED`).
+- Optimized graph-only retry path after `GRAPH_RELATIONSHIP_SYNC_FAILED` to reuse stored embeddings and avoid redundant embeddings API calls.
 - Updated memory graph architecture docs to document memory nodes and self-link behavior.
 - Expanded graph + MCP docs with edge weight tables, contradiction/semantic extraction pipeline guidance, conflict payload schemas/examples, and skills guidance for conflict-aware agent handling.
 

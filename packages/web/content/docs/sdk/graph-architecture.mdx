@@ -161,7 +161,9 @@ Enabling `GRAPH_LLM_EXTRACTION_ENABLED` adds model calls per memory write (pairw
 Operationally:
 
 - memory writes still succeed if extraction fails
-- extraction failures are logged and skipped
+- extraction failures are logged as best-effort degradation and surfaced in embedding job metrics as `GRAPH_RELATIONSHIP_PARTIAL_DEGRADE`
+- issue-level extraction codes are recorded (`GRAPH_LLM_CLASSIFICATION_FAILED`, `GRAPH_LLM_SEMANTIC_EXTRACTION_FAILED`) to make rollout regressions visible
+- retries after `GRAPH_RELATIONSHIP_SYNC_FAILED` reuse stored embeddings when available to avoid repeated embedding API calls for graph-only failures
 - monitor AI Gateway usage when enabling this in high-write tenants
 - embedding usage endpoints currently report embedding spend, not a separate semantic-extraction meter
 
