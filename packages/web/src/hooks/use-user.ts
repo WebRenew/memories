@@ -73,6 +73,7 @@ export function useUser(): { user: User | null; loading: boolean } {
         authSubscription = null
         authInitialized = false
         hasResolvedUser = false
+        isBootstrapping = false
         cachedUser = null
       }
     }
