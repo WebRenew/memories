@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { useCallback, useEffect, useMemo } from "react"
+import { useCallback } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import type { User } from "@supabase/supabase-js"
 import { BookOpen, KeyRound, Network } from "lucide-react"
@@ -75,20 +75,12 @@ export function DashboardShell({
     plan === "past_due"
       ? "top-[6.25rem] h-[calc(100vh-6.25rem)]"
       : "top-16 h-[calc(100vh-4rem)]"
-  const internalNavItems = useMemo(() => navItems.filter((item) => !item.external), [])
-
   const prefetchRoute = useCallback(
     (href: string) => {
       router.prefetch(href)
     },
     [router],
   )
-
-  useEffect(() => {
-    for (const item of internalNavItems) {
-      prefetchRoute(item.href)
-    }
-  }, [internalNavItems, prefetchRoute])
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
@@ -262,7 +254,7 @@ export function DashboardShell({
                 <Link
                   key={item.href}
                   href={item.href}
-                  prefetch
+                  prefetch={false}
                   onMouseEnter={() => prefetchRoute(item.href)}
                   onFocus={() => prefetchRoute(item.href)}
                   aria-current={isActive ? "page" : undefined}
@@ -316,7 +308,7 @@ export function DashboardShell({
                 <Link
                   key={item.href}
                   href={item.href}
-                  prefetch
+                  prefetch={false}
                   onMouseEnter={() => prefetchRoute(item.href)}
                   onFocus={() => prefetchRoute(item.href)}
                   aria-current={isActive ? "page" : undefined}
