@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import dynamic from "next/dynamic";
+import { FooterYear } from "./FooterYear";
 
 const ThemeSwitcher = dynamic(
   () => import("./ThemeSwitcher").then((mod) => mod.ThemeSwitcher),
@@ -87,7 +88,7 @@ export function Footer() {
               memories.sh
             </Link>
             <span className="text-[9px] text-muted-foreground/40 uppercase tracking-[0.2em] font-bold">
-              &copy; {currentYear}
+              &copy; <FooterYear initialYear={currentYear} />
             </span>
           </div>
           <div className="flex items-center gap-8">
