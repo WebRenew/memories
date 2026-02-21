@@ -324,21 +324,19 @@ describe("sdk embedding jobs", () => {
       ],
     })
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            data: [{ embedding: [1, 0] }],
-            model: modelId,
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }
-        )
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          data: [{ embedding: [1, 0] }],
+          model: modelId,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
       )
     )
+    vi.stubGlobal("fetch", fetchMock)
 
     await enqueueEmbeddingJob({
       turso: db,
@@ -538,6 +536,121 @@ describe("sdk embedding jobs", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
+  it("records structured degradation codes when llm extraction fails but graph sync succeeds", async () => {
+    process.env.GRAPH_MAPPING_ENABLED = "true"
+    process.env.GRAPH_LLM_EXTRACTION_ENABLED = "true"
+
+    const db = await setupDb("memories-embedding-jobs-llm-degrade-metrics")
+    const nowIso = "2026-02-20T03:30:00.000Z"
+    const modelId = "openai/text-embedding-3-small"
+
+    await insertMemory(db, {
+      id: "mem_seed",
+      content: "I like coffee in mornings and tea in afternoons.",
+      nowIso,
+    })
+    await insertMemory(db, {
+      id: "mem_neighbor",
+      content: "I dislike coffee",
+      nowIso,
+    })
+
+    await syncMemoryGraphMapping(db, {
+      id: "mem_seed",
+      content: "I like coffee in mornings and tea in afternoons.",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: null,
+      userId: null,
+      tags: [],
+      category: null,
+    })
+    await syncMemoryGraphMapping(db, {
+      id: "mem_neighbor",
+      content: "I dislike coffee",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: null,
+      userId: null,
+      tags: [],
+      category: null,
+    })
+
+    await db.execute({
+      sql: `INSERT INTO memory_embeddings (
+              memory_id, embedding, model, model_version, dimension, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        "mem_neighbor",
+        encodeEmbedding([0.8, 0.6]),
+        modelId,
+        modelId,
+        2,
+        nowIso,
+        nowIso,
+      ],
+    })
+
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = String(input)
+      if (url.includes("/v1/embeddings")) {
+        return new Response(
+          JSON.stringify({
+            data: [{ embedding: [1, 0] }],
+            model: modelId,
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }
+        )
+      }
+
+      if (url.includes("/v1/chat/completions")) {
+        return new Response("llm unavailable", {
+          status: 503,
+          headers: { "content-type": "text/plain" },
+        })
+      }
+
+      return new Response("not found", { status: 404 })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    await enqueueEmbeddingJob({
+      turso: db,
+      memoryId: "mem_seed",
+      content: "I like coffee in mornings and tea in afternoons.",
+      modelId,
+      operation: "add",
+      nowIso,
+    })
+
+    const summary = await processDueEmbeddingJobs({
+      turso: db,
+      maxJobs: 1,
+      nowIso,
+    })
+    expect(summary.success).toBe(1)
+    expect(summary.retries).toBe(0)
+
+    const metricResult = await db.execute({
+      sql: `SELECT outcome, error_code, error_message
+            FROM memory_embedding_job_metrics
+            WHERE memory_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1`,
+      args: ["mem_seed"],
+    })
+    expect(String(metricResult.rows[0]?.outcome ?? "")).toBe("success")
+    expect(String(metricResult.rows[0]?.error_code ?? "")).toBe("GRAPH_RELATIONSHIP_PARTIAL_DEGRADE")
+    expect(String(metricResult.rows[0]?.error_message ?? "")).toContain("GRAPH_LLM_CLASSIFICATION_FAILED")
+    expect(String(metricResult.rows[0]?.error_message ?? "")).toContain("GRAPH_LLM_SEMANTIC_EXTRACTION_FAILED")
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it("retries the job when relationship edge sync fails after embedding upsert", async () => {
     process.env.GRAPH_MAPPING_ENABLED = "true"
 
@@ -602,21 +715,19 @@ describe("sdk embedding jobs", () => {
       END;
     `)
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            data: [{ embedding: [1, 0] }],
-            model: modelId,
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }
-        )
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          data: [{ embedding: [1, 0] }],
+          model: modelId,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
       )
     )
+    vi.stubGlobal("fetch", fetchMock)
 
     await enqueueEmbeddingJob({
       turso: db,
@@ -644,11 +755,35 @@ describe("sdk embedding jobs", () => {
     expect(String(jobResult.rows[0]?.status ?? "")).toBe("queued")
     expect(Number(jobResult.rows[0]?.attempt_count ?? -1)).toBe(1)
     expect(String(jobResult.rows[0]?.last_error ?? "")).toContain("GRAPH_RELATIONSHIP_SYNC_FAILED")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
 
     const embeddingResult = await db.execute({
       sql: "SELECT COUNT(*) AS count FROM memory_embeddings WHERE memory_id = ?",
       args: ["mem_seed"],
     })
     expect(Number(embeddingResult.rows[0]?.count ?? 0)).toBe(1)
+
+    await db.execute("DROP TRIGGER fail_graph_edge_insert")
+    await db.execute({
+      sql: "UPDATE memory_embedding_jobs SET next_attempt_at = ? WHERE memory_id = ?",
+      args: ["2026-02-20T03:59:00.000Z", "mem_seed"],
+    })
+
+    const secondRun = await processDueEmbeddingJobs({
+      turso: db,
+      maxJobs: 1,
+      nowIso: "2026-02-20T04:01:00.000Z",
+    })
+    expect(secondRun.processed).toBe(1)
+    expect(secondRun.success).toBe(1)
+    expect(secondRun.retries).toBe(0)
+
+    const succeededJob = await db.execute({
+      sql: "SELECT status, attempt_count FROM memory_embedding_jobs WHERE memory_id = ?",
+      args: ["mem_seed"],
+    })
+    expect(String(succeededJob.rows[0]?.status ?? "")).toBe("succeeded")
+    expect(Number(succeededJob.rows[0]?.attempt_count ?? -1)).toBe(2)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

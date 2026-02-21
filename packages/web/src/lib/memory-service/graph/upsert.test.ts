@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { removeMemoryGraphMapping, syncMemoryGraphMapping } from "./upsert"
+import { removeMemoryGraphMapping, replaceMemoryRelationshipEdges, syncMemoryGraphMapping } from "./upsert"
 
 type DbClient = ReturnType<typeof createClient>
 
@@ -259,6 +259,107 @@ describe("syncMemoryGraphMapping", () => {
     expect(newTagLinkCount).toBe(0)
 
     await db.execute("DROP TRIGGER fail_graph_edge_insert")
+  })
+
+  it("rolls back relationship edge replacement when upsert fails mid-write", async () => {
+    const memoryId = "mem-relationship-atomic"
+    const oldTarget = "mem-relationship-old"
+    const newTarget = "mem-relationship-new"
+
+    await syncMemoryGraphMapping(db, {
+      id: memoryId,
+      content: "Seed memory for relationship replacement.",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: "github.com/webrenew/memories",
+      userId: "user-atomic",
+      tags: ["ops"],
+      category: "ops",
+    })
+    await syncMemoryGraphMapping(db, {
+      id: oldTarget,
+      content: "Old relationship target",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: "github.com/webrenew/memories",
+      userId: "user-atomic",
+      tags: ["ops"],
+      category: "ops",
+    })
+    await syncMemoryGraphMapping(db, {
+      id: newTarget,
+      content: "New relationship target",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: "github.com/webrenew/memories",
+      userId: "user-atomic",
+      tags: ["ops"],
+      category: "ops",
+    })
+
+    await replaceMemoryRelationshipEdges(
+      db,
+      memoryId,
+      [
+        {
+          from: { nodeType: "memory", nodeKey: memoryId },
+          to: { nodeType: "memory", nodeKey: oldTarget },
+          edgeType: "similar_to",
+          weight: 1,
+          confidence: 1,
+          evidenceMemoryId: memoryId,
+          expiresAt: null,
+        },
+      ],
+      { edgeTypes: ["similar_to"] }
+    )
+
+    await db.execute(`
+      CREATE TRIGGER fail_relationship_replace_insert
+      BEFORE INSERT ON graph_edges
+      WHEN NEW.evidence_memory_id = '${memoryId}' AND NEW.edge_type = 'similar_to'
+      BEGIN
+        SELECT RAISE(FAIL, 'forced relationship replace failure');
+      END;
+    `)
+
+    await expect(
+      replaceMemoryRelationshipEdges(
+        db,
+        memoryId,
+        [
+          {
+            from: { nodeType: "memory", nodeKey: memoryId },
+            to: { nodeType: "memory", nodeKey: newTarget },
+            edgeType: "similar_to",
+            weight: 1,
+            confidence: 1,
+            evidenceMemoryId: memoryId,
+            expiresAt: null,
+          },
+        ],
+        { edgeTypes: ["similar_to"] }
+      )
+    ).rejects.toThrow("forced relationship replace failure")
+
+    const result = await db.execute({
+      sql: `SELECT from_n.node_key AS from_key, to_n.node_key AS to_key
+            FROM graph_edges e
+            JOIN graph_nodes from_n ON from_n.id = e.from_node_id
+            JOIN graph_nodes to_n ON to_n.id = e.to_node_id
+            WHERE e.edge_type = 'similar_to'
+              AND e.evidence_memory_id = ?
+            ORDER BY from_key, to_key`,
+      args: [memoryId],
+    })
+
+    const pairs = result.rows.map((row) => `${row.from_key}->${row.to_key}`)
+    expect(pairs).toEqual([`${memoryId}->${oldTarget}`])
+
+    await db.execute("DROP TRIGGER fail_relationship_replace_insert")
   })
 
   it("keeps shared nodes when one of multiple linked memories is removed", async () => {
