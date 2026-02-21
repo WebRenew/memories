@@ -58,7 +58,12 @@ function isMissingApiKeysTableError(error: unknown): boolean {
   if (code === "42P01") return true
 
   const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : ""
-  return message.includes("mcp_api_keys") || message.includes("Unexpected table: mcp_api_keys")
+  const normalizedMessage = message.toLowerCase()
+  return (
+    normalizedMessage.includes("unexpected table: mcp_api_keys") ||
+    normalizedMessage.includes('relation "mcp_api_keys" does not exist') ||
+    normalizedMessage.includes('relation "public.mcp_api_keys" does not exist')
+  )
 }
 
 function toApiKeyRecord(row: Pick<ApiKeyRow, "id" | "api_key_prefix" | "api_key_last4" | "created_at" | "expires_at">): UserApiKeyRecord {
@@ -274,8 +279,30 @@ export async function revokeUserApiKeys(
 
   if (params.keyId) {
     if (params.keyId.startsWith("legacy:")) {
+      const legacyHash = params.keyId.slice("legacy:".length)
       await clearLegacyUserKey(admin, params.userId)
-      return { revokedCount: 1 }
+      if (!legacyHash) {
+        return { revokedCount: 1 }
+      }
+
+      const { data, error } = await admin
+        .from("mcp_api_keys")
+        .update({ revoked_at: nowIso })
+        .eq("user_id", params.userId)
+        .eq("api_key_hash", legacyHash)
+        .is("revoked_at", null)
+        .select("id")
+
+      if (error) {
+        if (!isMissingApiKeysTableError(error)) {
+          throw new Error(`Failed to revoke legacy API key: ${error.message}`)
+        }
+        return { revokedCount: 1 }
+      }
+
+      await syncLegacyPrimaryApiKey(admin, params.userId)
+      const revokedCount = Array.isArray(data) ? data.length : 0
+      return { revokedCount: revokedCount > 0 ? revokedCount : 1 }
     }
 
     const { data, error } = await admin
