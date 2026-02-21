@@ -125,6 +125,8 @@ console.log(ctx.trace)
 
 `trace.strategy` is the applied strategy after rollout guardrails. This lets you detect when a hybrid request safely falls back to baseline.
 
+With graph mapping enabled, hybrid retrieval can surface semantically related memories through `similar_to` edges even when lexical overlap is weak.
+
 Workspace rollout and safety signals are available from SDK HTTP graph endpoints:
 
 - `GET /api/sdk/v1/graph/rollout` for mode + shadow metrics + quality gate snapshot

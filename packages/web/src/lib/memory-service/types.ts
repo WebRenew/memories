@@ -85,7 +85,17 @@ export interface GraphExplainability {
   linkedViaNode: string
   edgeType: string
   hopCount: number
+  confidence: number
   seedMemoryId: string
+}
+
+export interface ContextConflict {
+  memoryAId: string
+  memoryBId: string
+  edgeType: "contradicts"
+  confidence: number
+  explanation: string
+  suggestion: string
 }
 
 export interface ContextTrace {
@@ -112,6 +122,7 @@ export interface ContextTrace {
   baselineCandidates: number
   graphCandidates: number
   graphExpandedCount: number
+  conflictCount?: number
   fallbackTriggered: boolean
   fallbackReason: string | null
   totalCandidates: number

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ensureMemoryUserIdSchema } from "@/lib/memory-service/scope-schema"
+import { syncMemoryGraphMapping } from "@/lib/memory-service/graph/upsert"
 import { enqueueEmbeddingJob, processDueEmbeddingJobs } from "./jobs"
 
 type DbClient = ReturnType<typeof createClient>
@@ -14,6 +15,8 @@ const originalAiGatewayApiKey = process.env.AI_GATEWAY_API_KEY
 const originalAiGatewayBaseUrl = process.env.AI_GATEWAY_BASE_URL
 const originalRetryBaseMs = process.env.SDK_EMBEDDING_JOB_RETRY_BASE_MS
 const originalRetryMaxMs = process.env.SDK_EMBEDDING_JOB_RETRY_MAX_MS
+const originalGraphMappingEnabled = process.env.GRAPH_MAPPING_ENABLED
+const originalGraphLlmExtractionEnabled = process.env.GRAPH_LLM_EXTRACTION_ENABLED
 
 async function setupDb(prefix: string): Promise<DbClient> {
   const dbDir = mkdtempSync(join(tmpdir(), `${prefix}-`))
@@ -78,6 +81,11 @@ function blobByteLength(value: unknown): number {
   return 0
 }
 
+function encodeEmbedding(values: number[]): Uint8Array {
+  const vector = new Float32Array(values)
+  return new Uint8Array(vector.buffer.slice(vector.byteOffset, vector.byteOffset + vector.byteLength))
+}
+
 afterEach(() => {
   for (const db of testDatabases.splice(0, testDatabases.length)) {
     db.close()
@@ -102,6 +110,16 @@ afterEach(() => {
     delete process.env.SDK_EMBEDDING_JOB_RETRY_MAX_MS
   } else {
     process.env.SDK_EMBEDDING_JOB_RETRY_MAX_MS = originalRetryMaxMs
+  }
+  if (originalGraphMappingEnabled === undefined) {
+    delete process.env.GRAPH_MAPPING_ENABLED
+  } else {
+    process.env.GRAPH_MAPPING_ENABLED = originalGraphMappingEnabled
+  }
+  if (originalGraphLlmExtractionEnabled === undefined) {
+    delete process.env.GRAPH_LLM_EXTRACTION_ENABLED
+  } else {
+    process.env.GRAPH_LLM_EXTRACTION_ENABLED = originalGraphLlmExtractionEnabled
   }
 })
 
@@ -248,5 +266,235 @@ describe("sdk embedding jobs", () => {
       args: ["mem_retry"],
     })
     expect(metrics.rows.map((row) => String(row.outcome))).toEqual(["retry", "dead_letter"])
+  })
+
+  it("syncs similar_to graph edges after successful embedding upsert", async () => {
+    process.env.GRAPH_MAPPING_ENABLED = "true"
+
+    const db = await setupDb("memories-embedding-jobs-similarity-edges")
+    const nowIso = "2026-02-20T02:00:00.000Z"
+    const modelId = "openai/text-embedding-3-small"
+
+    await insertMemory(db, {
+      id: "mem_seed",
+      content: "Seed memory for similarity edges",
+      nowIso,
+    })
+    await insertMemory(db, {
+      id: "mem_neighbor",
+      content: "Neighbor memory for similarity edges",
+      nowIso,
+    })
+
+    await syncMemoryGraphMapping(db, {
+      id: "mem_seed",
+      content: "Seed memory for similarity edges",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: null,
+      userId: null,
+      tags: [],
+      category: null,
+    })
+    await syncMemoryGraphMapping(db, {
+      id: "mem_neighbor",
+      content: "Neighbor memory for similarity edges",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: null,
+      userId: null,
+      tags: [],
+      category: null,
+    })
+
+    await db.execute({
+      sql: `INSERT INTO memory_embeddings (
+              memory_id, embedding, model, model_version, dimension, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        "mem_neighbor",
+        encodeEmbedding([0.99, 0.01]),
+        modelId,
+        modelId,
+        2,
+        nowIso,
+        nowIso,
+      ],
+    })
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: [{ embedding: [1, 0] }],
+            model: modelId,
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }
+        )
+      )
+    )
+
+    await enqueueEmbeddingJob({
+      turso: db,
+      memoryId: "mem_seed",
+      content: "Seed memory for similarity edges",
+      modelId,
+      operation: "add",
+      nowIso,
+    })
+
+    const summary = await processDueEmbeddingJobs({
+      turso: db,
+      maxJobs: 1,
+      nowIso,
+    })
+    expect(summary.success).toBe(1)
+
+    const edgeResult = await db.execute({
+      sql: `SELECT from_n.node_key AS from_key, to_n.node_key AS to_key
+            FROM graph_edges e
+            JOIN graph_nodes from_n ON from_n.id = e.from_node_id
+            JOIN graph_nodes to_n ON to_n.id = e.to_node_id
+            WHERE e.edge_type = 'similar_to'
+            ORDER BY from_key, to_key`,
+    })
+
+    const pairs = edgeResult.rows.map((row) => `${row.from_key}->${row.to_key}`)
+    expect(pairs).toEqual(["mem_neighbor->mem_seed", "mem_seed->mem_neighbor"])
+  })
+
+  it("creates contradicts edges in ambiguous zone when llm extraction is enabled", async () => {
+    process.env.GRAPH_MAPPING_ENABLED = "true"
+    process.env.GRAPH_LLM_EXTRACTION_ENABLED = "true"
+
+    const db = await setupDb("memories-embedding-jobs-llm-relationships")
+    const nowIso = "2026-02-20T03:00:00.000Z"
+    const modelId = "openai/text-embedding-3-small"
+
+    await insertMemory(db, {
+      id: "mem_seed",
+      content: "I like coffee",
+      nowIso,
+    })
+    await insertMemory(db, {
+      id: "mem_neighbor",
+      content: "I dislike coffee",
+      nowIso,
+    })
+
+    await syncMemoryGraphMapping(db, {
+      id: "mem_seed",
+      content: "I like coffee",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: null,
+      userId: null,
+      tags: [],
+      category: null,
+    })
+    await syncMemoryGraphMapping(db, {
+      id: "mem_neighbor",
+      content: "I dislike coffee",
+      type: "note",
+      layer: "long_term",
+      expiresAt: null,
+      projectId: null,
+      userId: null,
+      tags: [],
+      category: null,
+    })
+
+    await db.execute({
+      sql: `INSERT INTO memory_embeddings (
+              memory_id, embedding, model, model_version, dimension, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        "mem_neighbor",
+        encodeEmbedding([0.8, 0.6]),
+        modelId,
+        modelId,
+        2,
+        nowIso,
+        nowIso,
+      ],
+    })
+
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = String(input)
+      if (url.includes("/v1/embeddings")) {
+        return new Response(
+          JSON.stringify({
+            data: [{ embedding: [1, 0] }],
+            model: modelId,
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }
+        )
+      }
+
+      if (url.includes("/v1/chat/completions")) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    relationship: "contradicts",
+                    confidence: 0.91,
+                    explanation: "Opposite preference on the same topic.",
+                  }),
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }
+        )
+      }
+
+      return new Response("not found", { status: 404 })
+    })
+
+    vi.stubGlobal("fetch", fetchMock)
+
+    await enqueueEmbeddingJob({
+      turso: db,
+      memoryId: "mem_seed",
+      content: "I like coffee",
+      modelId,
+      operation: "add",
+      nowIso,
+    })
+
+    const summary = await processDueEmbeddingJobs({
+      turso: db,
+      maxJobs: 1,
+      nowIso,
+    })
+    expect(summary.success).toBe(1)
+
+    const relationshipEdges = await db.execute({
+      sql: `SELECT from_n.node_key AS from_key, to_n.node_key AS to_key
+            FROM graph_edges e
+            JOIN graph_nodes from_n ON from_n.id = e.from_node_id
+            JOIN graph_nodes to_n ON to_n.id = e.to_node_id
+            WHERE e.edge_type = 'contradicts'
+            ORDER BY from_key, to_key`,
+    })
+
+    const pairs = relationshipEdges.rows.map((row) => `${row.from_key}->${row.to_key}`)
+    expect(pairs).toEqual(["mem_neighbor->mem_seed", "mem_seed->mem_neighbor"])
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
