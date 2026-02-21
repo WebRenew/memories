@@ -108,6 +108,16 @@ export type SemanticRelationshipExtractor = (input: {
   recentMemories: SemanticRelationshipContextMemory[]
 }) => Promise<SemanticRelationshipExtractionResult>
 
+export type RelationshipSyncIssueCode = "GRAPH_LLM_CLASSIFICATION_FAILED" | "GRAPH_LLM_SEMANTIC_EXTRACTION_FAILED"
+
+export interface RelationshipSyncIssue {
+  code: RelationshipSyncIssueCode
+  stage: "classification" | "semantic_extraction"
+  memoryId: string
+  candidateMemoryId?: string | null
+  detail: string
+}
+
 export interface ComputeRelationshipEdgesInput extends ComputeSimilarityEdgesInput {
   ambiguousMinScore?: number
   ambiguousMaxScore?: number
@@ -117,6 +127,7 @@ export interface ComputeRelationshipEdgesInput extends ComputeSimilarityEdgesInp
   semanticContextLimit?: number
   semanticConfidenceThreshold?: number
   semanticMinChars?: number
+  reportIssue?: (issue: RelationshipSyncIssue) => void
 }
 
 function memoryNodeRef(memoryId: string): GraphNodeRef {
@@ -387,6 +398,14 @@ async function buildLlmRelationshipEdges(
         })
       }
     } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      input.reportIssue?.({
+        code: "GRAPH_LLM_CLASSIFICATION_FAILED",
+        stage: "classification",
+        memoryId: input.memoryId,
+        candidateMemoryId: match.memoryId,
+        detail,
+      })
       console.error("Memory relationship classification failed:", error)
     }
   }
@@ -472,6 +491,13 @@ async function buildSemanticRelationshipEdges(
 
     return edges
   } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    input.reportIssue?.({
+      code: "GRAPH_LLM_SEMANTIC_EXTRACTION_FAILED",
+      stage: "semantic_extraction",
+      memoryId: input.memoryId,
+      detail,
+    })
     console.error("Semantic relationship extraction failed:", error)
     return []
   }

@@ -1,15 +1,16 @@
 import {
   getAiGatewayApiKey,
   getAiGatewayBaseUrl,
-  parseBooleanFlag,
   getSdkEmbeddingJobMaxAttempts,
   getSdkEmbeddingJobProcessingTimeoutMs,
   getSdkEmbeddingJobRetryBaseMs,
   getSdkEmbeddingJobRetryMaxMs,
   getSdkEmbeddingJobWorkerBatchSize,
+  parseBooleanFlag,
 } from "@/lib/env"
+import { decodeEmbeddingBlob } from "@/lib/memory-service/embedding"
 import { classifyMemoryRelationship, extractSemanticRelationships } from "@/lib/memory-service/graph/llm-extract"
-import { syncRelationshipEdgesForMemory } from "@/lib/memory-service/graph/similarity"
+import { syncRelationshipEdgesForMemory, type RelationshipSyncIssue } from "@/lib/memory-service/graph/similarity"
 import {
   defaultLayerForType,
   type TursoClient,
@@ -28,6 +29,7 @@ interface EmbeddingJobRow {
   content: string
   attemptCount: number
   maxAttempts: number
+  lastError: string | null
 }
 
 interface GatewayEmbeddingResponse {
@@ -82,6 +84,9 @@ class EmbeddingJobError extends Error {
     }
   }
 }
+
+const GRAPH_RELATIONSHIP_SYNC_FAILED_CODE = "GRAPH_RELATIONSHIP_SYNC_FAILED"
+const GRAPH_RELATIONSHIP_PARTIAL_DEGRADE_CODE = "GRAPH_RELATIONSHIP_PARTIAL_DEGRADE"
 
 function getRowsAffected(result: unknown): number {
   if (!result || typeof result !== "object") return 0
@@ -173,6 +178,64 @@ function toEmbeddingJobError(error: unknown): EmbeddingJobError {
     retryable: true,
     cause: error,
   })
+}
+
+function shouldReuseEmbeddingAfterGraphSyncFailure(job: EmbeddingJobRow): boolean {
+  if (job.attemptCount <= 0) return false
+  if (!job.lastError) return false
+  return job.lastError.includes(GRAPH_RELATIONSHIP_SYNC_FAILED_CODE)
+}
+
+async function loadStoredEmbeddingForRetry(
+  turso: TursoClient,
+  memoryId: string,
+  model: string
+): Promise<{ embedding: number[]; modelVersion: string } | null> {
+  const result = await turso.execute({
+    sql: `SELECT embedding, model_version
+          FROM memory_embeddings
+          WHERE memory_id = ? AND model = ?
+          LIMIT 1`,
+    args: [memoryId, model],
+  })
+
+  if (!Array.isArray(result.rows) || result.rows.length === 0) {
+    return null
+  }
+
+  const row = result.rows[0] as Record<string, unknown>
+  const decoded = decodeEmbeddingBlob(row.embedding)
+  if (!decoded || decoded.length === 0) {
+    return null
+  }
+
+  const embedding = Array.from(decoded)
+  if (embedding.some((value) => !Number.isFinite(value))) {
+    return null
+  }
+
+  const modelVersion =
+    typeof row.model_version === "string" && row.model_version.trim().length > 0
+      ? row.model_version.trim()
+      : "gateway-v1"
+
+  return {
+    embedding,
+    modelVersion,
+  }
+}
+
+function summarizeRelationshipIssues(issues: RelationshipSyncIssue[]): string | null {
+  if (issues.length === 0) return null
+  const counts = new Map<string, number>()
+  for (const issue of issues) {
+    counts.set(issue.code, (counts.get(issue.code) ?? 0) + 1)
+  }
+  const parts = [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([code, count]) => `${code}:${count}`)
+
+  return `relationship_issues=${issues.length};${parts.join(",")}`
 }
 
 async function fetchGatewayEmbedding(params: {
@@ -283,7 +346,7 @@ async function claimNextDueJob(turso: TursoClient, nowIso: string): Promise<Embe
   }
 
   const result = await turso.execute({
-    sql: `SELECT id, memory_id, operation, model, model_version, content, attempt_count, max_attempts
+    sql: `SELECT id, memory_id, operation, model, model_version, content, attempt_count, max_attempts, last_error
           FROM memory_embedding_jobs
           WHERE claimed_by = ?
             AND status = 'processing'
@@ -309,6 +372,7 @@ async function claimNextDueJob(turso: TursoClient, nowIso: string): Promise<Embe
     content: String(row.content ?? ""),
     attemptCount: parseNonNegativeInt(row.attempt_count, 0),
     maxAttempts: parsePositiveInt(row.max_attempts, getSdkEmbeddingJobMaxAttempts()),
+    lastError: typeof row.last_error === "string" ? row.last_error : null,
   }
 }
 
@@ -472,27 +536,42 @@ async function processSingleJob(turso: TursoClient, job: EmbeddingJobRow, nowIso
       return "skipped"
     }
 
-    const embeddingResponse = await fetchGatewayEmbedding({
-      modelId: job.model,
-      content: job.content,
-    })
-    const encoded = encodeEmbedding(embeddingResponse.embedding)
-    const modelVersion = job.modelVersion ?? embeddingResponse.modelVersion
+    let embeddingVector: number[] | null = null
+    let modelVersion = job.modelVersion
 
-    await turso.execute({
-      sql: `INSERT INTO memory_embeddings (
-              memory_id, embedding, model, model_version, dimension, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(memory_id) DO UPDATE SET
-              embedding = excluded.embedding,
-              model = excluded.model,
-              model_version = excluded.model_version,
-              dimension = excluded.dimension,
-              updated_at = excluded.updated_at`,
-      args: [job.memoryId, encoded, job.model, modelVersion, embeddingResponse.embedding.length, nowIso, nowIso],
-    })
+    if (shouldReuseEmbeddingAfterGraphSyncFailure(job)) {
+      const reused = await loadStoredEmbeddingForRetry(turso, job.memoryId, job.model)
+      if (reused) {
+        embeddingVector = reused.embedding
+        modelVersion = modelVersion ?? reused.modelVersion
+      }
+    }
+
+    if (!embeddingVector) {
+      const embeddingResponse = await fetchGatewayEmbedding({
+        modelId: job.model,
+        content: job.content,
+      })
+      embeddingVector = embeddingResponse.embedding
+      modelVersion = modelVersion ?? embeddingResponse.modelVersion
+      const encoded = encodeEmbedding(embeddingVector)
+
+      await turso.execute({
+        sql: `INSERT INTO memory_embeddings (
+                memory_id, embedding, model, model_version, dimension, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(memory_id) DO UPDATE SET
+                embedding = excluded.embedding,
+                model = excluded.model,
+                model_version = excluded.model_version,
+                dimension = excluded.dimension,
+                updated_at = excluded.updated_at`,
+        args: [job.memoryId, encoded, job.model, modelVersion, embeddingVector.length, nowIso, nowIso],
+      })
+    }
 
     const graphMappingEnabled = parseBooleanFlag(process.env.GRAPH_MAPPING_ENABLED, false)
+    const relationshipIssues: RelationshipSyncIssue[] = []
     if (graphMappingEnabled && memoryRow) {
       const llmExtractionEnabled = parseBooleanFlag(process.env.GRAPH_LLM_EXTRACTION_ENABLED, false)
       const memoryType = typeof memoryRow.type === "string" ? memoryRow.type : "note"
@@ -506,7 +585,7 @@ async function processSingleJob(turso: TursoClient, job: EmbeddingJobRow, nowIso
         await syncRelationshipEdgesForMemory({
           turso,
           memoryId: job.memoryId,
-          embedding: embeddingResponse.embedding,
+          embedding: embeddingVector,
           modelId: job.model,
           projectId: typeof memoryRow.project_id === "string" ? memoryRow.project_id : null,
           userId: typeof memoryRow.user_id === "string" ? memoryRow.user_id : null,
@@ -516,15 +595,26 @@ async function processSingleJob(turso: TursoClient, job: EmbeddingJobRow, nowIso
           memoryCreatedAt: typeof memoryRow.created_at === "string" ? memoryRow.created_at : null,
           classifier: llmExtractionEnabled ? classifyMemoryRelationship : null,
           semanticExtractor: llmExtractionEnabled ? extractSemanticRelationships : null,
+          reportIssue: (issue) => {
+            relationshipIssues.push(issue)
+          },
           nowIso,
         })
       } catch (error) {
         throw new EmbeddingJobError("Relationship edge sync failed", {
-          code: "GRAPH_RELATIONSHIP_SYNC_FAILED",
+          code: GRAPH_RELATIONSHIP_SYNC_FAILED_CODE,
           retryable: true,
           cause: error,
         })
       }
+    }
+
+    const relationshipIssueSummary = summarizeRelationshipIssues(relationshipIssues)
+    if (relationshipIssueSummary) {
+      console.warn("[GRAPH_RELATIONSHIP_PARTIAL_DEGRADE]", {
+        memoryId: job.memoryId,
+        summary: relationshipIssueSummary,
+      })
     }
 
     await markJobSucceeded({
@@ -540,8 +630,8 @@ async function processSingleJob(turso: TursoClient, job: EmbeddingJobRow, nowIso
       attempt: attempts,
       outcome: "success",
       durationMs: Date.now() - startedAt,
-      errorCode: null,
-      errorMessage: null,
+      errorCode: relationshipIssueSummary ? GRAPH_RELATIONSHIP_PARTIAL_DEGRADE_CODE : null,
+      errorMessage: relationshipIssueSummary,
     })
 
     return "success"

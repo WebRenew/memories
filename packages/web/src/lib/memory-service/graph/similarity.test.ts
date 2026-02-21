@@ -490,6 +490,90 @@ describe("similarity graph edges", () => {
     expect(Number(result.rows[0]?.count ?? 0)).toBe(0)
   })
 
+  it("reports classifier failures with structured issue codes", async () => {
+    const db = await setupDb("memories-graph-relationship-issue-reporting")
+    const nowIso = "2026-02-22T00:27:00.000Z"
+    const modelId = "openai/text-embedding-3-small"
+    const issues: Array<{ code: string; stage: string; candidateMemoryId?: string | null }> = []
+
+    await insertMemory(db, { id: "mem-a", content: "I like tea", nowIso })
+    await insertMemory(db, { id: "mem-b", content: "I dislike tea", nowIso })
+    await upsertEmbedding(db, {
+      memoryId: "mem-b",
+      model: modelId,
+      embedding: [0.8, 0.6],
+      nowIso,
+    })
+
+    await syncRelationshipEdgesForMemory({
+      turso: db,
+      memoryId: "mem-a",
+      embedding: [1, 0],
+      modelId,
+      projectId: null,
+      userId: null,
+      layer: "long_term",
+      expiresAt: null,
+      nowIso,
+      threshold: 0.95,
+      ambiguousMinScore: 0.7,
+      ambiguousMaxScore: 0.9,
+      llmConfidenceThreshold: 0.8,
+      memoryContent: "I like tea",
+      memoryCreatedAt: nowIso,
+      classifier: async () => {
+        throw new Error("classifier offline")
+      },
+      reportIssue: (issue) => {
+        issues.push(issue)
+      },
+    })
+
+    expect(issues).toHaveLength(1)
+    expect(issues[0]).toMatchObject({
+      code: "GRAPH_LLM_CLASSIFICATION_FAILED",
+      stage: "classification",
+      candidateMemoryId: "mem-b",
+    })
+  })
+
+  it("reports semantic extraction failures with structured issue codes", async () => {
+    const db = await setupDb("memories-graph-semantic-issue-reporting")
+    const nowIso = "2026-02-22T00:28:00.000Z"
+    const modelId = "openai/text-embedding-3-small"
+    const issues: Array<{ code: string; stage: string }> = []
+
+    await insertMemory(db, { id: "mem-a", content: "I only drink coffee in the morning.", nowIso })
+    await insertMemory(db, { id: "mem-b", content: "I plan my mornings around coffee.", nowIso })
+
+    await syncRelationshipEdgesForMemory({
+      turso: db,
+      memoryId: "mem-a",
+      embedding: [1, 0],
+      modelId,
+      projectId: null,
+      userId: null,
+      layer: "long_term",
+      expiresAt: null,
+      nowIso,
+      threshold: 0.99,
+      memoryContent: "I only drink coffee in the morning.",
+      memoryCreatedAt: nowIso,
+      semanticExtractor: async () => {
+        throw new Error("semantic extractor unavailable")
+      },
+      reportIssue: (issue) => {
+        issues.push(issue)
+      },
+    })
+
+    expect(issues).toHaveLength(1)
+    expect(issues[0]).toMatchObject({
+      code: "GRAPH_LLM_SEMANTIC_EXTRACTION_FAILED",
+      stage: "semantic_extraction",
+    })
+  })
+
   it("adds semantic relationship edge types and reuses condition nodes", async () => {
     const db = await setupDb("memories-graph-semantic-relationships")
     const nowIso = "2026-02-22T00:30:00.000Z"

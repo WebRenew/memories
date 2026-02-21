@@ -323,24 +323,38 @@ export async function replaceMemoryRelationshipEdges(
   options: { nowIso?: string; edgeTypes?: string[] } = {}
 ): Promise<void> {
   await ensureGraphTables(turso)
-  const edgeTypes = Array.from(new Set((options.edgeTypes ?? []).map((value) => value.trim()).filter(Boolean)))
-  const hasTypedDelete = edgeTypes.length > 0
+  const savepoint = `graph_replace_${crypto.randomUUID().replace(/-/g, "")}`
+  await turso.execute(`SAVEPOINT ${savepoint}`)
 
-  const memoryNodeIds = await resolveMemoryNodeIds(turso, [memoryId])
-  if (memoryNodeIds.length > 0) {
-    const typeMarkers = hasTypedDelete ? placeholders(edgeTypes.length) : ""
-    const memoryMarkers = placeholders(memoryNodeIds.length)
-    const edgeTypeFilter = hasTypedDelete ? `edge_type IN (${typeMarkers}) AND ` : ""
-    await turso.execute({
-      sql: `DELETE FROM graph_edges
-            WHERE ${edgeTypeFilter}(from_node_id IN (${memoryMarkers})
-                   OR to_node_id IN (${memoryMarkers}))`,
-      args: [...edgeTypes, ...memoryNodeIds, ...memoryNodeIds],
-    })
+  try {
+    const edgeTypes = Array.from(new Set((options.edgeTypes ?? []).map((value) => value.trim()).filter(Boolean)))
+    const hasTypedDelete = edgeTypes.length > 0
+
+    const memoryNodeIds = await resolveMemoryNodeIds(turso, [memoryId])
+    if (memoryNodeIds.length > 0) {
+      const typeMarkers = hasTypedDelete ? placeholders(edgeTypes.length) : ""
+      const memoryMarkers = placeholders(memoryNodeIds.length)
+      const edgeTypeFilter = hasTypedDelete ? `edge_type IN (${typeMarkers}) AND ` : ""
+      await turso.execute({
+        sql: `DELETE FROM graph_edges
+              WHERE ${edgeTypeFilter}(from_node_id IN (${memoryMarkers})
+                     OR to_node_id IN (${memoryMarkers}))`,
+        args: [...edgeTypes, ...memoryNodeIds, ...memoryNodeIds],
+      })
+    }
+
+    await upsertGraphEdges(turso, edges, options)
+    await pruneOrphanGraphNodes(turso)
+    await turso.execute(`RELEASE SAVEPOINT ${savepoint}`)
+  } catch (error) {
+    try {
+      await turso.execute(`ROLLBACK TO SAVEPOINT ${savepoint}`)
+      await turso.execute(`RELEASE SAVEPOINT ${savepoint}`)
+    } catch (rollbackError) {
+      console.error("Graph relationship replacement rollback failed:", rollbackError)
+    }
+    throw error
   }
-
-  await upsertGraphEdges(turso, edges, options)
-  await pruneOrphanGraphNodes(turso)
 }
 
 export async function syncMemoryGraphMapping(turso: TursoClient, input: GraphMemoryInput): Promise<void> {
