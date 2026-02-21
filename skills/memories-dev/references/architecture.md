@@ -48,6 +48,22 @@ memories sync → turso.ts
   → Push/pull changes
 ```
 
+### Hosted SDK Embedding Worker Path (web)
+```
+memory write (SDK) → enqueue embedding job
+  → jobs.ts worker claims queued job
+  → generate or reuse embedding (on graph-only retry)
+  → upsert memory_embeddings
+  → sync relationship edges (similar_to + optional LLM-derived edges)
+  → write job metric outcome/error codes
+```
+
+Notes:
+- Relationship edge replacement is savepoint-wrapped to avoid partial delete/insert states on failure.
+- LLM extraction failures are best-effort and can surface on successful jobs as `GRAPH_RELATIONSHIP_PARTIAL_DEGRADE`.
+- Issue-level degradation codes include `GRAPH_LLM_CLASSIFICATION_FAILED` and `GRAPH_LLM_SEMANTIC_EXTRACTION_FAILED`.
+- Retries after `GRAPH_RELATIONSHIP_SYNC_FAILED` attempt to reuse stored vectors to avoid repeated embeddings API calls.
+
 ---
 
 ## Database Layer
