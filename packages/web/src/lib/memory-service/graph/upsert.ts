@@ -13,12 +13,26 @@ interface GraphMemoryInput {
   category: string | null
 }
 
+export interface GraphEdgeWrite {
+  from: GraphNodeRef
+  to: GraphNodeRef
+  edgeType: string
+  weight?: number
+  confidence?: number
+  evidenceMemoryId?: string | null
+  expiresAt?: string | null
+}
+
 function nodeIdFallback(ref: GraphNodeRef): string {
   return `graph-node:${ref.nodeType}:${ref.nodeKey}`
 }
 
 function edgeId(memoryId: string, edgeType: string, fromNodeId: string, toNodeId: string): string {
   return `graph-edge:${memoryId}:${edgeType}:${fromNodeId}:${toNodeId}`
+}
+
+function edgeIdForNodes(edgeType: string, fromNodeId: string, toNodeId: string): string {
+  return `graph-edge:${edgeType}:${fromNodeId}:${toNodeId}`
 }
 
 function toSnapshot(input: GraphMemoryInput): GraphMemorySnapshot {
@@ -167,6 +181,97 @@ export async function bulkRemoveMemoryGraphMappings(turso: TursoClient, memoryId
     await removeEdgesForNodeIds(turso, memoryNodeIds)
   }
 
+  await pruneOrphanGraphNodes(turso)
+}
+
+export async function upsertGraphEdges(
+  turso: TursoClient,
+  edges: GraphEdgeWrite[],
+  options: { nowIso?: string } = {}
+): Promise<void> {
+  if (edges.length === 0) return
+  await ensureGraphTables(turso)
+
+  const nowIso = options.nowIso ?? new Date().toISOString()
+  const nodeIdByRef = new Map<string, string>()
+  const nodeRefs = new Map<string, GraphNodeRef>()
+
+  for (const edge of edges) {
+    const fromKey = `${edge.from.nodeType}:${edge.from.nodeKey}`
+    const toKey = `${edge.to.nodeType}:${edge.to.nodeKey}`
+    nodeRefs.set(fromKey, edge.from)
+    nodeRefs.set(toKey, edge.to)
+  }
+
+  for (const [refKey, ref] of nodeRefs.entries()) {
+    const resolved = await resolveNodeId(turso, ref)
+    if (resolved) {
+      nodeIdByRef.set(refKey, resolved)
+    }
+  }
+
+  for (const edge of edges) {
+    const fromKey = `${edge.from.nodeType}:${edge.from.nodeKey}`
+    const toKey = `${edge.to.nodeType}:${edge.to.nodeKey}`
+    const fromNodeId = nodeIdByRef.get(fromKey)
+    const toNodeId = nodeIdByRef.get(toKey)
+    if (!fromNodeId || !toNodeId) continue
+
+    await turso.execute({
+      sql: `INSERT INTO graph_edges (
+              id,
+              from_node_id,
+              to_node_id,
+              edge_type,
+              weight,
+              confidence,
+              evidence_memory_id,
+              expires_at,
+              created_at,
+              updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              weight = excluded.weight,
+              confidence = excluded.confidence,
+              evidence_memory_id = excluded.evidence_memory_id,
+              expires_at = excluded.expires_at,
+              updated_at = excluded.updated_at`,
+      args: [
+        edgeIdForNodes(edge.edgeType, fromNodeId, toNodeId),
+        fromNodeId,
+        toNodeId,
+        edge.edgeType,
+        edge.weight ?? 1,
+        edge.confidence ?? 1,
+        edge.evidenceMemoryId ?? null,
+        edge.expiresAt ?? null,
+        nowIso,
+        nowIso,
+      ],
+    })
+  }
+}
+
+export async function replaceMemorySimilarityEdges(
+  turso: TursoClient,
+  memoryId: string,
+  edges: GraphEdgeWrite[],
+  options: { nowIso?: string } = {}
+): Promise<void> {
+  await ensureGraphTables(turso)
+
+  const memoryNodeIds = await resolveMemoryNodeIds(turso, [memoryId])
+  if (memoryNodeIds.length > 0) {
+    await turso.execute({
+      sql: `DELETE FROM graph_edges
+            WHERE edge_type = 'similar_to'
+              AND (from_node_id IN (${placeholders(memoryNodeIds.length)})
+                   OR to_node_id IN (${placeholders(memoryNodeIds.length)}))`,
+      args: [...memoryNodeIds, ...memoryNodeIds],
+    })
+  }
+
+  await upsertGraphEdges(turso, edges, options)
   await pruneOrphanGraphNodes(turso)
 }
 

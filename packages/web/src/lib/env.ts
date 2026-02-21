@@ -284,6 +284,19 @@ export const GRAPH_DEFAULT_STRATEGY_AUTOPILOT_ENABLED = parseBooleanFlag(
   true
 )
 
+export function getSimilarityEdgeThreshold(): number {
+  const value = parseNonNegativeFloat(process.env.SIMILARITY_EDGE_THRESHOLD, 0.85)
+  return Math.max(0, Math.min(1, value))
+}
+
+export function getSimilarityEdgeMaxK(): number {
+  return parsePositiveInt(process.env.SIMILARITY_EDGE_MAX_K, 20)
+}
+
+export function getSimilarityEdgeMaxPerMemory(): number {
+  return parsePositiveInt(process.env.SIMILARITY_EDGE_MAX_PER_MEMORY, 5)
+}
+
 // ── Other ────────────────────────────────────────────────────────────
 
 export function getAppUrl(): string {

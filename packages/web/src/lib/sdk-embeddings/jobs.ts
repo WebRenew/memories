@@ -1,13 +1,18 @@
 import {
   getAiGatewayApiKey,
   getAiGatewayBaseUrl,
+  parseBooleanFlag,
   getSdkEmbeddingJobMaxAttempts,
   getSdkEmbeddingJobProcessingTimeoutMs,
   getSdkEmbeddingJobRetryBaseMs,
   getSdkEmbeddingJobRetryMaxMs,
   getSdkEmbeddingJobWorkerBatchSize,
 } from "@/lib/env"
-import type { TursoClient } from "@/lib/memory-service/types"
+import { syncSimilarityEdgesForMemory } from "@/lib/memory-service/graph/similarity"
+import {
+  defaultLayerForType,
+  type TursoClient,
+} from "@/lib/memory-service/types"
 
 export type EmbeddingJobOperation = "add" | "edit" | "backfill"
 
@@ -430,7 +435,10 @@ async function processSingleJob(turso: TursoClient, job: EmbeddingJobRow, nowIso
 
   try {
     const memoryResult = await turso.execute({
-      sql: "SELECT id, deleted_at FROM memories WHERE id = ? LIMIT 1",
+      sql: `SELECT id, type, memory_layer, expires_at, project_id, user_id, deleted_at
+            FROM memories
+            WHERE id = ?
+            LIMIT 1`,
       args: [job.memoryId],
     })
     const memoryRow = Array.isArray(memoryResult.rows) && memoryResult.rows.length > 0
@@ -482,6 +490,31 @@ async function processSingleJob(turso: TursoClient, job: EmbeddingJobRow, nowIso
               updated_at = excluded.updated_at`,
       args: [job.memoryId, encoded, job.model, modelVersion, embeddingResponse.embedding.length, nowIso, nowIso],
     })
+
+    if (parseBooleanFlag(process.env.GRAPH_MAPPING_ENABLED, false) && memoryRow) {
+      try {
+        const memoryType = typeof memoryRow.type === "string" ? memoryRow.type : "note"
+        const memoryLayerRaw = typeof memoryRow.memory_layer === "string" ? memoryRow.memory_layer : null
+        const memoryLayer =
+          memoryLayerRaw === "rule" || memoryLayerRaw === "working" || memoryLayerRaw === "long_term"
+            ? memoryLayerRaw
+            : defaultLayerForType(memoryType)
+
+        await syncSimilarityEdgesForMemory({
+          turso,
+          memoryId: job.memoryId,
+          embedding: embeddingResponse.embedding,
+          modelId: job.model,
+          projectId: typeof memoryRow.project_id === "string" ? memoryRow.project_id : null,
+          userId: typeof memoryRow.user_id === "string" ? memoryRow.user_id : null,
+          layer: memoryLayer,
+          expiresAt: typeof memoryRow.expires_at === "string" ? memoryRow.expires_at : null,
+          nowIso,
+        })
+      } catch (error) {
+        console.error("Similarity edge sync failed:", error)
+      }
+    }
 
     await markJobSucceeded({
       turso,
